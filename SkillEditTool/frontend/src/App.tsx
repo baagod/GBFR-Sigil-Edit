@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { SkillPicker, type PickerItem } from "./SkillPicker";
@@ -365,9 +366,13 @@ export default function App() {
           {t.title(enabledCount, edits.length)}
         </h1>
 
-        {/* Three square buttons: the label is the language's own short form, so
-            this never needs translating either. */}
-        <div className="flex items-center gap-1">
+        {/*
+          One joined group: ButtonGroup squares off everything but the outer
+          corners and drops the inner borders, so the three read as one control.
+          The label is each language's own short form, so it never needs
+          translating, and the chosen one keeps the filled (primary) fill.
+        */}
+        <ButtonGroup>
           {LANGS.map((code) => (
             <Button
               key={code}
@@ -382,7 +387,7 @@ export default function App() {
               {LANG_LABEL[code]}
             </Button>
           ))}
-        </div>
+        </ButtonGroup>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
