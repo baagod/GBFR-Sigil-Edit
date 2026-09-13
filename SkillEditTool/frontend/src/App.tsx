@@ -419,11 +419,11 @@ export default function App() {
                   /*
                     A fixed width, not a flexible one: the name and the level have
                     to stay together, and the value boxes are what should absorb a
-                    wider window. 208px is sized for the longest name in the game's
-                    English text ("Super Ultimate Perfect Dodge"); anything longer
+                    wider window. 222px clears the longest name in any of the three
+                    languages ("スーパーアルテイメットJust回避"); anything longer
                     truncates, with the tooltip carrying the whole one.
                   */
-                  className={`w-52 shrink-0 truncate text-sm ${
+                  className={`w-[222px] shrink-0 truncate text-sm ${
                     edit.Enabled ? "" : "text-muted-foreground"
                   }`}
                   title={name || edit.Key}
