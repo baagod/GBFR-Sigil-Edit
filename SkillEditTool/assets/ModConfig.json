@@ -1,0 +1,28 @@
+{
+  "ModId": "GBFR.SkillEdit",
+  "ModName": "GBFR Skill Edit",
+  "ModAuthor": "baago",
+  "ModVersion": "1.0.0",
+  "ModDescription": "Patches skill_status rows at startup, driven by a Config.json written by SkillEditTool. Ships no .tbl: the table is read from the game archive, edited in memory, and handed back through IDataManager.",
+  "ModDll": "GBFR.SkillEdit.dll",
+  "ModIcon": "",
+  "ModR2RManagedDll32": "",
+  "ModR2RManagedDll64": "",
+  "ModNativeDll32": "",
+  "ModNativeDll64": "",
+  "Tags": [],
+  "CanUnload": true,
+  "HasExports": false,
+  "IsLibrary": false,
+  "ReleaseMetadataFileName": "GBFR.SkillEdit.ReleaseMetadata.json",
+  "PluginData": {},
+  "IsUniversalMod": false,
+  "ModDependencies": [
+    "gbfrelink.utility.manager"
+  ],
+  "OptionalDependencies": [],
+  "SupportedAppId": [
+    "granblue_fantasy_relink.exe"
+  ],
+  "ProjectUrl": ""
+}

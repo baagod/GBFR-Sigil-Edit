@@ -1,0 +1,70 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace GBFR.SkillEdit;
+
+/// <summary>
+/// One skill-status override: which row, and the LevelValue slots to write.
+///
+/// <see cref="Values"/> maps positionally onto the table's LevelValue1..10, which
+/// is what a skill's own description uses as {0}, {1}, {2} ... Slots a given skill
+/// does not use are simply left at zero. Descriptions are all the information
+/// available about a slot's meaning, so it is not modelled here.
+/// </summary>
+public class SkillEdit
+{
+    /// <summary>How many LevelValue slots the table has.</summary>
+    public const int LevelValueCount = 10;
+
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>skill_status Key as an 8-digit hex hash, e.g. 06719232.</summary>
+    public string Key { get; set; } = "";
+
+    /// <summary>
+    /// Stored level. The row holding a sigil's real numbers is one lower than the
+    /// level shown in game (game Lv15 -> stored 14).
+    /// </summary>
+    public int Level { get; set; } = 14;
+
+    /// <summary>LevelValue1..10, written in order.</summary>
+    public float[] Values { get; set; } = new float[LevelValueCount];
+}
+
+/// <summary>
+/// The mod's Config.json. Written by the standalone SkillEditTool, read here at
+/// startup.
+///
+/// This type deliberately implements NO Reloaded configuration interface: doing so
+/// would make the launcher offer a "Mod configuration" window, and that window
+/// cannot render a list (it shows a meaningless Capacity/Count pair). The edit list
+/// is managed by the tool instead, so this is plain data.
+/// </summary>
+public class Config
+{
+    [JsonPropertyName("Edits")]
+    public List<SkillEdit> Edits { get; set; } = [];
+
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    public static Config Load(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                var config = JsonSerializer.Deserialize<Config>(File.ReadAllText(path), Options);
+                if (config?.Edits is { Count: > 0 })
+                    return config;
+            }
+        }
+        catch
+        {
+            // fall through to defaults
+        }
+        return new Config();
+    }
+}

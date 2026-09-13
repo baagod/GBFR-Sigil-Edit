@@ -1,0 +1,33 @@
+# Build output
+**/bin/
+**/obj/
+**/publish/
+dist/
+node_modules/
+SkillEditTool/SkillEditTool.exe
+*.exe~
+*.zip
+
+# Editors / tooling
+.idea/
+.vs/
+.vscode/
+.codegraph/
+.tmp-*/
+*.user
+*.suo
+*.pdb
+*.ilk
+
+# Development-only inputs.
+#
+# The game's own tables, the toolchain that reads them, and the databases the
+# asset scripts build from. The assets those scripts produce
+# (SkillEditTool/assets/skillnames.json and skilldefaults.json) are committed, so
+# neither a build nor a release needs any of this - only regenerating them does,
+# and that requires a copy of the game.
+GBFRDataTools/
+game_extract/
+*.db
+sqlite3.exe
+msg_*.json
