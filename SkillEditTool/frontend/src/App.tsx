@@ -192,37 +192,54 @@ export default function App() {
   const [names, setNames] = useState<Record<string, string>>({});
   const [defaults, setDefaults] = useState<Record<string, number[]>>({});
   const [modsDir, setModsDir] = useState("");
+  // "" once we know Reloaded-II cannot be found; null while still asking.
+  const [reloadedDir, setReloadedDir] = useState<string | null>(null);
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [newKey, setNewKey] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [list, nameMap, defaultMap, dir] = await Promise.all([
-          Call.ByName(`${SERVICE}.LoadEdits`) as Promise<SkillEdit[]>,
-          Call.ByName(`${SERVICE}.NameMap`) as Promise<Record<string, string>>,
-          Call.ByName(`${SERVICE}.DefaultMap`) as Promise<Record<string, number[]>>,
-          Call.ByName(`${SERVICE}.ModsDir`) as Promise<string>,
-        ]);
-        const loaded = enforceExclusivity(
-          (list ?? []).map((e) => ({ ...e, Values: pad(e.Values ?? []) })),
-        );
-        setEdits(loaded);
-        setNames(nameMap ?? {});
-        setDefaults(defaultMap ?? {});
-        setModsDir(dir ?? "");
+  /*
+    Reloaded-II is a portable folder, so where it lives is discovered at startup
+    and can be corrected by hand. Everything the tool shows depends on that
+    answer, which is why picking a folder reloads all of it.
+  */
+  async function loadAll() {
+    const [list, nameMap, defaultMap, dir, root] = await Promise.all([
+      Call.ByName(`${SERVICE}.LoadEdits`) as Promise<SkillEdit[]>,
+      Call.ByName(`${SERVICE}.NameMap`) as Promise<Record<string, string>>,
+      Call.ByName(`${SERVICE}.DefaultMap`) as Promise<Record<string, number[]>>,
+      Call.ByName(`${SERVICE}.ModsDir`) as Promise<string>,
+      Call.ByName(`${SERVICE}.ReloadedDir`) as Promise<string>,
+    ]);
+    const loaded = enforceExclusivity(
+      (list ?? []).map((e) => ({ ...e, Values: pad(e.Values ?? []) })),
+    );
+    setEdits(loaded);
+    setNames(nameMap ?? {});
+    setDefaults(defaultMap ?? {});
+    setModsDir(dir ?? "");
+    setReloadedDir(root ?? "");
 
-        // The file on disk may hold several enabled edits for one row; write the
-        // normalised list back so what is stored matches what is shown.
-        if ((list ?? []).some((e, i) => e.Enabled !== loaded[i].Enabled)) {
-          await writeConfig(loaded, true);
-        }
-      } catch (err) {
-        setError({ title: "读取失败", detail: String(err) });
-      }
-    })();
+    // The file on disk may hold several enabled edits for one row; write the
+    // normalised list back so what is stored matches what is shown.
+    if ((list ?? []).some((e, i) => e.Enabled !== loaded[i].Enabled)) {
+      await writeConfig(loaded, true);
+    }
+  }
+
+  useEffect(() => {
+    loadAll().catch((err) => setError({ title: "读取失败", detail: String(err) }));
   }, []);
+
+  async function chooseReloadedDir() {
+    try {
+      const chosen = (await Call.ByName(`${SERVICE}.ChooseReloadedDir`)) as string;
+      if (!chosen) return; // cancelled
+      await loadAll();
+    } catch (err) {
+      setError({ title: "选择目录失败", detail: String(err) });
+    }
+  }
 
   /** Every skill that has a display name, alphabetical. */
   const pickerItems: PickerItem[] = useMemo(
@@ -419,18 +436,38 @@ export default function App() {
           9px, which slid the target line next to it back and forth. The disabled
           state is the feedback while the write is in flight.
         */}
-        <Button onClick={install} disabled={busy || shown.length === 0}>
+        <Button
+          onClick={install}
+          disabled={busy || shown.length === 0 || !reloadedDir}
+        >
           安装 Mod
         </Button>
 
         {/*
-          One line. Failures do not land here: a write error can be long and its
-          useful half is at the end, so it gets a dialog instead of being
-          truncated into this row.
+          One line. Failures do not land here - a write error can be long and its
+          useful half is at the end, so it gets a dialog instead. What lands here
+          is the one thing that cannot be worked out on its own: where Reloaded-II
+          is, when the search came up empty.
         */}
-        <div className="min-h-4 min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {modsDir ? `目标：${modsDir}\\GBFR.SkillEdit` : ""}
-        </div>
+        {reloadedDir === "" ? (
+          <div className="flex min-h-4 min-w-0 flex-1 items-center gap-2">
+            <span className="truncate text-xs text-muted-foreground">
+              没找到 Reloaded-II 的安装目录
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={chooseReloadedDir}
+              disabled={busy}
+            >
+              选择目录…
+            </Button>
+          </div>
+        ) : reloadedDir ? (
+          <div className="min-h-4 min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            目标：{modsDir}\GBFR.SkillEdit
+          </div>
+        ) : null}
       </footer>
 
       {/*

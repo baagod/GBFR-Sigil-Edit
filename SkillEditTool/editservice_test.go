@@ -12,15 +12,12 @@ import (
 // without touching the real installation.
 func fakeReloaded(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("HOME", home)
+	home := hermeticHome(t)
 
-	root := filepath.Join(home, "Desktop", "Reloaded-II")
-	for _, dir := range []string{"Mods", filepath.Join("User", "Mods")} {
-		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
-			t.Fatal(err)
-		}
+	// Everything the discovery looks for, plus the mod user-config folder.
+	root := makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
+	if err := os.MkdirAll(filepath.Join(root, "User", "Mods"), 0o755); err != nil {
+		t.Fatal(err)
 	}
 	return root
 }
@@ -94,6 +91,105 @@ func TestInstallMigratesLegacyConfig(t *testing.T) {
 	}
 }
 
+// A folder has to actually look like a Reloaded-II install before the search
+// adopts it, or any unrelated folder with that name would be deployed into.
+func TestLooksLikeReloaded(t *testing.T) {
+	dir := t.TempDir()
+
+	if looksLikeReloaded(dir) {
+		t.Fatal("an empty folder was accepted")
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "Mods"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if looksLikeReloaded(dir) {
+		t.Fatal("a Mods folder on its own was accepted by the search")
+	}
+	// The picker is deliberately looser: a renamed install is still usable as
+	// long as it has somewhere to put mods.
+	if !hasModsFolder(dir) {
+		t.Fatal("a Mods folder should be enough for a folder picked by hand")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Reloaded-II.exe"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !looksLikeReloaded(dir) {
+		t.Fatal("Reloaded-II.exe plus a Mods folder was rejected")
+	}
+}
+
+// hermeticHome points every path the discovery consults at a throwaway folder, so
+// the tests never see the machine's real Reloaded-II.
+func hermeticHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
+	return home
+}
+
+func makeReloaded(t *testing.T, dir string) string {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, "Mods"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Reloaded-II.exe"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// A folder chosen earlier wins over searching, and the search skips over to the
+// next launch without asking again.
+func TestSavedReloadedDirWins(t *testing.T) {
+	home := hermeticHome(t)
+	saved := makeReloaded(t, filepath.Join(home, "Somewhere", "Reloaded-II"))
+	saveSettings(settings{ReloadedDir: saved})
+
+	if got := reloadedDir(); got != saved {
+		t.Fatalf("saved folder ignored: got %q, want %q", got, saved)
+	}
+}
+
+// A remembered folder that is no longer a Reloaded install (moved, deleted) must
+// not be used, and must not stop the search either.
+func TestStaleSavedDirFallsBackToSearching(t *testing.T) {
+	home := hermeticHome(t)
+	saveSettings(settings{ReloadedDir: filepath.Join(home, "gone")})
+
+	found := makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
+	if got := reloadedDir(); got != found {
+		t.Fatalf("stale entry blocked the search: got %q, want %q", got, found)
+	}
+}
+
+// Nothing anywhere is a valid answer; the UI turns it into the folder picker.
+func TestNoReloadedDirAnywhere(t *testing.T) {
+	hermeticHome(t)
+	if got := reloadedDir(); got != "" {
+		t.Fatalf("expected nothing to be found, got %q", got)
+	}
+}
+
+// The picker's answer is remembered for next time.
+func TestSaveSettingsRoundTrip(t *testing.T) {
+	hermeticHome(t)
+	want := `C:\Somewhere\Reloaded-II`
+	saveSettings(settings{ReloadedDir: want})
+
+	path := settingsFile()
+	if path == "" {
+		t.Fatal("no settings path")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("settings were not written: %v", err)
+	}
+	if got := loadSettings().ReloadedDir; got != want {
+		t.Fatalf("settings round-trip lost the value: got %q, want %q", got, want)
+	}
+}
 // The picker and the default-value fill come from two separately generated
 // assets. If their key sets drift, adding a skill silently produces zeros, so
 // assert the two tables describe the same set of skills.

@@ -23,15 +23,20 @@ var embeddedNames []byte
 var embeddedDefaults []byte
 
 func main() {
+	edits := &EditService{}
+
 	app := application.New(application.Options{
 		Name: "GBFRSkillEdits",
 		Services: []application.Service{
-			application.NewService(&EditService{}),
+			application.NewService(edits),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
 	})
+
+	// Only known once the app exists: the folder picker needs a window to belong to.
+	edits.app = app
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "GBFR Skill Edit",

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // LevelValueCount is how many LevelValue slots skill_status carries, and therefore
@@ -36,7 +38,47 @@ const modFolder = "GBFR.SkillEdit"
 const modDllName = "GBFR.SkillEdit.dll"
 
 // EditService is the Wails-exposed backend.
-type EditService struct{}
+type EditService struct {
+	// app is only needed for the folder picker, which has to belong to a window.
+	app *application.App
+}
+
+// ReloadedDir is the Reloaded-II folder the tool deploys into, or "" when one has
+// not been found or picked yet.
+func (s *EditService) ReloadedDir() string {
+	return reloadedDir()
+}
+
+// ChooseReloadedDir asks the user for the Reloaded-II folder and remembers it.
+// An empty result means they cancelled.
+func (s *EditService) ChooseReloadedDir() (string, error) {
+	if s.app == nil {
+		return "", fmt.Errorf("no window available for a folder picker")
+	}
+	chosen, err := s.app.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{
+		CanChooseDirectories: true,
+		CanChooseFiles:       false,
+		Title:                "选择 Reloaded-II 目录",
+		ButtonText:           "选择",
+	}).PromptForSingleSelection()
+	if err != nil {
+		return "", err
+	}
+	if chosen == "" {
+		return "", nil
+	}
+	// Loose on purpose: a renamed or moved install is fine, one without a Mods
+	// folder is not.
+	if !hasModsFolder(chosen) {
+		return "", fmt.Errorf("%s 里没有 Mods 文件夹，这看起来不是 Reloaded-II 的安装目录", chosen)
+	}
+	absolute, err := filepath.Abs(chosen)
+	if err != nil {
+		absolute = chosen
+	}
+	saveSettings(settings{ReloadedDir: absolute})
+	return absolute, nil
+}
 
 // SkillNames maps a skill_status Key (8-hex hash) to its display name.
 // Populated once from the embedded skillnames.json.
@@ -98,17 +140,113 @@ func defaultEdits() []SkillEdit {
 }
 
 // reloadedDir is the Reloaded-II installation this tool deploys into, or "" when
-// it is not where we expect it.
+// there is none to be found.
+//
+// Nothing about the location may be assumed: Reloaded-II is a portable folder
+// that people keep wherever they unpacked it. A folder the user picked earlier
+// wins, then the places it usually ends up, and if all of that fails the caller
+// offers the folder picker.
 func reloadedDir() string {
-	home, err := os.UserHomeDir()
+	if saved := loadSettings().ReloadedDir; saved != "" && looksLikeReloaded(saved) {
+		return saved
+	}
+	for _, candidate := range candidateReloadedDirs() {
+		if looksLikeReloaded(candidate) {
+			saveSettings(settings{ReloadedDir: candidate})
+			return candidate
+		}
+	}
+	return ""
+}
+
+// looksLikeReloaded is the strict test used while searching, so that some
+// unrelated folder called "Reloaded-II" is not adopted by mistake.
+func looksLikeReloaded(dir string) bool {
+	if info, err := os.Stat(filepath.Join(dir, "Reloaded-II.exe")); err != nil || info.IsDir() {
+		return false
+	}
+	return hasModsFolder(dir)
+}
+
+// hasModsFolder is the only thing the tool actually needs from the folder, and
+// the test applied to a folder the user picked by hand - their install may be
+// renamed, but it still has to have somewhere to put mods.
+func hasModsFolder(dir string) bool {
+	info, err := os.Stat(filepath.Join(dir, "Mods"))
+	return err == nil && info.IsDir()
+}
+
+// candidateReloadedDirs lists the places worth looking in, cheapest first. Drive
+// letters are kept to the usual three: statting an absent drive is quick, but a
+// mapped network drive that is asleep can block for seconds.
+func candidateReloadedDirs() []string {
+	dirs := []string{}
+	if home, err := os.UserHomeDir(); err == nil {
+		dirs = append(dirs,
+			filepath.Join(home, "Desktop", "Reloaded-II"),
+			filepath.Join(home, "Reloaded-II"),
+			filepath.Join(home, "Downloads", "Reloaded-II"),
+			filepath.Join(home, "Documents", "Reloaded-II"),
+		)
+	}
+	if exe, err := os.Executable(); err == nil {
+		// The tool may well be sitting inside or beside the install.
+		dir := filepath.Dir(exe)
+		dirs = append(dirs, filepath.Join(dir, "Reloaded-II"), dir, filepath.Dir(dir))
+	}
+	for _, env := range []string{"LOCALAPPDATA", "APPDATA", "ProgramFiles", "ProgramFiles(x86)"} {
+		if value := os.Getenv(env); value != "" {
+			dirs = append(dirs, filepath.Join(value, "Reloaded-II"))
+		}
+	}
+	for _, drive := range []string{"C:", "D:", "E:"} {
+		dirs = append(dirs, drive+`\Reloaded-II`)
+	}
+	return dirs
+}
+
+// settings is the tool's own state, kept outside the mod so that it survives
+// reinstalls. Losing it only costs one folder pick.
+type settings struct {
+	ReloadedDir string `json:"ReloadedDir"`
+}
+
+// settingsFile is under %APPDATA%; "" when we cannot work out where that is.
+func settingsFile() string {
+	dir, err := os.UserConfigDir()
 	if err != nil {
 		return ""
 	}
-	candidate := filepath.Join(home, "Desktop", "Reloaded-II")
-	if info, err := os.Stat(candidate); err != nil || !info.IsDir() {
-		return ""
+	return filepath.Join(dir, "GBFR.SkillEdit", "tool.json")
+}
+
+func loadSettings() settings {
+	var loaded settings
+	path := settingsFile()
+	if path == "" {
+		return loaded
 	}
-	return candidate
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return loaded
+	}
+	_ = json.Unmarshal(raw, &loaded)
+	return loaded
+}
+
+// saveSettings is best effort: failing to remember the folder costs the user one
+// extra pick next launch, which is not worth interrupting them for.
+func saveSettings(value settings) {
+	path := settingsFile()
+	if path == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return
+	}
+	if raw, err := json.MarshalIndent(value, "", "  "); err == nil {
+		_ = os.WriteFile(path, raw, 0o644)
+	}
 }
 
 // ModsDir returns the Reloaded-II mods folder, or "" when it cannot be found.
