@@ -369,9 +369,12 @@ export default function App() {
           {LANGS.map((code) => (
             <Button
               key={code}
-              size="icon-sm"
+              size="sm"
               variant={code === lang ? "default" : "outline"}
               aria-label={code}
+              // Fixed width and no padding: the stock sizes are sized for one
+              // glyph, which leaves two letters touching the edges.
+              className="w-9 px-0"
               onClick={() => setLang(code)}
             >
               {LANG_LABEL[code]}
