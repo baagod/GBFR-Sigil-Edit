@@ -115,11 +115,13 @@ function ValueSlots({
   const vanillaOf = (i: number) => defaults?.[i] ?? 0;
 
   return (
-    <div className="flex shrink-0 items-center">
+    // The one flexible part of the row: whatever the name and the level do not
+    // need goes to the values, and they share it evenly.
+    <div className="flex min-w-0 flex-1 items-center">
       {Array.from({ length: SLOTS }, (_, i) => (
         <Fragment key={i}>
           {i > 0 && (
-            <span className="text-muted-foreground/40" aria-hidden>
+            <span className="shrink-0 text-muted-foreground/40" aria-hidden>
               |
             </span>
           )}
@@ -149,7 +151,7 @@ function ValueSlots({
               reads as one line of numbers separated by |, and the only chrome left
               is a faint wash on the slot being edited so the caret has a home.
             */
-            className={`h-7 w-8 min-w-0 border-0 bg-transparent px-0 text-center text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+            className={`h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-center text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
           />
         </Fragment>
       ))}
@@ -409,11 +411,16 @@ export default function App() {
                 />
 
                 <span
-                  className={`min-w-0 flex-1 truncate text-sm ${
+                  /*
+                    A fixed width, not a flexible one: the name and the level have
+                    to stay together, and the value boxes are what should absorb a
+                    wider window. 208px is sized for the longest name in the game's
+                    English text ("Super Ultimate Perfect Dodge"); anything longer
+                    truncates, with the tooltip carrying the whole one.
+                  */
+                  className={`w-52 shrink-0 truncate text-sm ${
                     edit.Enabled ? "" : "text-muted-foreground"
                   }`}
-                  // Names longer than the row allows are truncated; the tooltip is
-                  // where the whole one is readable.
                   title={name || edit.Key}
                 >
                   {name || <span className="font-mono text-muted-foreground">{edit.Key}</span>}
