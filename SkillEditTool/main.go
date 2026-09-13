@@ -51,13 +51,17 @@ func main() {
 		Title: "GBFR Skill Edit",
 		/*
 			Wails sizes the outer window, and Windows spends 8px per side on the
-			resize frame, so 616 here is 600 of *client* area for the frontend to
+			resize frame, so 792 here is 776 of *client* area for the frontend to
 			lay out in. Measured with GetWindowRect vs GetClientRect at 96 DPI.
 
-			Only a starting size, not a constraint: the width is resizable.
+			Width is pinned: the row packs a 222px name, the level and ten value
+			boxes, and below about 700 of client width the boxes stop fitting four
+			digits. Height stays resizable.
 		*/
-		Width:  616,
-		Height: 620,
+		Width:    792,
+		MinWidth: 792,
+		MaxWidth: 792,
+		Height:   620,
 		// Matches the shadcn dark --background token, so the window does not flash
 		// a different colour before the frontend paints.
 		BackgroundColour: application.NewRGB(10, 10, 10),
