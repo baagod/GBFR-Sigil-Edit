@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { SkillPicker, type PickerItem } from "./SkillPicker";
+import { LANGS, LANG_LABEL, MESSAGES, initialLang, rememberLang, type Lang } from "./i18n";
 
 type SkillEdit = {
   Enabled: boolean;
@@ -159,9 +160,11 @@ function ValueSlots({
 /** The stored level, shown one higher because that is what the game calls it. */
 function LevelInput({
   stored,
+  label,
   onChange,
 }: {
   stored: number;
+  label: string;
   onChange: (stored: number) => void;
 }) {
   return (
@@ -178,7 +181,7 @@ function LevelInput({
           digits, which is what w-6 is sized for. */}
       <Input
         type="number"
-        aria-label="等级"
+        aria-label={label}
         value={shownLevel(stored)}
         onChange={(e) => onChange(Number(e.target.value) - 1)}
         className={`h-7 w-6 min-w-0 border-0 bg-transparent px-0 text-left text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
@@ -188,6 +191,7 @@ function LevelInput({
 }
 
 export default function App() {
+  const [lang, setLang] = useState<Lang>(initialLang);
   const [edits, setEdits] = useState<SkillEdit[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [defaults, setDefaults] = useState<Record<string, number[]>>({});
@@ -198,15 +202,28 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [newKey, setNewKey] = useState("");
 
+  const t = MESSAGES[lang];
+
+  /*
+    Skill names come from the game's own text for the chosen language, so they are
+    fetched again whenever it changes. The edit list is language-neutral and is
+    deliberately left alone.
+  */
+  useEffect(() => {
+    rememberLang(lang);
+    Call.ByName(`${SERVICE}.NameMap`, lang)
+      .then((map) => setNames((map ?? {}) as Record<string, string>))
+      .catch((err) => setError({ title: t.readFailed, detail: String(err) }));
+  }, [lang]);
+
   /*
     Reloaded-II is a portable folder, so where it lives is discovered at startup
     and can be corrected by hand. Everything the tool shows depends on that
     answer, which is why picking a folder reloads all of it.
   */
   async function loadAll() {
-    const [list, nameMap, defaultMap, dir, root] = await Promise.all([
+    const [list, defaultMap, dir, root] = await Promise.all([
       Call.ByName(`${SERVICE}.LoadEdits`) as Promise<SkillEdit[]>,
-      Call.ByName(`${SERVICE}.NameMap`) as Promise<Record<string, string>>,
       Call.ByName(`${SERVICE}.DefaultMap`) as Promise<Record<string, number[]>>,
       Call.ByName(`${SERVICE}.ModsDir`) as Promise<string>,
       Call.ByName(`${SERVICE}.ReloadedDir`) as Promise<string>,
@@ -215,7 +232,6 @@ export default function App() {
       (list ?? []).map((e) => ({ ...e, Values: pad(e.Values ?? []) })),
     );
     setEdits(loaded);
-    setNames(nameMap ?? {});
     setDefaults(defaultMap ?? {});
     setModsDir(dir ?? "");
     setReloadedDir(root ?? "");
@@ -228,16 +244,19 @@ export default function App() {
   }
 
   useEffect(() => {
-    loadAll().catch((err) => setError({ title: "读取失败", detail: String(err) }));
+    loadAll().catch((err) => setError({ title: t.readFailed, detail: String(err) }));
   }, []);
 
   async function chooseReloadedDir() {
     try {
-      const chosen = (await Call.ByName(`${SERVICE}.ChooseReloadedDir`)) as string;
+      const chosen = (await Call.ByName(
+        `${SERVICE}.ChooseReloadedDir`,
+        lang,
+      )) as string;
       if (!chosen) return; // cancelled
       await loadAll();
     } catch (err) {
-      setError({ title: "选择目录失败", detail: String(err) });
+      setError({ title: t.chooseFailed, detail: String(err) });
     }
   }
 
@@ -275,7 +294,7 @@ export default function App() {
       await Call.ByName(`${SERVICE}.Install`, items);
       setError(null);
     } catch (err) {
-      setError({ title: "写入失败", detail: String(err) });
+      setError({ title: t.writeFailed, detail: String(err) });
     } finally {
       if (!quiet) setBusy(false);
     }
@@ -339,10 +358,26 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 flex flex-col gap-4 p-5">
-      <header>
+      <header className="flex items-center justify-between">
         <h1 className="text-sm font-semibold">
-          技能选择（{enabledCount}/{edits.length}）
+          {t.title(enabledCount, edits.length)}
         </h1>
+
+        {/* Three square buttons: the label is the language's own short form, so
+            this never needs translating either. */}
+        <div className="flex items-center gap-1">
+          {LANGS.map((code) => (
+            <Button
+              key={code}
+              size="icon-sm"
+              variant={code === lang ? "default" : "outline"}
+              aria-label={code}
+              onClick={() => setLang(code)}
+            >
+              {LANG_LABEL[code]}
+            </Button>
+          ))}
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -366,7 +401,7 @@ export default function App() {
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <Checkbox
                   checked={edit.Enabled}
-                  aria-label={`启用 ${name || edit.Key}`}
+                  aria-label={t.enable(name || edit.Key)}
                   onCheckedChange={() => toggle(index)}
                 />
 
@@ -383,6 +418,7 @@ export default function App() {
 
                 <LevelInput
                   stored={edit.Level}
+                  label={t.level}
                   onChange={(level) => update(index, { Level: level })}
                 />
 
@@ -395,7 +431,7 @@ export default function App() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={`删除 ${name || edit.Key}`}
+                  aria-label={t.remove(name || edit.Key)}
                   onClick={() => remove(index)}
                 >
                   <Trash2 />
@@ -407,7 +443,7 @@ export default function App() {
 
         {shown.length === 0 && (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            没有改动条目。
+            {t.empty}
           </p>
         )}
       </div>
@@ -419,28 +455,28 @@ export default function App() {
           <SkillPicker
             items={pickerItems}
             value={newKey}
-            placeholder="选择技能…"
-            searchPlaceholder="搜索技能名"
-            emptyLabel="没有匹配的技能"
+            placeholder={t.pickSkill}
+            searchPlaceholder={t.searchSkill}
+            emptyLabel={t.noMatch}
             onSelect={setNewKey}
           />
         </div>
         <Button onClick={add} disabled={!newKey}>
-          添加
+          {t.add}
         </Button>
       </div>
 
       <footer className="flex items-center gap-4 border-t pt-4">
         {/*
-          The label never changes. Swapping it for "写入中…" resized the button by
-          9px, which slid the target line next to it back and forth. The disabled
-          state is the feedback while the write is in flight.
+          The label never changes. Swapping it for a progress word resized the
+          button by 9px, which slid the target line next to it back and forth.
+          The disabled state is the feedback while the write is in flight.
         */}
         <Button
           onClick={install}
           disabled={busy || shown.length === 0 || !reloadedDir}
         >
-          安装 Mod
+          {t.install}
         </Button>
 
         {/*
@@ -452,7 +488,7 @@ export default function App() {
         {reloadedDir === "" ? (
           <div className="flex min-h-4 min-w-0 flex-1 items-center gap-2">
             <span className="truncate text-xs text-muted-foreground">
-              没找到 Reloaded-II 的安装目录
+              {t.noReloaded}
             </span>
             <Button
               variant="outline"
@@ -460,12 +496,12 @@ export default function App() {
               onClick={chooseReloadedDir}
               disabled={busy}
             >
-              选择目录…
+              {t.chooseDir}
             </Button>
           </div>
         ) : reloadedDir ? (
           <div className="min-h-4 min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            目标：{modsDir}\GBFR.SkillEdit
+            {t.target(`${modsDir}\\GBFR.SkillEdit`)}
           </div>
         ) : null}
       </footer>
@@ -493,7 +529,7 @@ export default function App() {
           {/* Stock footer and stock button: below the sm breakpoint the footer is
               a column, so the button stretches on its own. No width of our own. */}
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setError(null)}>确定</AlertDialogAction>
+            <AlertDialogAction onClick={() => setError(null)}>{t.ok}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -16,8 +16,17 @@ var embeddedDll []byte
 //go:embed assets/ModConfig.json
 var embeddedCfg []byte
 
-//go:embed assets/skillnames.json
-var embeddedNames []byte
+// One skill-name table per UI language, each built from that language's own text
+// in the game. The hashes are identical across all three.
+//
+//go:embed assets/skillnames.zh.json
+var embeddedNamesZH []byte
+
+//go:embed assets/skillnames.en.json
+var embeddedNamesEN []byte
+
+//go:embed assets/skillnames.ja.json
+var embeddedNamesJA []byte
 
 //go:embed assets/skilldefaults.json
 var embeddedDefaults []byte

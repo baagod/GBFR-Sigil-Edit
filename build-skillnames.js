@@ -9,7 +9,11 @@
 //
 // Falls back to skill.Name -> TXT_SKILL_* for skills with no owning sigil.
 //
-// Usage: node build-skillnames.js [--gen <gen dir>] [--out <json path>]
+// Usage: node build-skillnames.js [--lang zh|en|ja] [--root <project dir>]
+//                                [--db <gbfr.db>] [--msg <text dir>] [--out <json path>]
+//
+// Needs an extracted copy of the game - the tables and the per-language text
+// folder. The generated asset is committed, so only regenerating needs that.
 
 "use strict";
 const fs = require("fs");
@@ -20,11 +24,23 @@ const arg = (n, d) => {
   return i >= 0 ? process.argv[i + 1] : d;
 };
 
-const GEN = arg("gen", "D:/Games/Relink/GBFR.PreEquippedSigils/gen");
-const DB = arg("db", path.join(GEN, "extracted", "gbfr.db"));
-const MSG_CS = path.join(GEN, "extracted", "system", "table", "text", "cs");
-const OUT = arg("out", "D:/Games/Relink/GBFR.SkillEdit/SkillEditTool/assets/skillnames.json");
-const IDS = path.join(GEN, "GBFRDataTools", "Data", "ids.txt");
+// The game names its text folders with its own codes; the tool uses the usual
+// language codes, so the two are mapped here.
+const GAME_LANG = { zh: "cs", en: "en", ja: "jp" };
+
+const LANG = arg("lang", "zh");
+if (!(LANG in GAME_LANG)) {
+  throw new Error(`unknown --lang ${LANG}; expected one of ${Object.keys(GAME_LANG).join(", ")}`);
+}
+
+const ROOT = arg("root", ".");
+const DB = arg("db", path.join(ROOT, "vanilla.db"));
+const MSG_DIR = arg(
+  "msg",
+  path.join(ROOT, "game_extract", "system", "table", "text", GAME_LANG[LANG]),
+);
+const IDS = arg("ids", path.join(ROOT, "GBFRDataTools", "Data", "ids.txt"));
+const OUT = arg("out", path.join(ROOT, "SkillEditTool", "assets", `skillnames.${LANG}.json`));
 
 // ---------- .msg text lookup ----------
 // The container interleaves `id_hash_<pstring>` and `text_<pstring>` records, so
@@ -94,7 +110,7 @@ function parseIds(file) {
 function main() {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(DB);
-  const cs = parseTextMessages(MSG_CS);
+  const cs = parseTextMessages(MSG_DIR);
 
   // ids.txt maps hash -> short id (and the reverse). gem columns store short ids
   // like SKILL_127_00 while skill_status stores the 8-hex hash, so both

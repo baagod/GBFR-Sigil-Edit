@@ -190,28 +190,75 @@ func TestSaveSettingsRoundTrip(t *testing.T) {
 		t.Fatalf("settings round-trip lost the value: got %q, want %q", got, want)
 	}
 }
-// The picker and the default-value fill come from two separately generated
-// assets. If their key sets drift, adding a skill silently produces zeros, so
-// assert the two tables describe the same set of skills.
+
+// The name tables and the default-value table come from separately generated
+// assets. If their key sets drift, adding a skill silently produces zeros (or a
+// blank picker row), so assert every language describes the same set of skills as
+// the defaults - and the same set as each other.
 func TestSkillTablesAgree(t *testing.T) {
-	if len(skillNames) == 0 {
-		t.Fatal("skillnames.json did not load")
-	}
 	if len(skillDefaults) == 0 {
 		t.Fatal("skilldefaults.json did not load")
 	}
-	if len(skillNames) != len(skillDefaults) {
-		t.Fatalf("key count differs: names %d, defaults %d", len(skillNames), len(skillDefaults))
+	if len(nameTables) != 3 {
+		t.Fatalf("expected a table each for zh, en and ja, got %d", len(nameTables))
 	}
-	for key := range skillNames {
-		if _, ok := skillDefaults[key]; !ok {
-			t.Fatalf("skill %s has a name but no default values", key)
+	var reference map[string]string
+	for _, lang := range []string{"zh", "en", "ja"} {
+		names, ok := nameTables[lang]
+		if !ok {
+			t.Fatalf("no name table for %s", lang)
+		}
+		if len(names) == 0 {
+			t.Fatalf("the %s name table is empty", lang)
+		}
+		if len(names) != len(skillDefaults) {
+			t.Fatalf("%s: key count differs from the defaults: names %d, defaults %d",
+				lang, len(names), len(skillDefaults))
+		}
+		for key := range names {
+			if _, ok := skillDefaults[key]; !ok {
+				t.Fatalf("%s: skill %s has a name but no default values", lang, key)
+			}
+		}
+		if reference == nil {
+			reference = names
+			continue
+		}
+		for key := range reference {
+			if _, ok := names[key]; !ok {
+				t.Fatalf("%s is missing skill %s, which other languages have", lang, key)
+			}
 		}
 	}
 	for key, values := range skillDefaults {
 		if len(values) != LevelValueCount {
 			t.Fatalf("skill %s has %d default values, want %d", key, len(values), LevelValueCount)
 		}
+	}
+}
+
+// The same skill has to be the same skill in every language - by hash, with a
+// translated name.
+func TestNameTablesAreTranslated(t *testing.T) {
+	zh := nameTables["zh"]["06719232"]
+	en := nameTables["en"]["06719232"]
+	ja := nameTables["ja"]["06719232"]
+	if zh == "" || en == "" || ja == "" {
+		t.Fatalf("06719232 is missing a name in some language: zh=%q en=%q ja=%q", zh, en, ja)
+	}
+	if zh == en || zh == ja || en == ja {
+		t.Fatalf("the tables are not actually translated: zh=%q en=%q ja=%q", zh, en, ja)
+	}
+}
+
+// An unknown language falls back rather than handing back an empty picker.
+func TestNameMapFallsBack(t *testing.T) {
+	service := &EditService{}
+	if got := len(service.NameMap("ko")); got == 0 {
+		t.Fatal("an unknown language produced an empty name map")
+	}
+	if got := len(service.NameMap("en")); got == 0 {
+		t.Fatal("en produced an empty name map")
 	}
 }
 

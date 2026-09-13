@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -49,17 +48,29 @@ func (s *EditService) ReloadedDir() string {
 	return reloadedDir()
 }
 
+// pickerText is the folder dialog's own copy. The OS draws that dialog, so these
+// strings have to cross into Go rather than live in the frontend's dictionary.
+var pickerText = map[string]struct{ Title, Button, NoMods string }{
+	LangZH: {"选择 Reloaded-II 目录", "选择", "%s 里没有 Mods 文件夹，这看起来不是 Reloaded-II 的安装目录"},
+	"en":   {"Select the Reloaded-II folder", "Select", "%s has no Mods folder, so it does not look like a Reloaded-II install"},
+	"ja":   {"Reloaded-II のフォルダを選ぶ", "選択", "%s に Mods フォルダがないため、Reloaded-II のインストール先ではないようです"},
+}
+
 // ChooseReloadedDir asks the user for the Reloaded-II folder and remembers it.
 // An empty result means they cancelled.
-func (s *EditService) ChooseReloadedDir() (string, error) {
+func (s *EditService) ChooseReloadedDir(lang string) (string, error) {
 	if s.app == nil {
 		return "", fmt.Errorf("no window available for a folder picker")
+	}
+	text, ok := pickerText[lang]
+	if !ok {
+		text = pickerText[LangZH]
 	}
 	chosen, err := s.app.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{
 		CanChooseDirectories: true,
 		CanChooseFiles:       false,
-		Title:                "选择 Reloaded-II 目录",
-		ButtonText:           "选择",
+		Title:                text.Title,
+		ButtonText:           text.Button,
 	}).PromptForSingleSelection()
 	if err != nil {
 		return "", err
@@ -70,7 +81,7 @@ func (s *EditService) ChooseReloadedDir() (string, error) {
 	// Loose on purpose: a renamed or moved install is fine, one without a Mods
 	// folder is not.
 	if !hasModsFolder(chosen) {
-		return "", fmt.Errorf("%s 里没有 Mods 文件夹，这看起来不是 Reloaded-II 的安装目录", chosen)
+		return "", fmt.Errorf(text.NoMods, chosen)
 	}
 	absolute, err := filepath.Abs(chosen)
 	if err != nil {
@@ -80,28 +91,35 @@ func (s *EditService) ChooseReloadedDir() (string, error) {
 	return absolute, nil
 }
 
-// SkillNames maps a skill_status Key (8-hex hash) to its display name.
-// Populated once from the embedded skillnames.json.
-var skillNames = loadSkillNames()
+// LangZH is the language the tool falls back to when asked for one it has no
+// table for.
+const LangZH = "zh"
 
-func loadSkillNames() map[string]string {
+// nameTables maps a UI language to its skill-name table. The keys are the same
+// 8-hex hashes in every language; only the display names differ.
+var nameTables = map[string]map[string]string{
+	LangZH: decodeNames(embeddedNamesZH),
+	"en":   decodeNames(embeddedNamesEN),
+	"ja":   decodeNames(embeddedNamesJA),
+}
+
+func decodeNames(raw []byte) map[string]string {
 	names := make(map[string]string)
-	if len(embeddedNames) == 0 {
+	if len(raw) == 0 {
 		return names
 	}
-	_ = json.Unmarshal(embeddedNames, &names)
+	_ = json.Unmarshal(raw, &names)
 	return names
 }
 
-// NameOf returns the display name for a skill key, or "" when unknown.
-func (s *EditService) NameOf(key string) string {
-	return skillNames[strings.ToUpper(strings.TrimSpace(key))]
-}
-
-// NameMap returns the whole key -> name table so the frontend can resolve
-// names locally instead of one call per row.
-func (s *EditService) NameMap() map[string]string {
-	return skillNames
+// NameMap returns the whole key -> name table for a language, so the frontend can
+// resolve names locally instead of one call per row. An unknown language gets the
+// fallback rather than an empty picker.
+func (s *EditService) NameMap(lang string) map[string]string {
+	if names, ok := nameTables[lang]; ok {
+		return names
+	}
+	return nameTables[LangZH]
 }
 
 // skillDefaults maps a skill_status Key to that skill's vanilla LevelValue1..10,
