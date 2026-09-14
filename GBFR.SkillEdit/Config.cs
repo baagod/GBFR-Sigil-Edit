@@ -21,10 +21,7 @@ public class SkillEdit
     /// <summary>skill_status Key as an 8-digit hex hash, e.g. 06719232.</summary>
     public string Key { get; set; } = "";
 
-    /// <summary>
-    /// The row's Level field - the level the game shows for it, and the row the
-    /// values are written to. 15 is the level most skills keep their numbers on.
-    /// </summary>
+    /// <summary>The row's Level field: the level the game shows, and where an edit lands.</summary>
     public int Level { get; set; } = 15;
 
     /// <summary>LevelValue1..10, written in order.</summary>

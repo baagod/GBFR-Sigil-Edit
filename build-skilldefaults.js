@@ -1,13 +1,9 @@
-// Build skillinfo.json: skill hash -> its vanilla LevelValue1..10 and the stored
-// levels those numbers live on, so the tool can prefill a sensible starting point
-// when a skill is added instead of ten zeros, and bound the level field.
-//
-// One asset rather than two: both halves describe the same row, come from the same
-// query, and are always wanted together.
+// Build skillinfo.json: skill hash -> its vanilla LevelValue1..10 and the level
+// those numbers live on, so the tool can prefill a new edit and bound its level.
 //
 // Source is the game's own skill_status.tbl, converted to SQLite by GBFRDataTools.
-// A row's Level field is the level the game shows for it, and it is the row an edit
-// targets, so the numbers here are used as they are.
+// A row's Level field is the level the game shows for it and the row an edit is
+// written to, so the numbers here are used as they are.
 //
 // Usage: node build-skilldefaults.js [--root <project dir>]
 
@@ -93,48 +89,57 @@ function main() {
     return idToHash.get(key) ?? key;
   };
 
-  const maxLevel = new Map();
-  for (const row of db.prepare("select Key, max(Level) m from skill_status group by Key").all()) {
-    maxLevel.set(String(row.Key), row.m);
-  }
-
   const cols = Array.from({ length: 10 }, (_, i) => `LevelValue${i + 1}`).join(", ");
   const rows = db.prepare(`select Key, Level, ${cols} from skill_status`).all();
 
   const valuesOf = (row) =>
     Array.from({ length: 10 }, (_, i) => Number(row[`LevelValue${i + 1}`]) || 0);
-  const nonZero = (row) => valuesOf(row).some((v) => v !== 0);
 
-  // Level 15 is what most skills keep their numbers on; a few only carry them
-  // higher up.
-  const valuedAt15 = new Set();
+  /*
+    Every row of the skills the tool offers, indexed by level - 1, because an edit
+    can name any of those levels. Only carrying the one row a new edit starts on was
+    wrong for everything else: the placeholder, and the value an emptied box writes
+    back, both have to be the game's numbers for the level in play. Levels are
+    contiguous from 1, so the array needs no holes.
+  */
+  const perLevel = new Map();
   for (const row of rows) {
-    if (row.Level === 15 && nonZero(row)) valuedAt15.add(norm(String(row.Key)));
+    const hash = norm(String(row.Key));
+    if (!(hash in names)) continue;
+    if (EXCLUDED.has(hash)) continue;
+    if (!perLevel.has(hash)) perLevel.set(hash, []);
+    perLevel.get(hash)[row.Level - 1] = valuesOf(row);
   }
 
   const out = {};
-  for (const row of rows) {
-    const key = String(row.Key);
-    if (row.Level !== maxLevel.get(key)) continue;
+  for (const [hash, levels] of perLevel) {
+    // One row per level, contiguous from 1, so the last row is the highest level
+    // the skill has.
+    const max = levels.length;
 
-    const hash = norm(key);
-    if (!(hash in names)) continue;
-    if (EXCLUDED.has(hash)) continue;
+    /*
+      The lowest level that carries numbers. Rows below it are all zeros - the game
+      keeps them empty - so pointing an edit there would write a value into a row
+      that has none. The level field is clamped to this range, which is what stops
+      a skill whose numbers only exist on one level from being moved off it.
+    */
+    const first = levels.findIndex((row) => row.some((v) => v !== 0));
+    const min = first < 0 ? max : first + 1;
 
     /*
       Which level a new edit should point at.
 
-      The skill's own maximum while that is a normal 20 or less, otherwise the
-      usual 15 - except where 15 holds nothing, in which case the maximum is the
-      only row that would do anything.
+      The skill's own maximum while that is a normal 20 or less, otherwise the usual
+      15 - except where 15 holds nothing (min is above it), in which case the maximum
+      is the only row that would do anything.
     */
-    const maxLevel_ = row.Level;
-    const defaultLevel =
-      maxLevel_ <= 20 || !valuedAt15.has(hash) ? maxLevel_ : 15;
+    const defaultLevel = max <= 20 || min > 15 ? max : 15;
+
     out[hash] = {
       Default: defaultLevel,
-      Max: maxLevel_,
-      Values: valuesOf(row),
+      Max: max,
+      Min: min,
+      Levels: levels,
     };
   }
 
@@ -146,9 +151,10 @@ function main() {
   console.log(`  ${Object.keys(out).length} skills, ${(size / 1024).toFixed(1)} KB`);
   for (const k of ["06719232", "29B07BEB", "70395731", "CAC6AFF2"]) {
     const info = out[k];
+    const atDefault = info?.Levels?.[info.Default - 1] ?? [];
     console.log(
-      `  ${names[k] ?? k} (${k}) = [${(info?.Values ?? []).join(", ")}]  Lv${
-        info ? `${info.Default}/${info.Max}` : "?"
+      `  ${names[k] ?? k} (${k}) = [${atDefault.join(", ")}]  Lv${
+        info ? `${info.Min}..${info.Max} (default ${info.Default})` : "?"
       }`,
     );
   }

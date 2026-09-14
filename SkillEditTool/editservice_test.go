@@ -267,8 +267,16 @@ func TestSkillTablesAgree(t *testing.T) {
 		}
 	}
 	for key, info := range skillInfo {
-		if len(info.Values) != LevelValueCount {
-			t.Fatalf("skill %s has %d values, want %d", key, len(info.Values), LevelValueCount)
+		// One row per level, each carrying the ten LevelValue slots: the level an
+		// edit names has to have a row of its own, or a slot's placeholder (and the
+		// value an emptied box writes back) would come from a different level.
+		if len(info.Levels) != info.Max {
+			t.Fatalf("skill %s has %d level rows, want %d", key, len(info.Levels), info.Max)
+		}
+		for level, row := range info.Levels {
+			if len(row) != LevelValueCount {
+				t.Fatalf("skill %s level %d has %d values, want %d", key, level+1, len(row), LevelValueCount)
+			}
 		}
 	}
 }
@@ -298,8 +306,13 @@ func TestNameMapFallsBack(t *testing.T) {
 	}
 }
 
-// 黑龙的咒印 is the worked example: vanilla is 10/3/20 at level 15, and the mod's
+// 黑龙的咒印 is the worked example: vanilla is 10/3/20 on level 15, and the mod's
 // whole purpose is raising the first value.
+//
+// It is also the example that shows why every level needs its own row: levels 1 to
+// 14 of this skill are all zeros, so reading level 15's numbers while the edit names
+// level 14 would put a placeholder - and a written-back value - of 10/3/20 on a row
+// the game says is empty.
 func TestKnownSkillDefault(t *testing.T) {
 	info, ok := skillInfo["06719232"]
 	if !ok {
@@ -307,8 +320,15 @@ func TestKnownSkillDefault(t *testing.T) {
 	}
 	want := []float64{10, 3, 20, 0, 0, 0, 0, 0, 0, 0}
 	for i := range want {
-		if info.Values[i] != want[i] {
-			t.Fatalf("06719232[%d] = %v, want %v", i, info.Values[i], want[i])
+		if got := info.Levels[info.Default-1][i]; got != want[i] {
+			t.Fatalf("06719232 level %d[%d] = %v, want %v", info.Default, i, got, want[i])
+		}
+	}
+
+	below := info.Levels[info.Default-2]
+	for i, value := range below {
+		if value != 0 {
+			t.Fatalf("06719232 level %d[%d] = %v, want the zeros the table holds there", info.Default-1, i, value)
 		}
 	}
 }
@@ -320,32 +340,53 @@ func TestLevelRangesAreUsable(t *testing.T) {
 		t.Fatal("skillinfo.json did not load")
 	}
 	for hash, info := range skillInfo {
-		if info.Max < 0 || info.Default < 0 {
-			t.Fatalf("%s has a negative level: %+v", hash, info)
+		if info.Min < 1 || info.Default < 1 {
+			t.Fatalf("%s has a level below 1: %+v", hash, info)
 		}
-		if info.Default > info.Max {
-			t.Fatalf("%s defaults to Lv%d but its maximum is Lv%d", hash, info.Default, info.Max)
+		if info.Default > info.Max || info.Min > info.Default {
+			t.Fatalf("%s range is Lv%d..%d with default Lv%d", hash, info.Min, info.Max, info.Default)
+		}
+
+		// The clamped range is only honest if Min is the first level that carries
+		// numbers: every row below it has to be all zeros, or the field would be
+		// refusing levels the game does define.
+		carries := func(level int) bool {
+			for _, value := range info.Levels[level-1] {
+				if value != 0 {
+					return true
+				}
+			}
+			return false
+		}
+		if !carries(info.Min) {
+			t.Fatalf("%s: level %d carries no values, so it is not a lower bound", hash, info.Min)
+		}
+		for level := 1; level < info.Min; level++ {
+			if carries(level) {
+				t.Fatalf("%s: level %d carries values below the minimum %d", hash, level, info.Min)
+			}
 		}
 	}
 
 	// The three cases the rule treats differently. Levels are the table's own, so
-	// these are the numbers the game shows.
+	// these are the numbers the game shows. 黑龙的咒印 keeps its numbers on level 15
+	// alone, which is why its field is pinned there; 穷寇心 ramps from level 1.
 	for _, want := range []struct {
-		hash     string
-		def, max int
-		why      string
+		hash          string
+		min, def, max int
+		why           string
 	}{
-		{"06719232", 15, 15, "15 levels: default to its own maximum"},
-		{"70395731", 15, 30, "30 levels: default to the usual 15"},
-		{"CAC6AFF2", 1, 1, "1 level: default to it, not to 15"},
+		{"06719232", 15, 15, 15, "numbers on level 15 only: the field is pinned there"},
+		{"70395731", 1, 15, 30, "30 levels: default to the usual 15, free from 1 to 30"},
+		{"CAC6AFF2", 1, 1, 1, "1 level: default to it, not to 15"},
 	} {
 		got, ok := skillInfo[want.hash]
 		if !ok {
 			t.Fatalf("%s missing from the skill table", want.hash)
 		}
-		if got.Default != want.def || got.Max != want.max {
-			t.Fatalf("%s: got Lv%d/%d, want Lv%d/%d (%s)",
-				want.hash, got.Default, got.Max, want.def, want.max, want.why)
+		if got.Min != want.min || got.Default != want.def || got.Max != want.max {
+			t.Fatalf("%s: got Lv%d..%d (default %d), want Lv%d..%d (default %d) (%s)",
+				want.hash, got.Min, got.Max, got.Default, want.min, want.max, want.def, want.why)
 		}
 	}
 }

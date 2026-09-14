@@ -132,19 +132,23 @@ func (s *EditService) NameMap(lang string) map[string]string {
 	return nameTables[LangZH]
 }
 
-// SkillInfo is one row of the generated skillinfo.json: the skill's vanilla
-// LevelValue1..10, so a newly added edit starts from the game's own numbers
-// instead of zeros, and the levels those numbers live on.
+// SkillInfo is one row of the generated skillinfo.json: every level of a skill the
+// tool offers, so a newly added edit starts from the game's own numbers instead of
+// zeros, and so the value shown for a slot - and the one an emptied box writes back
+// - is the game's number for the level the edit names.
+//
+// Levels is indexed by level - 1: Levels[3] is the row whose Level field is 4.
 //
 // Default is the level a new edit should start on: the skill's own maximum when
 // that is a normal 20 or less, otherwise the usual 15, except for the few skills
-// whose values only exist higher up. Max is what the level field is clamped to.
-// Both are the table's own Level values - the level the game shows, and the row an
-// edit is written to.
+// whose values only exist higher up. Min and Max are what the level field is
+// clamped to - Min is the lowest level carrying numbers, so a skill whose numbers
+// exist on one level only cannot be moved off it.
 type SkillInfo struct {
-	Values  []float64 `json:"Values"`
-	Default int       `json:"Default"`
-	Max     int       `json:"Max"`
+	Levels  [][]float64 `json:"Levels"`
+	Default int         `json:"Default"`
+	Max     int         `json:"Max"`
+	Min     int         `json:"Min"`
 }
 
 // skillInfo maps a skill_status Key to that skill's own numbers and levels.
