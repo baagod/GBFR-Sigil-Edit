@@ -95,7 +95,7 @@ the frontend bundle and the DLL, so those have to exist first.
 
 ## Credits
 
-Made by **baago**. Source and releases: `<your-repo-url>`
+Made by **baago**. Source and releases: `https://github.com/baagod/GBFR-Skill-Edit`
 
 [中文说明](README.zh-CN.md)
 

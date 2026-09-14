@@ -77,7 +77,7 @@ Go 构建会把前端产物和 DLL 一起内嵌，所以这两者必须先就位
 
 ## 作者
 
-作者 **baago**。源码与发布页：`<your-repo-url>`
+作者 **baago**。源码与发布页：`https://github.com/baagod/GBFR-Skill-Edit`
 
 [English README](README.md)
 
