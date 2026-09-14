@@ -25,7 +25,7 @@ type SkillEdit = {
   Values: number[];
 };
 
-/** One skill's vanilla values, and where they live in stored levels. */
+/** One skill's vanilla values, and the levels they live on. */
 type SkillInfo = { Values: number[]; Default: number; Max: number };
 
 const SERVICE = "main.EditService";
@@ -38,9 +38,6 @@ const SLOTS = 10;
 */
 const NO_SPINNER =
   "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
-
-/** The table stores level N for the level the game calls N+1. */
-const shownLevel = (stored: number) => stored + 1;
 
 /** Two edits collide when they write the same row: same hash and same level. */
 const target = (e: SkillEdit) => `${e.Key}@${e.Level}`;
@@ -159,21 +156,20 @@ function ValueSlots({
 }
 
 /**
- * The stored level, shown one higher because that is what the game calls it, with
- * the skill's own maximum beside it and the field clamped to that maximum.
+ * The level the game shows for this row, with the skill's own maximum beside it
+ * and the field clamped to that maximum.
  */
 function LevelInput({
-  stored,
+  level,
   max,
   label,
   onChange,
 }: {
-  stored: number;
+  level: number;
   max: number;
   label: string;
-  onChange: (stored: number) => void;
+  onChange: (level: number) => void;
 }) {
-  const limit = shownLevel(max);
   return (
     /*
       Not an InputGroup: that whole component exists to draw a box around a field
@@ -191,19 +187,19 @@ function LevelInput({
         type="number"
         aria-label={label}
         min={1}
-        max={limit}
-        value={shownLevel(stored)}
+        max={max}
+        value={level}
         onChange={(e) => {
           const typed = Number(e.target.value);
           const wanted = Number.isFinite(typed) ? Math.round(typed) : 1;
-          onChange(Math.max(1, Math.min(limit, wanted)) - 1);
+          onChange(Math.max(1, Math.min(max, wanted)));
         }}
         // Narrow and left-aligned, so the digits sit against "Lv" and the
         // separator that follows them.
         className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 ml-0.5 text-left text-sm tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
       />
       <span className="text-sm leading-7 text-muted-foreground tabular-nums select-none">
-        / {limit}
+        / {max}
       </span>
     </div>
   );
@@ -368,7 +364,7 @@ export default function App() {
       {
         Enabled: true,
         Key: newKey,
-        Level: skills[key]?.Default ?? 14,
+        Level: skills[key]?.Default ?? 15,
         Values: pad(skills[key]?.Values ?? []),
       },
     ];
@@ -545,8 +541,8 @@ export default function App() {
                 </span>
 
                 <LevelInput
-                  stored={edit.Level}
-                  max={skills[edit.Key.toUpperCase()]?.Max ?? 14}
+                  level={edit.Level}
+                  max={skills[edit.Key.toUpperCase()]?.Max ?? 15}
                   label={t.level}
                   onChange={(level) => update(index, { Level: level })}
                 />

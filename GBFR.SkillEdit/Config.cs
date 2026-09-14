@@ -22,10 +22,10 @@ public class SkillEdit
     public string Key { get; set; } = "";
 
     /// <summary>
-    /// Stored level. The row holding a sigil's real numbers is one lower than the
-    /// level shown in game (game Lv15 -> stored 14).
+    /// The row's Level field - the level the game shows for it, and the row the
+    /// values are written to. 15 is the level most skills keep their numbers on.
     /// </summary>
-    public int Level { get; set; } = 14;
+    public int Level { get; set; } = 15;
 
     /// <summary>LevelValue1..10, written in order.</summary>
     public float[] Values { get; set; } = new float[LevelValueCount];

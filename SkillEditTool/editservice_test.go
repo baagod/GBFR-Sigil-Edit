@@ -44,7 +44,7 @@ never reads, which looks exactly like the mod doing nothing.
 func TestInstallWritesConfigWhereTheModReadsIt(t *testing.T) {
 	root := fakeReloaded(t)
 
-	edits := []SkillEdit{{Enabled: true, Key: "06719232", Level: 14, Values: []float64{30, 1, 20}}}
+	edits := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
 	if _, err := (&EditService{}).Install(edits); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
@@ -298,8 +298,8 @@ func TestNameMapFallsBack(t *testing.T) {
 	}
 }
 
-// 黑龙的咒印 is the worked example: vanilla is 10/3/20 at stored level 14, and
-// the mod's whole purpose is raising the first value.
+// 黑龙的咒印 is the worked example: vanilla is 10/3/20 at level 15, and the mod's
+// whole purpose is raising the first value.
 func TestKnownSkillDefault(t *testing.T) {
 	info, ok := skillInfo["06719232"]
 	if !ok {
@@ -324,19 +324,20 @@ func TestLevelRangesAreUsable(t *testing.T) {
 			t.Fatalf("%s has a negative level: %+v", hash, info)
 		}
 		if info.Default > info.Max {
-			t.Fatalf("%s defaults to Lv%d but its maximum is Lv%d", hash, info.Default+1, info.Max+1)
+			t.Fatalf("%s defaults to Lv%d but its maximum is Lv%d", hash, info.Default, info.Max)
 		}
 	}
 
-	// The three cases the rule treats differently.
+	// The three cases the rule treats differently. Levels are the table's own, so
+	// these are the numbers the game shows.
 	for _, want := range []struct {
 		hash     string
 		def, max int
 		why      string
 	}{
-		{"06719232", 14, 14, "15 levels: default to its own maximum"},
-		{"70395731", 14, 29, "30 levels: default to the usual 15"},
-		{"CAC6AFF2", 0, 0, "1 level: default to it, not to 15"},
+		{"06719232", 15, 15, "15 levels: default to its own maximum"},
+		{"70395731", 15, 30, "30 levels: default to the usual 15"},
+		{"CAC6AFF2", 1, 1, "1 level: default to it, not to 15"},
 	} {
 		got, ok := skillInfo[want.hash]
 		if !ok {
@@ -344,7 +345,7 @@ func TestLevelRangesAreUsable(t *testing.T) {
 		}
 		if got.Default != want.def || got.Max != want.max {
 			t.Fatalf("%s: got Lv%d/%d, want Lv%d/%d (%s)",
-				want.hash, got.Default+1, got.Max+1, want.def+1, want.max+1, want.why)
+				want.hash, got.Default, got.Max, want.def, want.max, want.why)
 		}
 	}
 }

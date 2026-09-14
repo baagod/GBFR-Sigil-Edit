@@ -28,8 +28,8 @@ var embeddedNamesEN []byte
 //go:embed assets/skillnames.ja.json
 var embeddedNamesJA []byte
 
-// Every skill's vanilla LevelValue1..10 and the stored levels its values live on,
-// in one generated table: both halves describe the same row.
+// Every skill's vanilla LevelValue1..10 and the levels those values live on, in
+// one generated table: both halves describe the same row.
 //
 //go:embed assets/skillinfo.json
 var embeddedSkillInfo []byte

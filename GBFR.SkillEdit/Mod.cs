@@ -21,16 +21,9 @@ namespace GBFR.SkillEdit;
 ///       +44  uint   LevelDescription
 ///       +48  uint   Level
 ///
-/// Row k starts at 8 + 52k, so its Key sits at 48 + 52k - and the offsets below
-/// are relative to that Key, which is what the patch loop walks. Value1Offset is
-/// therefore the next row's LevelValue1: the same skill one level up, because rows
-/// are grouped by Key in ascending Level.
-///
-/// That pairing is load-bearing rather than an accident. SkillEditTool stores a
-/// skill's levels as (table level - 1) and labels them stored + 1, so a level N
-/// chosen in the tool is written to the row whose Level field is N - the level the
-/// tool names. The offsets here and that convention have to move together: change
-/// one and every edit shifts by one level.
+/// Row k starts at 8 + 52k. A patch matches (Key, Level) and writes that row's own
+/// LevelValue1..10, so the Level an edit names is the Level field it lands on - the
+/// same number the game shows for it. Rows are grouped by Key with Level ascending.
 ///
 /// LevelValue7..10 exist only from the game's 2.0.0 (Endless Ragnarok) release on.
 /// A pre-2.0 table has 36-byte rows with the Key at +24, which is why Start()
@@ -41,14 +34,11 @@ public class Mod : IMod
     private const string TablePath = "system/table/skill_status.tbl";
 
     // The two numbers the whole layout hangs on: the file's own header, and one
-    // row. See the class comment for what sits where inside a row.
+    // row. The field offsets below are relative to the start of a row.
     private const int FileHeaderSize = 8;
     private const int RowSize = 52;
-
-    // Relative to the Key field - i.e. 40 bytes into the row, not to the row.
-    private const int HeaderSize = 48;
-    private const int LevelOffset = 8;
-    private const int Value1Offset = 12;
+    private const int KeyOffset = 40;
+    private const int LevelOffset = 48;
 
     private const string ConfigFileName = "Config.json";
     private const string ModId = "GBFR.SkillEdit";
@@ -195,37 +185,25 @@ public class Mod : IMod
     /// </summary>
     private static bool PatchRow(byte[] data, uint key, uint level, float[] values)
     {
-        for (var offset = HeaderSize; offset <= data.Length - RowSize; offset += RowSize)
+        for (var row = FileHeaderSize; row <= data.Length - RowSize; row += RowSize)
         {
-            if (BitConverter.ToUInt32(data, offset) != key)
+            if (BitConverter.ToUInt32(data, row + KeyOffset) != key)
                 continue;
-            if (BitConverter.ToUInt32(data, offset + LevelOffset) != level)
+            if (BitConverter.ToUInt32(data, row + LevelOffset) != level)
                 continue;
 
-            // The values sit in the row after this one (see the class comment), so
-            // that row has to belong to the same skill. The last row of a skill's
-            // block would otherwise write its numbers over the next skill's first
-            // level, and the table's own last row has no row after it at all.
-            var target = offset + RowSize;
-            if (target + sizeof(uint) > data.Length || BitConverter.ToUInt32(data, target) != key)
-            {
-                Log($"  {key:X8} L{level} @0x{offset:X}: refusing (values would land on the next skill's row)");
-                return false;
-            }
-
-            var at = offset + Value1Offset;
             var before = string.Join(" / ", Enumerable.Range(0, SkillEdit.LevelValueCount)
-                .Select(i => BitConverter.ToSingle(data, at + i * 4)));
+                .Select(i => BitConverter.ToSingle(data, row + i * 4)));
             var after = string.Join(" / ", Enumerable.Range(0, SkillEdit.LevelValueCount)
                 .Select(i => i < values.Length ? values[i] : 0f));
 
-            Log($"  {key:X8} L{level} @0x{offset:X}: was {before}");
-            Log($"  {key:X8} L{level} @0x{offset:X}: now {after}");
+            Log($"  {key:X8} L{level} @0x{row:X}: was {before}");
+            Log($"  {key:X8} L{level} @0x{row:X}: now {after}");
 
             for (var i = 0; i < SkillEdit.LevelValueCount; i++)
             {
                 var value = i < values.Length ? values[i] : 0f;
-                BitConverter.GetBytes(value).CopyTo(data, at + i * 4);
+                BitConverter.GetBytes(value).CopyTo(data, row + i * 4);
             }
             return true;
         }

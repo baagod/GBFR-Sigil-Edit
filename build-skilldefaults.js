@@ -6,8 +6,8 @@
 // query, and are always wanted together.
 //
 // Source is the game's own skill_status.tbl, converted to SQLite by GBFRDataTools.
-// Levels are stored 0-based in the table (the game shows level + 1), and the values
-// live on the highest level row, so "max(Level)" is the row to snapshot.
+// A row's Level field is the level the game shows for it, and it is the row an edit
+// targets, so the numbers here are used as they are.
 //
 // Usage: node build-skilldefaults.js [--root <project dir>]
 
@@ -105,8 +105,8 @@ function main() {
     Array.from({ length: 10 }, (_, i) => Number(row[`LevelValue${i + 1}`]) || 0);
   const nonZero = (row) => valuesOf(row).some((v) => v !== 0);
 
-  // Displayed level 15 is what the tool used to assume for every skill. Most
-  // skills carry values there; a few only carry them higher up.
+  // Level 15 is what most skills keep their numbers on; a few only carry them
+  // higher up.
   const valuedAt15 = new Set();
   for (const row of rows) {
     if (row.Level === 15 && nonZero(row)) valuedAt15.add(norm(String(row.Key)));
@@ -122,18 +122,18 @@ function main() {
     if (EXCLUDED.has(hash)) continue;
 
     /*
-      Which stored level a new edit should point at.
+      Which level a new edit should point at.
 
       The skill's own maximum while that is a normal 20 or less, otherwise the
       usual 15 - except where 15 holds nothing, in which case the maximum is the
       only row that would do anything.
     */
-    const maxDisplayed = row.Level;
-    const defaultDisplayed =
-      maxDisplayed <= 20 || !valuedAt15.has(hash) ? maxDisplayed : 15;
+    const maxLevel_ = row.Level;
+    const defaultLevel =
+      maxLevel_ <= 20 || !valuedAt15.has(hash) ? maxLevel_ : 15;
     out[hash] = {
-      Default: defaultDisplayed - 1,
-      Max: maxDisplayed - 1,
+      Default: defaultLevel,
+      Max: maxLevel_,
       Values: valuesOf(row),
     };
   }
@@ -148,7 +148,7 @@ function main() {
     const info = out[k];
     console.log(
       `  ${names[k] ?? k} (${k}) = [${(info?.Values ?? []).join(", ")}]  Lv${
-        info ? `${info.Default + 1}/${info.Max + 1}` : "?"
+        info ? `${info.Default}/${info.Max}` : "?"
       }`,
     );
   }

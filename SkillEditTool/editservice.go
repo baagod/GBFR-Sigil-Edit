@@ -134,12 +134,13 @@ func (s *EditService) NameMap(lang string) map[string]string {
 
 // SkillInfo is one row of the generated skillinfo.json: the skill's vanilla
 // LevelValue1..10, so a newly added edit starts from the game's own numbers
-// instead of zeros, and where those numbers live in stored levels (the game shows
-// stored + 1).
+// instead of zeros, and the levels those numbers live on.
 //
 // Default is the level a new edit should start on: the skill's own maximum when
 // that is a normal 20 or less, otherwise the usual 15, except for the few skills
 // whose values only exist higher up. Max is what the level field is clamped to.
+// Both are the table's own Level values - the level the game shows, and the row an
+// edit is written to.
 type SkillInfo struct {
 	Values  []float64 `json:"Values"`
 	Default int       `json:"Default"`
@@ -192,8 +193,8 @@ func padValues(values []float64) []float64 {
 // defaultEdits is what the tool starts from when no config exists yet.
 func defaultEdits() []SkillEdit {
 	return []SkillEdit{
-		{Enabled: true, Key: "06719232", Level: 14, Values: padValues([]float64{30, 1, 20})},
-		{Enabled: true, Key: "29B07BEB", Level: 14, Values: padValues([]float64{2})},
+		{Enabled: true, Key: "06719232", Level: 15, Values: padValues([]float64{30, 1, 20})},
+		{Enabled: true, Key: "29B07BEB", Level: 15, Values: padValues([]float64{2})},
 	}
 }
 
