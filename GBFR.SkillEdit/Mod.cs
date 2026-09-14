@@ -11,27 +11,42 @@ namespace GBFR.SkillEdit;
 /// No static .tbl ships with the mod: the table is read from the game archive,
 /// edited in memory, and written back.
 ///
-/// Row layout (verified against the file):
-///   - 48-byte header. Proven by phase analysis: all 15 occurrences of Key
-///     0x06719232 sit at absolute offsets congruent to 48 (mod 52), and no other
-///     phase matches any of them. So rows begin at 48 + 52k.
+/// Row layout. Checked against the file and against the table definition of the
+/// toolkit that reads this table - GBFRDataTools' skill_status.headers, plus the
+/// GameTable.cs that asserts 8 + RowSize * rowCount == file.Length:
+///   - 8-byte header: the row count, as an int64.
 ///   - Rows of 52 bytes:
-///       +0   uint   Key (skill hash)
-///       +4   uint   LevelDescription
-///       +8   uint   Level
-///       +12  float  LevelValue1
-///       +16  float  LevelValue2
-///       +20  float  LevelValue3
-///       +24  float  LevelValue4 ... through +48 (LevelValue10)
+///       +0   float  LevelValue1 ... +36 float LevelValue10
+///       +40  uint   Key (skill hash)
+///       +44  uint   LevelDescription
+///       +48  uint   Level
 ///
-/// The stored Level is one lower than the level shown in game: the row carrying a
-/// sigil's real numbers has Level == 14 and is displayed as Lv 15.
+/// Row k starts at 8 + 52k, so its Key sits at 48 + 52k - and the offsets below
+/// are relative to that Key, which is what the patch loop walks. Value1Offset is
+/// therefore the next row's LevelValue1: the same skill one level up, because rows
+/// are grouped by Key in ascending Level.
+///
+/// That pairing is load-bearing rather than an accident. SkillEditTool stores a
+/// skill's levels as (table level - 1) and labels them stored + 1, so a level N
+/// chosen in the tool is written to the row whose Level field is N - the level the
+/// tool names. The offsets here and that convention have to move together: change
+/// one and every edit shifts by one level.
+///
+/// LevelValue7..10 exist only from the game's 2.0.0 (Endless Ragnarok) release on.
+/// A pre-2.0 table has 36-byte rows with the Key at +24, which is why Start()
+/// checks the table's shape before touching it.
 /// </summary>
 public class Mod : IMod
 {
     private const string TablePath = "system/table/skill_status.tbl";
-    private const int HeaderSize = 48;
+
+    // The two numbers the whole layout hangs on: the file's own header, and one
+    // row. See the class comment for what sits where inside a row.
+    private const int FileHeaderSize = 8;
     private const int RowSize = 52;
+
+    // Relative to the Key field - i.e. 40 bytes into the row, not to the row.
+    private const int HeaderSize = 48;
     private const int LevelOffset = 8;
     private const int Value1Offset = 12;
 
@@ -84,6 +99,18 @@ public class Mod : IMod
                 return;
             }
             Log($"read {file.Length} bytes");
+
+            // The offsets this mod patches are only the right ones for a table of
+            // this shape. A pre-2.0 table has 36-byte rows, and any future column
+            // change moves them again: patching then would write into the wrong
+            // row, or past the end of one, without saying so.
+            if (!HasPatchableLayout(file, out var declaredRows))
+            {
+                Log($"FAIL: {TablePath} is not the {FileHeaderSize}-byte header + " +
+                    $"{RowSize}-byte row table this mod patches: {file.Length} bytes, header says " +
+                    $"{declaredRows} row(s). Nothing applied.");
+                return;
+            }
 
             var applied = 0;
             foreach (var edit in _config.Edits)
@@ -148,6 +175,20 @@ public class Mod : IMod
     }
 
     /// <summary>
+    /// True when the table is the one the offsets above were written against: an
+    /// 8-byte header whose row count accounts for the rest of the file in 52-byte
+    /// rows - the same identity the toolkit that generates this table asserts when
+    /// it reads it. A pre-2.0 table (36-byte rows) and any future column change
+    /// both fail this, which is the point: the caller then patches nothing instead
+    /// of writing into the wrong row.
+    /// </summary>
+    private static bool HasPatchableLayout(byte[] data, out long declaredRows)
+    {
+        declaredRows = data.Length >= FileHeaderSize ? BitConverter.ToInt64(data, 0) : 0;
+        return declaredRows > 0 && FileHeaderSize + (long)RowSize * declaredRows == data.Length;
+    }
+
+    /// <summary>
     /// Walks the table at its 52-byte stride, matches (Key, Level), and writes
     /// <paramref name="values"/> over LevelValue1..N. Missing trailing values are
     /// written as zero so the row ends up exactly as the tool described it.
@@ -160,6 +201,17 @@ public class Mod : IMod
                 continue;
             if (BitConverter.ToUInt32(data, offset + LevelOffset) != level)
                 continue;
+
+            // The values sit in the row after this one (see the class comment), so
+            // that row has to belong to the same skill. The last row of a skill's
+            // block would otherwise write its numbers over the next skill's first
+            // level, and the table's own last row has no row after it at all.
+            var target = offset + RowSize;
+            if (target + sizeof(uint) > data.Length || BitConverter.ToUInt32(data, target) != key)
+            {
+                Log($"  {key:X8} L{level} @0x{offset:X}: refusing (values would land on the next skill's row)");
+                return false;
+            }
 
             var at = offset + Value1Offset;
             var before = string.Join(" / ", Enumerable.Range(0, SkillEdit.LevelValueCount)
