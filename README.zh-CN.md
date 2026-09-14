@@ -16,7 +16,7 @@
 1. 安装 Reloaded-II 并启用 `gbfrelink.utility.manager`。
 2. 运行 `SkillEdit.exe`。
 3. 选择 Reloaded-II 目录。输入框默认填 `~\Desktop\Reloaded-II`，该目录里确实有 Reloaded-II 时直接用它；否则需选有 `Reloaded-II.exe` 的目录。
-4. 点「安装 Mod」。mod 本体写入 `<Reloaded-II>\Mods\GBFR.SkillEdit\`，配置改动写入 `%APPDATA%\GBFR.SkillEdit\Config.json`。
+4. 点「安装 Mod」。Mod 本体写入 `<Reloaded-II>\Mods\GBFR.SkillEdit\`，配置改动写入 `%APPDATA%\GBFR.SkillEdit\Config.json`。
 5. 在 Reloaded-II 里启用 `GBFR.SkillEdit`（同时确认 `gbfrelink.utility.manager` 也已启用），然后用 Reloaded-II 启动游戏。
 
 ## 使用
