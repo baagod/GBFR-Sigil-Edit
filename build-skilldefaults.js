@@ -24,7 +24,7 @@ const ROOT = arg("root", ".");
 // too big to belong to any one of them.
 const SHARED = path.join(ROOT, "..");
 const TBL = path.join(SHARED, "extracted/system/table/skill_status.tbl");
-const DB = path.join(ROOT, "vanilla.db");
+const DB = path.join(SHARED, "extracted", "gbfr.db");
 const OUT = path.join(ROOT, "SkillEditTool/assets/skilldefaults.json");
 const LEVELS_OUT = path.join(ROOT, "SkillEditTool/assets/skilllevels.json");
 const TOOL = path.join(SHARED, "GBFRDataTools/GBFRDataTools.exe");

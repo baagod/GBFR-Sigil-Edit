@@ -38,7 +38,7 @@ const ROOT = arg("root", ".");
 // repository: they are shared with the other mods in the workspace and are far
 // too big to belong to any one of them.
 const SHARED = path.join(ROOT, "..");
-const DB = path.join(ROOT, "vanilla.db");
+const DB = path.join(SHARED, "extracted", "gbfr.db");
 const MSG_DIR = path.join(SHARED, "extracted", "system", "table", "text", GAME_LANG[LANG]);
 const IDS = path.join(SHARED, "GBFRDataTools", "Data", "ids.txt");
 const OUT = path.join(ROOT, "SkillEditTool", "assets", `skillnames.${LANG}.json`);
