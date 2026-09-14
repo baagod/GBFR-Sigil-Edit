@@ -474,9 +474,12 @@ export default function App() {
                   className={`w-[222px] shrink-0 truncate text-sm ${
                     edit.Enabled ? "" : "text-muted-foreground"
                   }`}
-                  title={[name || edit.Key, slotNotation(edit.Key)]
-                    .filter(Boolean)
-                    .join("\n")}
+                  /*
+                    Only the explanation. The name is already on screen, so
+                    repeating it here would say nothing; a skill whose description
+                    we do not have gets no tooltip at all.
+                  */
+                  title={slotNotation(edit.Key) || undefined}
                 >
                   {name || <span className="font-mono text-muted-foreground">{edit.Key}</span>}
                 </span>
