@@ -24,7 +24,7 @@
     exit code.
 
 .PARAMETER Package
-    After a successful build, write dist-release\GBFR.SkillEdit-<version>.zip
+    After a successful build, write dist\GBFR.SkillEdit-<version>.zip
     holding the tool, both READMEs, the LICENSE and the mod itself.
 
 .EXAMPLE
@@ -134,7 +134,7 @@ if ($Package) {
         $version = Get-Date -Format 'yyyyMMdd'
     }
 
-    $releaseDir = Join-Path $root 'dist-release'
+    $releaseDir = Join-Path $root 'dist'
     $staging    = Join-Path $releaseDir 'staging'
     $zip        = Join-Path $releaseDir "GBFR.SkillEdit-$version.zip"
 

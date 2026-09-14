@@ -37,7 +37,7 @@ Needs .NET SDK 8, Node.js 20+, Go 1.25+.
 
 ```powershell
 ./build.ps1            # -> SkillEditTool/SkillEdit.exe
-./build.ps1 -Package   # -> dist-release/GBFR.SkillEdit-<version>.zip
+./build.ps1 -Package   # -> dist/GBFR.SkillEdit-<version>.zip
 ```
 
 The script builds the mod DLL and copies it into `SkillEditTool/assets/`, then builds the frontend, and only then compiles the exe — the Go build embeds both, so they have to be in place first.

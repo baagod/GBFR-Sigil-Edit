@@ -37,7 +37,7 @@
 
 ```powershell
 ./build.ps1            # -> SkillEditTool/SkillEdit.exe
-./build.ps1 -Package   # -> dist-release/GBFR.SkillEdit-<版本>.zip
+./build.ps1 -Package   # -> dist/GBFR.SkillEdit-<版本>.zip
 ```
 
 脚本先构建 mod DLL 并复制到 `SkillEditTool/assets/`，再构建前端，最后才编译 exe —— Go 构建会把前端产物和 DLL 一起内嵌，所以这两者必须先就位。
