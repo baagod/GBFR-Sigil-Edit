@@ -15,7 +15,7 @@
 ## 安装
 
 1. 装好并配置 Reloaded-II，再把 `gbfrelink.utility.manager` 加进去。
-2. 运行 `SkillEditTool.exe`。
+2. 运行 `SkillEdit.exe`。
 3. 选择 Reloaded-II 目录。输入框默认填 `%USERPROFILE%\Desktop\Reloaded-II`，该目录里确实有 Reloaded-II 时直接用它；否则选有 `Reloaded-II.exe` 的那个目录。
 4. 点「安装 Mod」。mod 本体写入 `<Reloaded-II>\Mods\GBFR.SkillEdit\`，改动配置写入 `<Reloaded-II>\User\Mods\GBFR.SkillEdit\Config.json`。
 5. 在 Reloaded-II 里启用 `GBFR.SkillEdit`（同时确认 `gbfrelink.utility.manager` 也已启用），然后用 Reloaded-II 启动游戏。
@@ -47,7 +47,7 @@
 需要 .NET SDK 8、Node.js 20+、Go 1.25+。
 
 ```powershell
-./build.ps1            # -> SkillEditTool/SkillEditTool.exe
+./build.ps1            # -> SkillEditTool/SkillEdit.exe
 ./build.ps1 -Package   # -> dist-release/GBFR.SkillEdit-<版本>.zip
 ```
 

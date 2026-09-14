@@ -10,7 +10,7 @@
         1. dotnet build          -> GBFR.SkillEdit\bin\Release\GBFR.SkillEdit.dll
         2. copy that DLL         -> SkillEditTool\assets\GBFR.SkillEdit.dll
         3. npm ci + npm run build -> SkillEditTool\frontend\dist
-        4. go build              -> SkillEditTool\SkillEditTool.exe
+        4. go build              -> SkillEditTool\SkillEdit.exe
 
     main.go embeds both the frontend bundle and the mod binary at compile time
     (//go:embed all:frontend/dist and //go:embed assets/GBFR.SkillEdit.dll). Go
@@ -48,7 +48,7 @@ $modCfg   = Join-Path $root 'GBFR.SkillEdit\ModConfig.json'
 $assetDll = Join-Path $root 'SkillEditTool\assets\GBFR.SkillEdit.dll'
 $toolDir  = Join-Path $root 'SkillEditTool'
 $frontend = Join-Path $toolDir 'frontend'
-$exe      = Join-Path $toolDir 'SkillEditTool.exe'
+$exe      = Join-Path $toolDir 'SkillEdit.exe'
 $distHtml = Join-Path $frontend 'dist\index.html'
 
 function Assert-Tool {
@@ -109,10 +109,10 @@ if (-not (Test-Path -LiteralPath $distHtml)) {
     throw "The frontend build did not produce '$distHtml'."
 }
 
-Write-Host '==> [4/4] Building SkillEditTool.exe (go build)'
+Write-Host '==> [4/4] Building SkillEdit.exe (go build)'
 Push-Location $toolDir
 try {
-    & go build -ldflags '-H windowsgui -s -w' -o SkillEditTool.exe .
+    & go build -ldflags '-H windowsgui -s -w' -o SkillEdit.exe .
     Assert-ExitCode 'go build'
 }
 finally {

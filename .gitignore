@@ -5,7 +5,7 @@
 dist/
 dist-release/
 node_modules/
-SkillEditTool/SkillEditTool.exe
+SkillEditTool/SkillEdit.exe
 *.exe~
 *.zip
 

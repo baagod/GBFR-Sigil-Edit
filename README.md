@@ -15,7 +15,7 @@ A typical table mod brings its own edited `.tbl` and overwrites the game's copy,
 ## Installing
 
 1. Set up Reloaded-II, then add `gbfrelink.utility.manager` to it.
-2. Run `SkillEditTool.exe`.
+2. Run `SkillEdit.exe`.
 3. Choose your Reloaded-II folder. The box is pre-filled with `%USERPROFILE%\Desktop\Reloaded-II`; that folder is used as-is when it really is a Reloaded-II install, otherwise pick the folder that contains `Reloaded-II.exe`.
 4. Click **Install mod**. The mod itself goes to `<Reloaded-II>\Mods\GBFR.SkillEdit\`, and your edit list to `<Reloaded-II>\User\Mods\GBFR.SkillEdit\Config.json`.
 5. Enable `GBFR.SkillEdit` in Reloaded-II (make sure `gbfrelink.utility.manager` is enabled too), then launch the game through Reloaded-II.
@@ -47,7 +47,7 @@ The interface ships in **中文 / English / 日本語**. It follows your system 
 Needs .NET SDK 8, Node.js 20+, Go 1.25+.
 
 ```powershell
-./build.ps1            # -> SkillEditTool/SkillEditTool.exe
+./build.ps1            # -> SkillEditTool/SkillEdit.exe
 ./build.ps1 -Package   # -> dist-release/GBFR.SkillEdit-<version>.zip
 ```
 
