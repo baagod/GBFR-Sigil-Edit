@@ -39,19 +39,24 @@ public class Mod : IMod
     private const string ModId = "GBFR.SkillEdit";
     private const string LogFileName = "GBFR.SkillEdit.log";
 
-    // The config and the log both live in %APPDATA%\GBFR.SkillEdit, which the
-    // tool writes to and this reads from. Chosen over %TEMP%, which a disk
-    // cleanup empties (the edit list is the user's data), and over the mod's own
-    // folder under Mods\, which would mean asking the loader for a path and
-    // handling the case where that fails. ApplicationData cannot fail to resolve,
-    // so both sides compute the same folder directly.
+    // The edit list lives in %APPDATA%\GBFR.SkillEdit, which the tool writes and
+    // this reads. Chosen over %TEMP%, which a disk cleanup empties - the edit list
+    // is the user's data - and over the mod's own folder under Mods\, which would
+    // mean two places holding state. ApplicationData cannot fail to resolve, so
+    // both sides compute the same folder directly.
     private static readonly string ConfigDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ModId);
 
     private static readonly string ConfigFile = Path.Combine(ConfigDir, ConfigFileName);
 
-    // Where Log() appends.
-    private static readonly string LogFile = Path.Combine(ConfigDir, LogFileName);
+    // Where Log() appends. Empty until Start() resolves it, and empty for the
+    // whole run if the loader cannot name the folder, in which case there is no
+    // log at all.
+    private static string _logFile = string.Empty;
+
+    // Whether this run has written its first line yet, so the file is started over
+    // once per launch instead of growing across every launch.
+    private static bool _logStarted;
 
     private ILogger _logger = null!;
     private IModLoader _loader = null!;
@@ -61,6 +66,8 @@ public class Mod : IMod
     {
         _loader = (IModLoader)loaderApi;
         _logger = (ILogger)_loader.GetLogger();
+
+        UseModDirectoryForLog();
 
         Log("=== GBFR.SkillEdit start (config-driven) ===");
 
@@ -180,21 +187,54 @@ public class Mod : IMod
     }
 
     /// <summary>
-
-    private static void Log(string message)
+    /// Points the log at the mod's own folder, resolved once in Start().
+    ///
+    /// The mod produces the log, so it lives with the mod's files - and that is
+    /// the first place anyone looks when a patch does not take. If the loader
+    /// cannot name the folder, logging is skipped for the run rather than sent
+    /// somewhere else: one location, nothing to keep in sync.
+    /// </summary>
+    private void UseModDirectoryForLog()
     {
         try
         {
-            // %TEMP% always existed, so the log always appeared. This folder only
-            // does once the tool has written the config, and the log is worth
-            // most exactly when it has not been run yet.
-            Directory.CreateDirectory(ConfigDir);
-            File.AppendAllText(LogFile, $"{DateTime.Now:HH:mm:ss.fff}  {message}{Environment.NewLine}");
+            if (_loader is IModLoaderV2 v2)
+            {
+                _logFile = Path.Combine(v2.GetDirectoryForModId(ModId), LogFileName);
+            }
+        }
+        catch
+        {
+            _logFile = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Appends a line to this run's log, starting the file over on the first call
+    /// so it always describes the launch you are looking at rather than every
+    /// launch before it.
+    ///
+    /// Nothing here may throw: the first call happens outside Start()'s try, and a
+    /// log is never a reason to stop patching.
+    /// </summary>
+    private static void Log(string message)
+    {
+        if (_logFile.Length == 0)
+            return;
+
+        try
+        {
+            if (!_logStarted)
+            {
+                File.WriteAllText(_logFile, string.Empty);
+                _logStarted = true;
+            }
+            File.AppendAllText(_logFile, $"{DateTime.Now:HH:mm:ss.fff}  {message}{Environment.NewLine}");
         }
         catch
         {
             // Never let logging take the patch down with it: the first call
-            // happens outside Start()'s try, and the log directory can be
+            // happens outside Start()'s try, and the log file can be
             // missing, full or read-only at any point.
         }
     }

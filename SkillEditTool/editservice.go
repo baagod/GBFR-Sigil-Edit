@@ -37,6 +37,11 @@ const modFolder = "GBFR.SkillEdit"
 // modDllName must match the assembly shipped in assets/.
 const modDllName = "GBFR.SkillEdit.dll"
 
+// logFileName is the log the mod writes beside its own files. Kept here so an
+// install can clear it: the mod starts the file over each launch, so a leftover
+// one is only ever yesterday's.
+const logFileName = "GBFR.SkillEdit.log"
+
 // EditService is the Wails-exposed backend.
 type EditService struct {
 	// app is only needed for the folder picker, which has to belong to a window.
@@ -446,6 +451,11 @@ func (s *EditService) Install(edits []SkillEdit) (string, error) {
 	for _, path := range legacyConfigPaths() {
 		_ = os.Remove(path)
 	}
+
+	// An install is a fresh start, so the previous run's log goes with it: the mod
+	// starts the file over on its next launch anyway, and until then a stale log
+	// sitting beside the files is worse than none.
+	_ = os.Remove(filepath.Join(target, logFileName))
 
 	// Short on purpose: the frontend shows this on a single fixed-height line and
 	// appends the enabled count. Where the files went is in its hover tooltip.
