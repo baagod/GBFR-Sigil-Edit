@@ -22,7 +22,7 @@ A typical table mod brings its own edited `.tbl` and overwrites the game's copy,
 ## Using it
 
 - **Adding a skill**: pick one in the dropdown (you can type to search) and click Add. The new entry starts from that skill's own vanilla numbers, so only the value you care about needs changing.
-- **Editing numbers**: every row has ten boxes, corresponding to `LevelValue1-10` in the table and to `{1-10}` in the skill's own description. **Hovering anywhere on the row** shows that description, with the placeholders numbered to match the boxes. A box left empty shows the game's value greyed out as a placeholder, and writes that value back.
+- **Editing parameters**: every row has ten parameter boxes, corresponding to `LevelValue1-10` in the table. **Hovering anywhere on the row** shows that skill's description, with the placeholders numbered to line up with the boxes; a box left empty greys the game's own value out as a placeholder, and writes that value back.
 - **Taking effect in game**: the parameters are read once, at game startup — **restart the game after changing them**. A running game is unaffected.
 
 ## Notes
