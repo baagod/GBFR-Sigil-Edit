@@ -14,11 +14,12 @@ func fakeReloaded(t *testing.T) string {
 	t.Helper()
 	home := hermeticHome(t)
 
-	// Everything the discovery looks for, plus the mod user-config folder.
 	root := makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
 	if err := os.MkdirAll(filepath.Join(root, "User", "Mods"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// Nothing is searched for, so an install only counts once it has been chosen.
+	saveSettings(settings{ReloadedDir: root})
 	return root
 }
 
@@ -91,8 +92,8 @@ func TestInstallMigratesLegacyConfig(t *testing.T) {
 	}
 }
 
-// A folder has to actually look like a Reloaded-II install before the search
-// adopts it, or any unrelated folder with that name would be deployed into.
+// An install is identified by its launcher, so a mod is never written into a
+// folder that merely has the right name.
 func TestLooksLikeReloaded(t *testing.T) {
 	dir := t.TempDir()
 
@@ -103,18 +104,16 @@ func TestLooksLikeReloaded(t *testing.T) {
 		t.Fatal(err)
 	}
 	if looksLikeReloaded(dir) {
-		t.Fatal("a Mods folder on its own was accepted by the search")
-	}
-	// The picker is deliberately looser: a renamed install is still usable as
-	// long as it has somewhere to put mods.
-	if !hasModsFolder(dir) {
-		t.Fatal("a Mods folder should be enough for a folder picked by hand")
+		t.Fatal("a Mods folder on its own was accepted")
 	}
 	if err := os.WriteFile(filepath.Join(dir, "Reloaded-II.exe"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if !looksLikeReloaded(dir) {
-		t.Fatal("Reloaded-II.exe plus a Mods folder was rejected")
+		t.Fatal("a folder with Reloaded-II.exe was rejected")
+	}
+	if looksLikeReloaded("") {
+		t.Fatal("an empty path was accepted")
 	}
 }
 
@@ -153,23 +152,28 @@ func TestSavedReloadedDirWins(t *testing.T) {
 	}
 }
 
-// A remembered folder that is no longer a Reloaded install (moved, deleted) must
-// not be used, and must not stop the search either.
-func TestStaleSavedDirFallsBackToSearching(t *testing.T) {
+// The chosen folder is used exactly as given, valid or not: an install that has
+// moved is reported when something is installed, not silently replaced by
+// whatever else happens to be lying around.
+func TestSavedDirIsUsedAsGiven(t *testing.T) {
 	home := hermeticHome(t)
-	saveSettings(settings{ReloadedDir: filepath.Join(home, "gone")})
+	chosen := filepath.Join(home, "Somewhere", "Reloaded-II")
+	saveSettings(settings{ReloadedDir: chosen})
 
-	found := makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
-	if got := reloadedDir(); got != found {
-		t.Fatalf("stale entry blocked the search: got %q, want %q", got, found)
+	// A real-looking install elsewhere must not win over the choice.
+	makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
+	if got := reloadedDir(); got != chosen {
+		t.Fatalf("got %q, want the chosen %q", got, chosen)
 	}
 }
 
-// Nothing anywhere is a valid answer; the UI turns it into the folder picker.
-func TestNoReloadedDirAnywhere(t *testing.T) {
-	hermeticHome(t)
+// Nothing is chosen and nothing is searched for, so the UI can ask.
+func TestNoDirChosen(t *testing.T) {
+	home := hermeticHome(t)
+	// Even a perfect candidate on the desktop is left alone.
+	makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
 	if got := reloadedDir(); got != "" {
-		t.Fatalf("expected nothing to be found, got %q", got)
+		t.Fatalf("expected nothing to be chosen, got %q", got)
 	}
 }
 

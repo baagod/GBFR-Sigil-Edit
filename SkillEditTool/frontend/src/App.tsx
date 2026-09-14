@@ -222,6 +222,8 @@ export default function App() {
   const [defaults, setDefaults] = useState<Record<string, number[]>>({});
   const [levels, setLevels] = useState<Record<string, LevelRange>>({});
   const [explains, setExplains] = useState<Record<string, string>>({});
+  // Where Reloaded-II usually lands, shown greyed until a folder is picked.
+  const [defaultDir, setDefaultDir] = useState("");
   const [modsDir, setModsDir] = useState("");
   // "" once we know Reloaded-II cannot be found; null while still asking.
   const [reloadedDir, setReloadedDir] = useState<string | null>(null);
@@ -250,17 +252,17 @@ export default function App() {
   }, [lang]);
 
   /*
-    Reloaded-II is a portable folder, so where it lives is discovered at startup
-    and can be corrected by hand. Everything the tool shows depends on that
-    answer, which is why picking a folder reloads all of it.
+    The Reloaded-II folder is the user's to name: it is portable, and everything
+    the tool shows depends on the answer, which is why picking one reloads all of it.
   */
   async function loadAll() {
-    const [list, defaultMap, levelMap, dir, root] = await Promise.all([
+    const [list, defaultMap, levelMap, dir, root, fallback] = await Promise.all([
       Call.ByName(`${SERVICE}.LoadEdits`) as Promise<SkillEdit[]>,
       Call.ByName(`${SERVICE}.DefaultMap`) as Promise<Record<string, number[]>>,
       Call.ByName(`${SERVICE}.LevelMap`) as Promise<Record<string, LevelRange>>,
       Call.ByName(`${SERVICE}.ModsDir`) as Promise<string>,
       Call.ByName(`${SERVICE}.ReloadedDir`) as Promise<string>,
+      Call.ByName(`${SERVICE}.DefaultReloadedDir`) as Promise<string>,
     ]);
     const loaded = enforceExclusivity(
       (list ?? []).map((e) => ({ ...e, Values: pad(e.Values ?? []) })),
@@ -270,6 +272,7 @@ export default function App() {
     setLevels(levelMap ?? {});
     setModsDir(dir ?? "");
     setReloadedDir(root ?? "");
+    setDefaultDir(fallback ?? "");
 
     // The file on disk may hold several enabled edits for one row; write the
     // normalised list back so what is stored matches what is shown.
@@ -555,25 +558,28 @@ export default function App() {
           is the one thing that cannot be worked out on its own: where Reloaded-II
           is, when the search came up empty.
         */}
-        {reloadedDir === "" ? (
-          <div className="flex min-h-4 min-w-0 flex-1 items-center gap-2">
-            <span className="truncate text-xs text-muted-foreground">
-              {t.noReloaded}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={chooseReloadedDir}
-              disabled={busy}
-            >
-              {t.chooseDir}
-            </Button>
-          </div>
-        ) : reloadedDir ? (
-          <div className="min-h-4 min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            {t.target(`${modsDir}\\GBFR.SkillEdit`)}
-          </div>
-        ) : null}
+        {/*
+          The folder itself is the control, the way the skill picker works: one
+          outlined box that opens a dialog. Until one is chosen the box shows
+          where Reloaded-II usually lands, greyed like any placeholder - nothing
+          is searched for.
+        */}
+        <Button
+          variant="outline"
+          onClick={chooseReloadedDir}
+          disabled={busy}
+          aria-label={t.chooseReloaded}
+          title={reloadedDir || defaultDir}
+          className="min-w-0 flex-1 justify-start font-normal"
+        >
+          <span
+            className={`truncate text-xs ${
+              reloadedDir ? "text-muted-foreground" : "text-muted-foreground/50"
+            }`}
+          >
+            {reloadedDir ? t.target(`${modsDir}\\GBFR.SkillEdit`) : defaultDir}
+          </span>
+        </Button>
       </footer>
 
       {/*

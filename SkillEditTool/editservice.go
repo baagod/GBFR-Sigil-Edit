@@ -78,11 +78,9 @@ func (s *EditService) ChooseReloadedDir(lang string) (string, error) {
 	if chosen == "" {
 		return "", nil
 	}
-	// Loose on purpose: a renamed or moved install is fine, one without a Mods
-	// folder is not.
-	if !hasModsFolder(chosen) {
-		return "", fmt.Errorf(text.NoMods, chosen)
-	}
+	// Accepted as-is: whether it is really a Reloaded-II install is settled when
+	// something is actually installed there, so a wrong pick fails loudly then
+	// rather than silently here.
 	absolute, err := filepath.Abs(chosen)
 	if err != nil {
 		absolute = chosen
@@ -213,70 +211,34 @@ func defaultEdits() []SkillEdit {
 	}
 }
 
-// reloadedDir is the Reloaded-II installation this tool deploys into, or "" when
-// there is none to be found.
+// reloadedDir is the Reloaded-II folder the user picked, or "" until they pick
+// one.
 //
-// Nothing about the location may be assumed: Reloaded-II is a portable folder
-// that people keep wherever they unpacked it. A folder the user picked earlier
-// wins, then the places it usually ends up, and if all of that fails the caller
-// offers the folder picker.
+// Nothing is searched for. Reloaded-II is a portable folder that people keep
+// wherever they unpacked it, and guessing wrong means writing a mod into some
+// unrelated directory; asking once is both safer and clearer.
 func reloadedDir() string {
-	if saved := loadSettings().ReloadedDir; saved != "" && looksLikeReloaded(saved) {
-		return saved
-	}
-	for _, candidate := range candidateReloadedDirs() {
-		if looksLikeReloaded(candidate) {
-			saveSettings(settings{ReloadedDir: candidate})
-			return candidate
-		}
-	}
-	return ""
+	return loadSettings().ReloadedDir
 }
 
-// looksLikeReloaded is the strict test used while searching, so that some
-// unrelated folder called "Reloaded-II" is not adopted by mistake.
+// DefaultReloadedDir is the path to show as a hint before anything is picked -
+// where Reloaded-II ends up when it is unpacked and run without moving it.
+func (s *EditService) DefaultReloadedDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, "Desktop", "Reloaded-II")
+}
+
+// looksLikeReloaded is what an install is checked against: the launcher has to be
+// there, so a mod is never written into a folder that merely has the right name.
 func looksLikeReloaded(dir string) bool {
-	if info, err := os.Stat(filepath.Join(dir, "Reloaded-II.exe")); err != nil || info.IsDir() {
+	if dir == "" {
 		return false
 	}
-	return hasModsFolder(dir)
-}
-
-// hasModsFolder is the only thing the tool actually needs from the folder, and
-// the test applied to a folder the user picked by hand - their install may be
-// renamed, but it still has to have somewhere to put mods.
-func hasModsFolder(dir string) bool {
-	info, err := os.Stat(filepath.Join(dir, "Mods"))
-	return err == nil && info.IsDir()
-}
-
-// candidateReloadedDirs lists the places worth looking in, cheapest first. Drive
-// letters are kept to the usual three: statting an absent drive is quick, but a
-// mapped network drive that is asleep can block for seconds.
-func candidateReloadedDirs() []string {
-	dirs := []string{}
-	if home, err := os.UserHomeDir(); err == nil {
-		dirs = append(dirs,
-			filepath.Join(home, "Desktop", "Reloaded-II"),
-			filepath.Join(home, "Reloaded-II"),
-			filepath.Join(home, "Downloads", "Reloaded-II"),
-			filepath.Join(home, "Documents", "Reloaded-II"),
-		)
-	}
-	if exe, err := os.Executable(); err == nil {
-		// The tool may well be sitting inside or beside the install.
-		dir := filepath.Dir(exe)
-		dirs = append(dirs, filepath.Join(dir, "Reloaded-II"), dir, filepath.Dir(dir))
-	}
-	for _, env := range []string{"LOCALAPPDATA", "APPDATA", "ProgramFiles", "ProgramFiles(x86)"} {
-		if value := os.Getenv(env); value != "" {
-			dirs = append(dirs, filepath.Join(value, "Reloaded-II"))
-		}
-	}
-	for _, drive := range []string{"C:", "D:", "E:"} {
-		dirs = append(dirs, drive+`\Reloaded-II`)
-	}
-	return dirs
+	info, err := os.Stat(filepath.Join(dir, "Reloaded-II.exe"))
+	return err == nil && !info.IsDir()
 }
 
 // settings is the tool's own state, kept outside the mod so that it survives
@@ -395,8 +357,13 @@ func (s *EditService) LoadEdits() []SkillEdit {
 func (s *EditService) Install(edits []SkillEdit) (string, error) {
 	mods := s.ModsDir()
 	cfgPath := configPath()
+	current := reloadedDir()
 	if mods == "" || cfgPath == "" {
-		return "", fmt.Errorf("could not find the Reloaded-II folder")
+		return "", fmt.Errorf("no Reloaded-II folder has been chosen yet")
+	}
+	// Checked here, not when the folder was picked: this is the moment it matters.
+	if !looksLikeReloaded(current) {
+		return "", fmt.Errorf("%s has no Reloaded-II.exe, so it is not a Reloaded-II folder", current)
 	}
 	target := filepath.Join(mods, modFolder)
 

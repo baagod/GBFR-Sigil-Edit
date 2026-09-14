@@ -30,8 +30,7 @@ type Dict = {
   noMatch: string;
   install: string;
   target: (path: string) => string;
-  noReloaded: string;
-  chooseDir: string;
+  chooseReloaded: string;
   ok: string;
   enable: (name: string) => string;
   remove: (name: string) => string;
@@ -51,8 +50,7 @@ export const MESSAGES: Record<Lang, Dict> = {
     noMatch: "没有匹配的技能",
     install: "安装 Mod",
     target: (path) => `目标：${path}`,
-    noReloaded: "没找到 Reloaded-II 的安装目录",
-    chooseDir: "选择目录…",
+    chooseReloaded: "选择 Reloaded-II 目录",
     ok: "确定",
     enable: (name) => `启用 ${name}`,
     remove: (name) => `删除 ${name}`,
@@ -70,8 +68,7 @@ export const MESSAGES: Record<Lang, Dict> = {
     noMatch: "No matching skill",
     install: "Install mod",
     target: (path) => `Target: ${path}`,
-    noReloaded: "Reloaded-II folder not found",
-    chooseDir: "Choose folder…",
+    chooseReloaded: "Select Reloaded-II folder",
     ok: "OK",
     enable: (name) => `Enable ${name}`,
     remove: (name) => `Remove ${name}`,
@@ -89,8 +86,7 @@ export const MESSAGES: Record<Lang, Dict> = {
     noMatch: "一致するスキルがありません",
     install: "Mod をインストール",
     target: (path) => `出力先：${path}`,
-    noReloaded: "Reloaded-II のフォルダが見つかりません",
-    chooseDir: "フォルダを選ぶ…",
+    chooseReloaded: "Reloaded-II のフォルダを選ぶ",
     ok: "OK",
     enable: (name) => `${name} を有効にする`,
     remove: (name) => `${name} を削除`,
