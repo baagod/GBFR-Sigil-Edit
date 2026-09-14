@@ -16,7 +16,7 @@ A typical table mod brings its own edited `.tbl` and overwrites the game's copy,
 1. Install Reloaded-II and enable `gbfrelink.utility.manager`.
 2. Run `SkillEdit.exe`.
 3. Choose your Reloaded-II folder. The box is pre-filled with `~\Desktop\Reloaded-II`; that folder is used as-is when it really is a Reloaded-II install, otherwise pick the folder containing `Reloaded-II.exe`.
-4. Click **Install Mod**. The Mod itself goes to `<Reloaded-II>\Mods\GBFR.SkillEdit\`, and your edit list to `%APPDATA%\GBFR.SkillEdit\Config.json`.
+4. Click **Install Mod**. The mod itself goes to `<Reloaded-II>\Mods\GBFR.SkillEdit\`, and your edit list to `%APPDATA%\GBFR.SkillEdit\Config.json`.
 5. Enable `GBFR.SkillEdit` in Reloaded-II (make sure `gbfrelink.utility.manager` is enabled too), then launch the game through Reloaded-II.
 
 ## Using it
