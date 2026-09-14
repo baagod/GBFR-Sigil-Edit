@@ -50,21 +50,15 @@ public class Config
         PropertyNameCaseInsensitive = true,
     };
 
+    /// <summary>
+    /// The edit list in <paramref name="path"/>, or an empty one when the file
+    /// holds nothing usable. A missing, unreadable or malformed file is left to
+    /// throw: the only caller is <see cref="Mod.LoadConfig"/>, which is where the
+    /// reason can actually be logged.
+    /// </summary>
     public static Config Load(string path)
     {
-        try
-        {
-            if (File.Exists(path))
-            {
-                var config = JsonSerializer.Deserialize<Config>(File.ReadAllText(path), Options);
-                if (config?.Edits is { Count: > 0 })
-                    return config;
-            }
-        }
-        catch
-        {
-            // fall through to defaults
-        }
-        return new Config();
+        var config = JsonSerializer.Deserialize<Config>(File.ReadAllText(path), Options);
+        return config?.Edits is { Count: > 0 } ? config : new Config();
     }
 }

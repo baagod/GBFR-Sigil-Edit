@@ -108,18 +108,18 @@ const LangZH = "zh"
 // nameTables maps a UI language to its skill-name table. The keys are the same
 // 8-hex hashes in every language; only the display names differ.
 var nameTables = map[string]map[string]string{
-	LangZH: decodeNames(embeddedNamesZH),
-	"en":   decodeNames(embeddedNamesEN),
-	"ja":   decodeNames(embeddedNamesJA),
+	LangZH: decodeStrings(embeddedNamesZH),
+	"en":   decodeStrings(embeddedNamesEN),
+	"ja":   decodeStrings(embeddedNamesJA),
 }
 
-func decodeNames(raw []byte) map[string]string {
-	names := make(map[string]string)
-	if len(raw) == 0 {
-		return names
-	}
-	_ = json.Unmarshal(raw, &names)
-	return names
+// decodeStrings turns one embedded string table into a map. There is no empty
+// case to handle: Unmarshal leaves the map empty when the table is absent or
+// malformed, which is the answer either way.
+func decodeStrings(raw []byte) map[string]string {
+	decoded := make(map[string]string)
+	_ = json.Unmarshal(raw, &decoded)
+	return decoded
 }
 
 // NameMap returns the whole key -> name table for a language, so the frontend can
@@ -132,65 +132,44 @@ func (s *EditService) NameMap(lang string) map[string]string {
 	return nameTables[LangZH]
 }
 
-// skillDefaults maps a skill_status Key to that skill's vanilla LevelValue1..10,
-// so a newly added edit starts from the game's own numbers instead of zeros.
-// Populated once from the embedded skilldefaults.json.
-var skillDefaults = loadSkillDefaults()
-
-func loadSkillDefaults() map[string][]float64 {
-	defaults := make(map[string][]float64)
-	if len(embeddedDefaults) == 0 {
-		return defaults
-	}
-	_ = json.Unmarshal(embeddedDefaults, &defaults)
-	return defaults
-}
-
-// LevelRange is where a skill's numbers live, in stored levels (the game shows
+// SkillInfo is one row of the generated skillinfo.json: the skill's vanilla
+// LevelValue1..10, so a newly added edit starts from the game's own numbers
+// instead of zeros, and where those numbers live in stored levels (the game shows
 // stored + 1).
 //
 // Default is the level a new edit should start on: the skill's own maximum when
 // that is a normal 20 or less, otherwise the usual 15, except for the few skills
 // whose values only exist higher up. Max is what the level field is clamped to.
-type LevelRange struct {
-	Default int `json:"Default"`
-	Max     int `json:"Max"`
+type SkillInfo struct {
+	Values  []float64 `json:"Values"`
+	Default int       `json:"Default"`
+	Max     int       `json:"Max"`
 }
 
-// levelRanges maps a skill hash to its levels. Populated once from the embedded
-// skilllevels.json.
-var levelRanges = loadLevelRanges()
+// skillInfo maps a skill_status Key to that skill's own numbers and levels.
+// Populated once from the embedded skillinfo.json.
+var skillInfo = loadSkillInfo()
 
-func loadLevelRanges() map[string]LevelRange {
-	ranges := make(map[string]LevelRange)
-	if len(embeddedLevels) == 0 {
-		return ranges
-	}
-	_ = json.Unmarshal(embeddedLevels, &ranges)
-	return ranges
+func loadSkillInfo() map[string]SkillInfo {
+	info := make(map[string]SkillInfo)
+	_ = json.Unmarshal(embeddedSkillInfo, &info)
+	return info
 }
 
-// LevelMap returns the whole hash -> levels table.
-func (s *EditService) LevelMap() map[string]LevelRange {
-	return levelRanges
+// SkillMap returns the whole hash -> skill table, so the frontend can resolve a
+// new edit's starting values and its level bound locally instead of one call per
+// row.
+func (s *EditService) SkillMap() map[string]SkillInfo {
+	return skillInfo
 }
 
 // explainTables holds, per language, the game's own explanation of each skill.
 // The text contains {N} placeholders standing for LevelValue(N+1) - the numbers
 // this tool edits - which is what makes a slot's meaning knowable at all.
 var explainTables = map[string]map[string]string{
-	LangZH: decodeTexts(embeddedExplainZH),
-	"en":   decodeTexts(embeddedExplainEN),
-	"ja":   decodeTexts(embeddedExplainJA),
-}
-
-func decodeTexts(raw []byte) map[string]string {
-	texts := make(map[string]string)
-	if len(raw) == 0 {
-		return texts
-	}
-	_ = json.Unmarshal(raw, &texts)
-	return texts
+	LangZH: decodeStrings(embeddedExplainZH),
+	"en":   decodeStrings(embeddedExplainEN),
+	"ja":   decodeStrings(embeddedExplainJA),
 }
 
 // ExplainMap returns the whole hash -> explanation table for a language, with the
@@ -200,11 +179,6 @@ func (s *EditService) ExplainMap(lang string) map[string]string {
 		return texts
 	}
 	return explainTables[LangZH]
-}
-
-// DefaultMap returns the whole key -> vanilla values table.
-func (s *EditService) DefaultMap() map[string][]float64 {
-	return skillDefaults
 }
 
 // padValues makes a Values slice exactly LevelValueCount long, so the JSON shape
@@ -344,49 +318,20 @@ func configPath() string {
 	return filepath.Join(dir, "Config.json")
 }
 
-// legacyConfigPaths are where earlier builds wrote Config.json, before the list
-// moved to %APPDATA%: first Reloaded's own per-mod config directory, then the
-// mod's folder itself. Read so an existing list survives the move; never written.
-func legacyConfigPaths() []string {
-	root := reloadedDir()
-	if root == "" {
-		return nil
-	}
-	return []string{
-		filepath.Join(root, "User", "Mods", modFolder, "Config.json"),
-		filepath.Join(root, "Mods", modFolder, "Config.json"),
-	}
-}
-
 // LoadEdits reads the current edit list from Config.json, falling back to the
-// locations earlier builds used and then to defaults.
+// built-in defaults when there is nothing to read.
 func (s *EditService) LoadEdits() []SkillEdit {
-	fallback := func() []SkillEdit {
-		edits := defaultEdits()
-		for i := range edits {
-			edits[i].Values = padValues(edits[i].Values)
-		}
-		return edits
-	}
-
-	for _, path := range append([]string{configPath()}, legacyConfigPaths()...) {
-		if path == "" {
-			continue
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
+	edits := defaultEdits()
+	if raw, err := os.ReadFile(configPath()); err == nil {
 		var cfg Config
-		if err := json.Unmarshal(raw, &cfg); err != nil || len(cfg.Edits) == 0 {
-			continue
+		if json.Unmarshal(raw, &cfg) == nil && len(cfg.Edits) > 0 {
+			edits = cfg.Edits
 		}
-		for i := range cfg.Edits {
-			cfg.Edits[i].Values = padValues(cfg.Edits[i].Values)
-		}
-		return cfg.Edits
 	}
-	return fallback()
+	for i := range edits {
+		edits[i].Values = padValues(edits[i].Values)
+	}
+	return edits
 }
 
 // Install writes the mod binary into the Reloaded-II mods folder and the edit
@@ -407,11 +352,6 @@ func (s *EditService) Install(edits []SkillEdit) (string, error) {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		return "", fmt.Errorf("creating the mod folder: %w", err)
 	}
-
-	// Earlier versions shipped a static .tbl under GBFR\data\..., so an install
-	// may have left empty folders behind. The table is patched at runtime now, so
-	// drop them rather than leave a confusing skeleton in the mod.
-	_ = os.RemoveAll(filepath.Join(target, "GBFR"))
 
 	for i := range edits {
 		edits[i].Values = padValues(edits[i].Values)
@@ -443,13 +383,6 @@ func (s *EditService) Install(edits []SkillEdit) (string, error) {
 	}
 	if err := os.WriteFile(cfgPath, cfgBytes, 0o644); err != nil {
 		return "", fmt.Errorf("writing Config.json: %w", err)
-	}
-
-	// Whatever an earlier version left at one of the old locations has just been
-	// carried over by LoadEdits; leaving it behind would mean a list someone can
-	// keep editing that the mod never reads.
-	for _, path := range legacyConfigPaths() {
-		_ = os.Remove(path)
 	}
 
 	// An install is a fresh start, so the previous run's log goes with it: the mod

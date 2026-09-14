@@ -112,8 +112,17 @@ function parseTextMessages(dir) {
 }
 
 function main() {
+  // Checked before opening: sqlite creates a database file for a path that does
+  // not exist, and that empty file is then trusted by build-skilldefaults.js as
+  // one that has already been built. Fail instead of leaving it behind.
+  if (!fs.existsSync(DB)) {
+    throw new Error(`missing ${DB}; run build-skilldefaults.js first`);
+  }
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(DB);
+  if (db.prepare("select name from sqlite_master where name = 'gem'").all().length === 0) {
+    throw new Error(`${DB} has no gem table; delete it and run build-skilldefaults.js`);
+  }
   const cs = parseTextMessages(MSG_DIR);
 
   // ids.txt maps hash -> short id (and the reverse). gem columns store short ids

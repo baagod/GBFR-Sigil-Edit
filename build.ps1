@@ -9,7 +9,8 @@
 
         1. dotnet build          -> GBFR.SkillEdit\bin\Release\GBFR.SkillEdit.dll
         2. copy that DLL         -> SkillEditTool\assets\GBFR.SkillEdit.dll
-        3. npm ci + npm run build -> SkillEditTool\frontend\dist
+           and ModConfig.json    -> SkillEditTool\assets\ModConfig.json
+        3. npm ci + tsc + npm run build -> SkillEditTool\frontend\dist
         4. go build              -> SkillEditTool\SkillEdit.exe
 
     main.go embeds both the frontend bundle and the mod binary at compile time
@@ -46,6 +47,7 @@ $csproj   = Join-Path $root 'GBFR.SkillEdit\GBFR.SkillEdit.csproj'
 $modDll   = Join-Path $root 'GBFR.SkillEdit\bin\Release\GBFR.SkillEdit.dll'
 $modCfg   = Join-Path $root 'GBFR.SkillEdit\ModConfig.json'
 $assetDll = Join-Path $root 'SkillEditTool\assets\GBFR.SkillEdit.dll'
+$assetCfg = Join-Path $root 'SkillEditTool\assets\ModConfig.json'
 $toolDir  = Join-Path $root 'SkillEditTool'
 $frontend = Join-Path $toolDir 'frontend'
 $exe      = Join-Path $toolDir 'SkillEdit.exe'
@@ -86,8 +88,11 @@ if (-not (Test-Path -LiteralPath $modDll)) {
     throw "dotnet build reported success but '$modDll' does not exist."
 }
 
-Write-Host '==> [2/4] Copying the DLL to SkillEditTool\assets (the file go:embed reads)'
+Write-Host '==> [2/4] Copying the DLL and ModConfig.json to SkillEditTool\assets (the files go:embed reads)'
 Copy-Item -LiteralPath $modDll -Destination $assetDll -Force
+# Copied rather than kept as a second hand-maintained file: the manifest is
+# embedded into the exe, so a stale copy would install the wrong version.
+Copy-Item -LiteralPath $modCfg -Destination $assetCfg -Force
 
 Write-Host '==> [3/4] Building the frontend (npm)'
 Push-Location $frontend
@@ -99,6 +104,10 @@ try {
         & $npm.Source ci
         Assert-ExitCode 'npm ci'
     }
+    # vite only strips types, so nothing else in this script would notice a type
+    # error: run the compiler over the same sources before bundling.
+    & $npm.Source run typecheck
+    Assert-ExitCode 'npm run typecheck'
     & $npm.Source run build
     Assert-ExitCode 'npm run build'
 }

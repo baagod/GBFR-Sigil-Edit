@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -71,132 +70,42 @@ func TestInstallWritesConfigWhereTheModReadsIt(t *testing.T) {
 	}
 }
 
-// A list left where the previous release wrote it (Reloaded's per-mod config
-// directory) must survive the move, and the stale copy must not be left behind
-// for someone to edit in vain.
-func TestInstallMigratesPrevConfig(t *testing.T) {
-	root := fakeReloaded(t)
-
-	prev := filepath.Join(root, "User", "Mods", modFolder)
-	if err := os.MkdirAll(prev, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	prevPath := filepath.Join(prev, "Config.json")
-	body := []byte(`{"Edits":[{"Enabled":true,"Key":"B064A634","Level":14,"Values":[300,10,300,10]}]}`)
-	if err := os.WriteFile(prevPath, body, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	service := &EditService{}
-	loaded := service.LoadEdits()
-	if len(loaded) != 1 || loaded[0].Key != "B064A634" || loaded[0].Values[0] != 300 {
-		t.Fatalf("the previous location's config was not picked up: %+v", loaded)
-	}
-	if len(loaded[0].Values) != LevelValueCount {
-		t.Fatalf("loaded values were not padded: %v", loaded[0].Values)
-	}
-
-	if _, err := service.Install(loaded); err != nil {
-		t.Fatalf("Install: %v", err)
-	}
-	if _, err := os.Stat(prevPath); !os.IsNotExist(err) {
-		t.Fatalf("stale Config.json still sits in Reloaded's config directory (err=%v)", err)
-	}
-	raw, err := os.ReadFile(appDataConfig(t, "Config.json"))
-	if err != nil {
-		t.Fatalf("migrated config missing: %v", err)
-	}
-	if !bytes.Contains(raw, []byte("B064A634")) {
-		t.Fatalf("the migrated list is not the one that was there: %s", raw)
-	}
-}
-
-// The same, for the even earlier location: the mod's own folder.
-func TestInstallMigratesLegacyConfig(t *testing.T) {
-	root := fakeReloaded(t)
-
-	legacy := filepath.Join(root, "Mods", modFolder)
-	if err := os.MkdirAll(legacy, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	legacyPath := filepath.Join(legacy, "Config.json")
-	body := []byte(`{"Edits":[{"Enabled":true,"Key":"B064A634","Level":14,"Values":[300,10,300,10]}]}`)
-	if err := os.WriteFile(legacyPath, body, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	service := &EditService{}
-	loaded := service.LoadEdits()
-	if len(loaded) != 1 || loaded[0].Key != "B064A634" || loaded[0].Values[0] != 300 {
-		t.Fatalf("legacy config was not picked up: %+v", loaded)
-	}
-	if len(loaded[0].Values) != LevelValueCount {
-		t.Fatalf("loaded values were not padded: %v", loaded[0].Values)
-	}
-
-	if _, err := service.Install(loaded); err != nil {
-		t.Fatalf("Install: %v", err)
-	}
-	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
-		t.Fatalf("stale Config.json still sits in the mod folder (err=%v)", err)
-	}
-	raw, err := os.ReadFile(appDataConfig(t, "Config.json"))
-	if err != nil {
-		t.Fatalf("migrated config missing: %v", err)
-	}
-	if !bytes.Contains(raw, []byte("B064A634")) {
-		t.Fatalf("the migrated list is not the one that was there: %s", raw)
-	}
-}
-
-// Both old locations at once, with the new one already written: the new one wins
-// and is not overwritten by the stale copies, which are still cleared away.
-func TestNewConfigWinsOverLegacy(t *testing.T) {
-	root := fakeReloaded(t)
-
-	legacy := filepath.Join(root, "Mods", modFolder)
-	if err := os.MkdirAll(legacy, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range []string{
-		filepath.Join(root, "User", "Mods", modFolder, "Config.json"),
-		filepath.Join(legacy, "Config.json"),
-	} {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(`{"Edits":[{"Enabled":true,"Key":"B064A634","Level":14,"Values":[1]}]}`), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+// The list the tool edits is the one the mod reads, so it has to come back out of
+// the same %APPDATA% file: a read that went anywhere else would show the user a
+// list that is not the one being deployed.
+func TestLoadEditsReadsTheAppDataConfig(t *testing.T) {
+	hermeticHome(t)
 
 	current := appDataConfig(t, "Config.json")
 	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(current, []byte(`{"Edits":[{"Enabled":true,"Key":"29B07BEB","Level":14,"Values":[2]}]}`), 0o644); err != nil {
+	body := []byte(`{"Edits":[{"Enabled":true,"Key":"B064A634","Level":14,"Values":[300,10,300,10]}]}`)
+	if err := os.WriteFile(current, body, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	service := &EditService{}
-	loaded := service.LoadEdits()
-	if len(loaded) != 1 || loaded[0].Key != "29B07BEB" {
-		t.Fatalf("a stale copy beat the current config: %+v", loaded)
+	loaded := (&EditService{}).LoadEdits()
+	if len(loaded) != 1 || loaded[0].Key != "B064A634" || loaded[0].Values[0] != 300 {
+		t.Fatalf("Config.json was not read back: %+v", loaded)
 	}
+	if len(loaded[0].Values) != LevelValueCount {
+		t.Fatalf("loaded values were not padded: %v", loaded[0].Values)
+	}
+}
 
-	if _, err := service.Install(loaded); err != nil {
-		t.Fatalf("Install: %v", err)
+// With nothing to read the tool starts from its own defaults rather than an empty
+// screen.
+func TestLoadEditsFallsBackToDefaults(t *testing.T) {
+	hermeticHome(t)
+
+	loaded := (&EditService{}).LoadEdits()
+	if len(loaded) != len(defaultEdits()) {
+		t.Fatalf("expected the default list, got %+v", loaded)
 	}
-	raw, err := os.ReadFile(current)
-	if err != nil {
-		t.Fatalf("Config.json disappeared: %v", err)
-	}
-	if !bytes.Contains(raw, []byte("29B07BEB")) || bytes.Contains(raw, []byte("B064A634")) {
-		t.Fatalf("the current config was replaced or merged with a stale one: %s", raw)
-	}
-	for _, path := range legacyConfigPaths() {
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Fatalf("stale copy %s was left behind (err=%v)", path, err)
+	for _, edit := range loaded {
+		if len(edit.Values) != LevelValueCount {
+			t.Fatalf("%s: default values were not padded: %v", edit.Key, edit.Values)
 		}
 	}
 }
@@ -317,13 +226,14 @@ func TestSaveSettingsRoundTrip(t *testing.T) {
 	}
 }
 
-// The name tables and the default-value table come from separately generated
-// assets. If their key sets drift, adding a skill silently produces zeros (or a
-// blank picker row), so assert every language describes the same set of skills as
-// the defaults - and the same set as each other.
+// The name tables and the skill table come from separately generated assets: the
+// names are per-language text from the game, the values and levels are one table.
+// If their key sets drift, adding a skill silently produces zeros (or a blank
+// picker row), so assert every language describes the same set of skills as the
+// values - and the same set as each other.
 func TestSkillTablesAgree(t *testing.T) {
-	if len(skillDefaults) == 0 {
-		t.Fatal("skilldefaults.json did not load")
+	if len(skillInfo) == 0 {
+		t.Fatal("skillinfo.json did not load")
 	}
 	if len(nameTables) != 3 {
 		t.Fatalf("expected a table each for zh, en and ja, got %d", len(nameTables))
@@ -337,13 +247,13 @@ func TestSkillTablesAgree(t *testing.T) {
 		if len(names) == 0 {
 			t.Fatalf("the %s name table is empty", lang)
 		}
-		if len(names) != len(skillDefaults) {
-			t.Fatalf("%s: key count differs from the defaults: names %d, defaults %d",
-				lang, len(names), len(skillDefaults))
+		if len(names) != len(skillInfo) {
+			t.Fatalf("%s: key count differs from the skill table: names %d, skills %d",
+				lang, len(names), len(skillInfo))
 		}
 		for key := range names {
-			if _, ok := skillDefaults[key]; !ok {
-				t.Fatalf("%s: skill %s has a name but no default values", lang, key)
+			if _, ok := skillInfo[key]; !ok {
+				t.Fatalf("%s: skill %s has a name but no values", lang, key)
 			}
 		}
 		if reference == nil {
@@ -356,9 +266,9 @@ func TestSkillTablesAgree(t *testing.T) {
 			}
 		}
 	}
-	for key, values := range skillDefaults {
-		if len(values) != LevelValueCount {
-			t.Fatalf("skill %s has %d default values, want %d", key, len(values), LevelValueCount)
+	for key, info := range skillInfo {
+		if len(info.Values) != LevelValueCount {
+			t.Fatalf("skill %s has %d values, want %d", key, len(info.Values), LevelValueCount)
 		}
 	}
 }
@@ -391,37 +301,30 @@ func TestNameMapFallsBack(t *testing.T) {
 // 黑龙的咒印 is the worked example: vanilla is 10/3/20 at stored level 14, and
 // the mod's whole purpose is raising the first value.
 func TestKnownSkillDefault(t *testing.T) {
-	values, ok := skillDefaults["06719232"]
+	info, ok := skillInfo["06719232"]
 	if !ok {
-		t.Fatal("06719232 (黑龙的咒印) missing from skilldefaults.json")
+		t.Fatal("06719232 (黑龙的咒印) missing from skillinfo.json")
 	}
 	want := []float64{10, 3, 20, 0, 0, 0, 0, 0, 0, 0}
 	for i := range want {
-		if values[i] != want[i] {
-			t.Fatalf("06719232[%d] = %v, want %v", i, values[i], want[i])
+		if info.Values[i] != want[i] {
+			t.Fatalf("06719232[%d] = %v, want %v", i, info.Values[i], want[i])
 		}
 	}
 }
 
-// The level table has to describe exactly the skills the picker offers, and its
-// default has to be a level the skill actually has values on.
-func TestLevelTableAgrees(t *testing.T) {
-	if len(levelRanges) == 0 {
-		t.Fatal("skilllevels.json did not load")
+// A skill's default level has to be one it actually has values on, and the level
+// field is only ever clamped to a level that exists.
+func TestLevelRangesAreUsable(t *testing.T) {
+	if len(skillInfo) == 0 {
+		t.Fatal("skillinfo.json did not load")
 	}
-	if len(levelRanges) != len(skillDefaults) {
-		t.Fatalf("level table has %d skills, defaults have %d", len(levelRanges), len(skillDefaults))
-	}
-	for hash := range skillDefaults {
-		r, ok := levelRanges[hash]
-		if !ok {
-			t.Fatalf("%s has default values but no level range", hash)
+	for hash, info := range skillInfo {
+		if info.Max < 0 || info.Default < 0 {
+			t.Fatalf("%s has a negative level: %+v", hash, info)
 		}
-		if r.Max < 0 || r.Default < 0 {
-			t.Fatalf("%s has a negative level: %+v", hash, r)
-		}
-		if r.Default > r.Max {
-			t.Fatalf("%s defaults to Lv%d but its maximum is Lv%d", hash, r.Default+1, r.Max+1)
+		if info.Default > info.Max {
+			t.Fatalf("%s defaults to Lv%d but its maximum is Lv%d", hash, info.Default+1, info.Max+1)
 		}
 	}
 
@@ -435,9 +338,9 @@ func TestLevelTableAgrees(t *testing.T) {
 		{"70395731", 14, 29, "30 levels: default to the usual 15"},
 		{"CAC6AFF2", 0, 0, "1 level: default to it, not to 15"},
 	} {
-		got, ok := levelRanges[want.hash]
+		got, ok := skillInfo[want.hash]
 		if !ok {
-			t.Fatalf("%s missing from the level table", want.hash)
+			t.Fatalf("%s missing from the skill table", want.hash)
 		}
 		if got.Default != want.def || got.Max != want.max {
 			t.Fatalf("%s: got Lv%d/%d, want Lv%d/%d (%s)",
@@ -449,11 +352,8 @@ func TestLevelTableAgrees(t *testing.T) {
 // The rows that are not really skills must be absent from every table.
 func TestExcludedRowsAreGone(t *testing.T) {
 	for _, hash := range []string{"9AD8B5E6", "0FBA47E8", "A4D6B880", "CDEB73F6"} {
-		if _, ok := skillDefaults[hash]; ok {
+		if _, ok := skillInfo[hash]; ok {
 			t.Fatalf("%s should not be offered", hash)
-		}
-		if _, ok := levelRanges[hash]; ok {
-			t.Fatalf("%s should not have a level range", hash)
 		}
 		for lang, names := range nameTables {
 			if _, ok := names[hash]; ok {

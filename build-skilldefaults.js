@@ -1,5 +1,9 @@
-// Build skilldefaults.json: skill hash -> its vanilla LevelValue1..10, so the tool
-// can prefill a sensible starting point when a skill is added instead of ten zeros.
+// Build skillinfo.json: skill hash -> its vanilla LevelValue1..10 and the stored
+// levels those numbers live on, so the tool can prefill a sensible starting point
+// when a skill is added instead of ten zeros, and bound the level field.
+//
+// One asset rather than two: both halves describe the same row, come from the same
+// query, and are always wanted together.
 //
 // Source is the game's own skill_status.tbl, converted to SQLite by GBFRDataTools.
 // Levels are stored 0-based in the table (the game shows level + 1), and the values
@@ -25,8 +29,7 @@ const ROOT = arg("root", ".");
 const SHARED = path.join(ROOT, "..");
 const TBL = path.join(SHARED, "extracted/system/table/skill_status.tbl");
 const DB = path.join(SHARED, "extracted", "gbfr.db");
-const OUT = path.join(ROOT, "SkillEditTool/assets/skilldefaults.json");
-const LEVELS_OUT = path.join(ROOT, "SkillEditTool/assets/skilllevels.json");
+const OUT = path.join(ROOT, "SkillEditTool/assets/skillinfo.json");
 const TOOL = path.join(SHARED, "GBFRDataTools/GBFRDataTools.exe");
 // The Chinese table is the one that decides which skills the tool offers; the
 // other languages carry the same keys.
@@ -42,15 +45,30 @@ const EXCLUDED = new Set([
   "CDEB73F6", // 幸运甘露
 ]);
 
+// A database file that exists but holds no tables is worse than none: every later
+// check sees a file that is "there". Test for the table instead, and convert over
+// a clean file rather than trust what is already sitting at that path.
 function ensureDb() {
-  if (fs.existsSync(DB)) return;
+  if (hasSkillStatus()) return;
   if (!fs.existsSync(TBL)) throw new Error(`missing table: ${TBL}`);
 
+  fs.rmSync(DB, { force: true });
   const dir = path.dirname(TBL);
   execFileSync(TOOL, ["tbl-to-sqlite", "-i", dir, "-o", DB, "-v", "2.0.5"], {
     stdio: "ignore",
   });
   console.log(`converted ${TBL} -> ${DB}`);
+}
+
+// The table build-skillnames.js also reads, so its absence means the conversion
+// never ran, or died halfway through.
+function hasSkillStatus() {
+  if (!fs.existsSync(DB)) return false;
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync(DB);
+  const found = db.prepare("select name from sqlite_master where name = 'skill_status'").all().length > 0;
+  db.close();
+  return found;
 }
 
 function main() {
@@ -95,7 +113,6 @@ function main() {
   }
 
   const out = {};
-  const levels = {};
   for (const row of rows) {
     const key = String(row.Key);
     if (row.Level !== maxLevel.get(key)) continue;
@@ -103,8 +120,6 @@ function main() {
     const hash = norm(key);
     if (!(hash in names)) continue;
     if (EXCLUDED.has(hash)) continue;
-
-    out[hash] = valuesOf(row);
 
     /*
       Which stored level a new edit should point at.
@@ -116,23 +131,24 @@ function main() {
     const maxDisplayed = row.Level;
     const defaultDisplayed =
       maxDisplayed <= 20 || !valuedAt15.has(hash) ? maxDisplayed : 15;
-    levels[hash] = { Default: defaultDisplayed - 1, Max: maxDisplayed - 1 };
+    out[hash] = {
+      Default: defaultDisplayed - 1,
+      Max: maxDisplayed - 1,
+      Values: valuesOf(row),
+    };
   }
 
   fs.mkdirSync(path.dirname(path.resolve(OUT)), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(out), "utf8");
-  fs.writeFileSync(LEVELS_OUT, JSON.stringify(levels, null, 1), "utf8");
 
   const size = fs.statSync(OUT).size;
-  console.log(`skilldefaults.json -> ${OUT}`);
+  console.log(`skillinfo.json -> ${OUT}`);
   console.log(`  ${Object.keys(out).length} skills, ${(size / 1024).toFixed(1)} KB`);
-  console.log(`skilllevels.json -> ${LEVELS_OUT}`);
-  console.log(`  ${Object.keys(levels).length} skills`);
   for (const k of ["06719232", "29B07BEB", "70395731", "CAC6AFF2"]) {
-    const l = levels[k];
+    const info = out[k];
     console.log(
-      `  ${names[k] ?? k} (${k}) = [${(out[k] ?? []).join(", ")}]  Lv${
-        l ? `${l.Default + 1}/${l.Max + 1}` : "?"
+      `  ${names[k] ?? k} (${k}) = [${(info?.Values ?? []).join(", ")}]  Lv${
+        info ? `${info.Default + 1}/${info.Max + 1}` : "?"
       }`,
     );
   }

@@ -25,8 +25,8 @@ type SkillEdit = {
   Values: number[];
 };
 
-/** Where a skill's numbers live, in stored levels; the game shows stored + 1. */
-type LevelRange = { Default: number; Max: number };
+/** One skill's vanilla values, and where they live in stored levels. */
+type SkillInfo = { Values: number[]; Default: number; Max: number };
 
 const SERVICE = "main.EditService";
 const SLOTS = 10;
@@ -71,19 +71,15 @@ const pad = (values: number[]) =>
   undone by its own normalisation and the user could never select it.
 */
 function enforceExclusivity(items: SkillEdit[], keepIndex?: number): SkillEdit[] {
-  const addressOfKeep = keepIndex !== undefined ? target(items[keepIndex]) : undefined;
+  // The address the clicked row writes; nothing is kept when normalising from disk.
+  const keep = keepIndex !== undefined ? target(items[keepIndex]) : undefined;
 
   const winner = new Map<string, number>();
   items.forEach((e, i) => {
     if (!e.Enabled) return;
     const address = target(e);
-    if (address === addressOfKeep) {
-      winner.set(address, keepIndex!);
-    } else if (!winner.has(address)) {
-      winner.set(address, i);
-    } else if (keepIndex === undefined) {
-      winner.set(address, i); // last one wins when normalising from disk
-    }
+    if (address === keep) winner.set(address, keepIndex!);
+    else if (keepIndex === undefined || !winner.has(address)) winner.set(address, i);
   });
 
   return items.map((e, i) =>
@@ -217,8 +213,7 @@ export default function App() {
   const [lang, setLang] = useState<Lang>(initialLang);
   const [edits, setEdits] = useState<SkillEdit[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
-  const [defaults, setDefaults] = useState<Record<string, number[]>>({});
-  const [levels, setLevels] = useState<Record<string, LevelRange>>({});
+  const [skills, setSkills] = useState<Record<string, SkillInfo>>({});
   const [explains, setExplains] = useState<Record<string, string>>({});
   // Where Reloaded-II usually lands, shown greyed until a folder is picked.
   const [defaultDir, setDefaultDir] = useState("");
@@ -254,10 +249,9 @@ export default function App() {
     the tool shows depends on the answer, which is why picking one reloads all of it.
   */
   async function loadAll() {
-    const [list, defaultMap, levelMap, dir, root, fallback] = await Promise.all([
+    const [list, skillMap, dir, root, fallback] = await Promise.all([
       Call.ByName(`${SERVICE}.LoadEdits`) as Promise<SkillEdit[]>,
-      Call.ByName(`${SERVICE}.DefaultMap`) as Promise<Record<string, number[]>>,
-      Call.ByName(`${SERVICE}.LevelMap`) as Promise<Record<string, LevelRange>>,
+      Call.ByName(`${SERVICE}.SkillMap`) as Promise<Record<string, SkillInfo>>,
       Call.ByName(`${SERVICE}.ModsDir`) as Promise<string>,
       Call.ByName(`${SERVICE}.ReloadedDir`) as Promise<string>,
       Call.ByName(`${SERVICE}.DefaultReloadedDir`) as Promise<string>,
@@ -266,8 +260,7 @@ export default function App() {
       (list ?? []).map((e) => ({ ...e, Values: pad(e.Values ?? []) })),
     );
     setEdits(loaded);
-    setDefaults(defaultMap ?? {});
-    setLevels(levelMap ?? {});
+    setSkills(skillMap ?? {});
     setModsDir(dir ?? "");
     setReloadedDir(root ?? "");
     setDefaultDir(fallback ?? "");
@@ -336,10 +329,6 @@ export default function App() {
     }
   }
 
-  function install() {
-    return writeConfig(edits, false);
-  }
-
   /*
     Flip one checkbox and re-apply the invariant, keeping the row the user just
     clicked and clearing any other edit that writes the same address.
@@ -379,8 +368,8 @@ export default function App() {
       {
         Enabled: true,
         Key: newKey,
-        Level: levels[key]?.Default ?? 14,
-        Values: pad(defaults[key] ?? []),
+        Level: skills[key]?.Default ?? 14,
+        Values: pad(skills[key]?.Values ?? []),
       },
     ];
     setNewKey("");
@@ -455,7 +444,7 @@ export default function App() {
           The disabled state is the feedback while the write is in flight.
         */}
         <Button
-          onClick={install}
+          onClick={() => writeConfig(edits, false)}
           disabled={busy || shown.length === 0 || !reloadedDir}
         >
           {t.install}
@@ -557,14 +546,14 @@ export default function App() {
 
                 <LevelInput
                   stored={edit.Level}
-                  max={levels[edit.Key.toUpperCase()]?.Max ?? 14}
+                  max={skills[edit.Key.toUpperCase()]?.Max ?? 14}
                   label={t.level}
                   onChange={(level) => update(index, { Level: level })}
                 />
 
                 <ValueSlots
                   values={edit.Values}
-                  defaults={defaults[edit.Key.toUpperCase()]}
+                  defaults={skills[edit.Key.toUpperCase()]?.Values}
                   onChange={(values) => update(index, { Values: values })}
                 />
 

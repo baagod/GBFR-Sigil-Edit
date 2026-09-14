@@ -28,8 +28,11 @@ var embeddedNamesEN []byte
 //go:embed assets/skillnames.ja.json
 var embeddedNamesJA []byte
 
-//go:embed assets/skilldefaults.json
-var embeddedDefaults []byte
+// Every skill's vanilla LevelValue1..10 and the stored levels its values live on,
+// in one generated table: both halves describe the same row.
+//
+//go:embed assets/skillinfo.json
+var embeddedSkillInfo []byte
 
 // The game's own explanation of each skill, per language. {N} in these stands for
 // LevelValue(N+1), so the tool can label the slots it edits.
@@ -42,12 +45,6 @@ var embeddedExplainEN []byte
 
 //go:embed assets/skillexplain.ja.json
 var embeddedExplainJA []byte
-
-// Which stored level each skill's values live on, and what a new edit should
-// target. Generated alongside the defaults, same 200 skills.
-//
-//go:embed assets/skilllevels.json
-var embeddedLevels []byte
 
 func main() {
 	edits := &EditService{}
