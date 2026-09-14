@@ -25,6 +25,9 @@ type SkillEdit = {
   Values: number[];
 };
 
+/** Where a skill's numbers live, in stored levels; the game shows stored + 1. */
+type LevelRange = { Default: number; Max: number };
+
 const SERVICE = "main.EditService";
 const SLOTS = 10;
 
@@ -160,16 +163,22 @@ function ValueSlots({
   );
 }
 
-/** The stored level, shown one higher because that is what the game calls it. */
+/**
+ * The stored level, shown one higher because that is what the game calls it, with
+ * the skill's own maximum beside it and the field clamped to that maximum.
+ */
 function LevelInput({
   stored,
+  max,
   label,
   onChange,
 }: {
   stored: number;
+  max: number;
   label: string;
   onChange: (stored: number) => void;
 }) {
+  const limit = shownLevel(max);
   return (
     /*
       Not an InputGroup: that whole component exists to draw a box around a field
@@ -178,17 +187,22 @@ function LevelInput({
     */
     <div className="flex h-7 shrink-0 items-center gap-1">
       <span className="text-xs text-muted-foreground select-none">Lv</span>
-      {/* Narrow and left-aligned: centred in a wider box it left a visible gap
-          after the label. No gap either - the numerals carry their own side
-          bearing, so "Lv15" still reads as two words. Levels are one or two
-          digits, which is what w-6 is sized for. */}
       <Input
         type="number"
         aria-label={label}
+        min={1}
+        max={limit}
         value={shownLevel(stored)}
-        onChange={(e) => onChange(Number(e.target.value) - 1)}
-        className={`h-7 w-6 min-w-0 border-0 bg-transparent px-0 text-left text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+        onChange={(e) => {
+          const typed = Number(e.target.value);
+          const wanted = Number.isFinite(typed) ? Math.round(typed) : 1;
+          onChange(Math.max(1, Math.min(limit, wanted)) - 1);
+        }}
+        className={`h-7 w-7 min-w-0 border-0 bg-transparent px-0 text-left text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
       />
+      <span className="text-xs text-muted-foreground tabular-nums select-none">
+        / {limit}
+      </span>
     </div>
   );
 }
@@ -198,6 +212,7 @@ export default function App() {
   const [edits, setEdits] = useState<SkillEdit[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [defaults, setDefaults] = useState<Record<string, number[]>>({});
+  const [levels, setLevels] = useState<Record<string, LevelRange>>({});
   const [modsDir, setModsDir] = useState("");
   // "" once we know Reloaded-II cannot be found; null while still asking.
   const [reloadedDir, setReloadedDir] = useState<string | null>(null);
@@ -225,9 +240,10 @@ export default function App() {
     answer, which is why picking a folder reloads all of it.
   */
   async function loadAll() {
-    const [list, defaultMap, dir, root] = await Promise.all([
+    const [list, defaultMap, levelMap, dir, root] = await Promise.all([
       Call.ByName(`${SERVICE}.LoadEdits`) as Promise<SkillEdit[]>,
       Call.ByName(`${SERVICE}.DefaultMap`) as Promise<Record<string, number[]>>,
+      Call.ByName(`${SERVICE}.LevelMap`) as Promise<Record<string, LevelRange>>,
       Call.ByName(`${SERVICE}.ModsDir`) as Promise<string>,
       Call.ByName(`${SERVICE}.ReloadedDir`) as Promise<string>,
     ]);
@@ -236,6 +252,7 @@ export default function App() {
     );
     setEdits(loaded);
     setDefaults(defaultMap ?? {});
+    setLevels(levelMap ?? {});
     setModsDir(dir ?? "");
     setReloadedDir(root ?? "");
 
@@ -334,18 +351,20 @@ export default function App() {
 
   /*
     A new edit starts from the skill's own vanilla LevelValue1..10 rather than
-    zeros, so the only thing to change is the number being tuned. Unknown keys
-    fall back to zeros.
+    zeros, so the only thing to change is the number being tuned, and on the level
+    that skill keeps its values on - which is not 15 for every skill. Unknown keys
+    fall back to the old behaviour.
   */
   function add() {
     if (!newKey) return;
+    const key = newKey.toUpperCase();
     const next = [
       ...edits,
       {
         Enabled: true,
         Key: newKey,
-        Level: 14,
-        Values: pad(defaults[newKey.toUpperCase()] ?? []),
+        Level: levels[key]?.Default ?? 14,
+        Values: pad(defaults[key] ?? []),
       },
     ];
     setNewKey("");
@@ -433,6 +452,7 @@ export default function App() {
 
                 <LevelInput
                   stored={edit.Level}
+                  max={levels[edit.Key.toUpperCase()]?.Max ?? 14}
                   label={t.level}
                   onChange={(level) => update(index, { Level: level })}
                 />

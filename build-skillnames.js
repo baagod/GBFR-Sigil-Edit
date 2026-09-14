@@ -42,6 +42,15 @@ const MSG_DIR = arg(
 const IDS = arg("ids", path.join(ROOT, "GBFRDataTools", "Data", "ids.txt"));
 const OUT = arg("out", path.join(ROOT, "SkillEditTool", "assets", `skillnames.${LANG}.json`));
 
+// Not skills anyone edits - leftover rows that happen to have names. Kept in sync
+// with the same list in build-skilldefaults.js.
+const EXCLUDED = new Set([
+  "9AD8B5E6", // 7net
+  "0FBA47E8", // 强健甘露
+  "A4D6B880", // 修炼甘露
+  "CDEB73F6", // 幸运甘露
+]);
+
 // ---------- .msg text lookup ----------
 // The container interleaves `id_hash_<pstring>` and `text_<pstring>` records, so
 // walk the file pair-wise exactly like gen/build-sigils.js does.
@@ -157,6 +166,7 @@ function main() {
 
   const result = {};
   for (const key of keys) {
+    if (EXCLUDED.has(key)) continue;
     const name = sigilName.get(key) || skillName.get(key);
     if (name) result[key] = name;
   }

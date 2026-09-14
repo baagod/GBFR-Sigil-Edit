@@ -136,6 +136,35 @@ func loadSkillDefaults() map[string][]float64 {
 	return defaults
 }
 
+// LevelRange is where a skill's numbers live, in stored levels (the game shows
+// stored + 1).
+//
+// Default is the level a new edit should start on: the skill's own maximum when
+// that is a normal 20 or less, otherwise the usual 15, except for the few skills
+// whose values only exist higher up. Max is what the level field is clamped to.
+type LevelRange struct {
+	Default int `json:"Default"`
+	Max     int `json:"Max"`
+}
+
+// levelRanges maps a skill hash to its levels. Populated once from the embedded
+// skilllevels.json.
+var levelRanges = loadLevelRanges()
+
+func loadLevelRanges() map[string]LevelRange {
+	ranges := make(map[string]LevelRange)
+	if len(embeddedLevels) == 0 {
+		return ranges
+	}
+	_ = json.Unmarshal(embeddedLevels, &ranges)
+	return ranges
+}
+
+// LevelMap returns the whole hash -> levels table.
+func (s *EditService) LevelMap() map[string]LevelRange {
+	return levelRanges
+}
+
 // DefaultMap returns the whole key -> vanilla values table.
 func (s *EditService) DefaultMap() map[string][]float64 {
 	return skillDefaults

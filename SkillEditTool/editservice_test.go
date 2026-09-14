@@ -276,3 +276,63 @@ func TestKnownSkillDefault(t *testing.T) {
 		}
 	}
 }
+
+// The level table has to describe exactly the skills the picker offers, and its
+// default has to be a level the skill actually has values on.
+func TestLevelTableAgrees(t *testing.T) {
+	if len(levelRanges) == 0 {
+		t.Fatal("skilllevels.json did not load")
+	}
+	if len(levelRanges) != len(skillDefaults) {
+		t.Fatalf("level table has %d skills, defaults have %d", len(levelRanges), len(skillDefaults))
+	}
+	for hash := range skillDefaults {
+		r, ok := levelRanges[hash]
+		if !ok {
+			t.Fatalf("%s has default values but no level range", hash)
+		}
+		if r.Max < 0 || r.Default < 0 {
+			t.Fatalf("%s has a negative level: %+v", hash, r)
+		}
+		if r.Default > r.Max {
+			t.Fatalf("%s defaults to Lv%d but its maximum is Lv%d", hash, r.Default+1, r.Max+1)
+		}
+	}
+
+	// The three cases the rule treats differently.
+	for _, want := range []struct {
+		hash     string
+		def, max int
+		why      string
+	}{
+		{"06719232", 14, 14, "15 levels: default to its own maximum"},
+		{"70395731", 14, 29, "30 levels: default to the usual 15"},
+		{"CAC6AFF2", 0, 0, "1 level: default to it, not to 15"},
+	} {
+		got, ok := levelRanges[want.hash]
+		if !ok {
+			t.Fatalf("%s missing from the level table", want.hash)
+		}
+		if got.Default != want.def || got.Max != want.max {
+			t.Fatalf("%s: got Lv%d/%d, want Lv%d/%d (%s)",
+				want.hash, got.Default+1, got.Max+1, want.def+1, want.max+1, want.why)
+		}
+	}
+}
+
+// The rows that are not really skills must be absent from every table.
+func TestExcludedRowsAreGone(t *testing.T) {
+	for _, hash := range []string{"9AD8B5E6", "0FBA47E8", "A4D6B880", "CDEB73F6"} {
+		if _, ok := skillDefaults[hash]; ok {
+			t.Fatalf("%s should not be offered", hash)
+		}
+		if _, ok := levelRanges[hash]; ok {
+			t.Fatalf("%s should not have a level range", hash)
+		}
+		for lang, names := range nameTables {
+			if _, ok := names[hash]; ok {
+				t.Fatalf("%s should not be named in %s", hash, lang)
+			}
+		}
+	}
+}

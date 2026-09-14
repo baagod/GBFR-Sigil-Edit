@@ -31,6 +31,12 @@ var embeddedNamesJA []byte
 //go:embed assets/skilldefaults.json
 var embeddedDefaults []byte
 
+// Which stored level each skill's values live on, and what a new edit should
+// target. Generated alongside the defaults, same 200 skills.
+//
+//go:embed assets/skilllevels.json
+var embeddedLevels []byte
+
 func main() {
 	edits := &EditService{}
 
