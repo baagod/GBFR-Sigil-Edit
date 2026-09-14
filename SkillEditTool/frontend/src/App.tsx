@@ -108,12 +108,10 @@ function enforceExclusivity(items: SkillEdit[], keepIndex?: number): SkillEdit[]
 function ValueSlots({
   values,
   defaults,
-  explain,
   onChange,
 }: {
   values: number[];
   defaults?: number[];
-  explain?: string;
   onChange: (next: number[]) => void;
 }) {
   const [touched, setTouched] = useState<ReadonlySet<number>>(new Set());

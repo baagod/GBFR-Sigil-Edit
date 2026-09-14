@@ -108,18 +108,6 @@ function parseTextMessages(dir) {
   return out;
 }
 
-// ---------- name_key -> short id ----------
-// ids.txt lines look like: <HASH>|ID|<name>
-function parseIds(file) {
-  const byName = new Map();
-  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
-    const parts = line.split("|");
-    if (parts.length < 3) continue;
-    byName.set(parts[2], parts[1]);
-  }
-  return byName;
-}
-
 function main() {
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(DB);

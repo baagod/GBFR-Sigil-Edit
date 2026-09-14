@@ -51,10 +51,10 @@ func (s *EditService) ReloadedDir() string {
 
 // pickerText is the folder dialog's own copy. The OS draws that dialog, so these
 // strings have to cross into Go rather than live in the frontend's dictionary.
-var pickerText = map[string]struct{ Title, Button, NoMods string }{
-	LangZH: {"选择 Reloaded-II 目录", "选择", "%s 里没有 Mods 文件夹，这看起来不是 Reloaded-II 的安装目录"},
-	"en":   {"Select the Reloaded-II folder", "Select", "%s has no Mods folder, so it does not look like a Reloaded-II install"},
-	"ja":   {"Reloaded-II のフォルダを選ぶ", "選択", "%s に Mods フォルダがないため、Reloaded-II のインストール先ではないようです"},
+var pickerText = map[string]struct{ Title, Button string }{
+	LangZH: {"选择 Reloaded-II 目录", "选择"},
+	"en":   {"Select the Reloaded-II folder", "Select"},
+	"ja":   {"Reloaded-II のフォルダを選ぶ", "選択"},
 }
 
 // ChooseReloadedDir asks the user for the Reloaded-II folder and remembers it.

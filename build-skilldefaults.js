@@ -23,7 +23,6 @@ const DB = arg("db", path.join(ROOT, "vanilla.db"));
 const OUT = arg("out", path.join(ROOT, "SkillEditTool/assets/skilldefaults.json"));
 const LEVELS_OUT = arg("levels-out", path.join(ROOT, "SkillEditTool/assets/skilllevels.json"));
 const TOOL = path.join(ROOT, "GBFRDataTools/GBFRDataTools.exe");
-const SQLITE = path.join(ROOT, "sqlite3.exe");
 // The Chinese table is the one that decides which skills the tool offers; the
 // other languages carry the same keys.
 const NAMES = arg("names", path.join(ROOT, "SkillEditTool/assets/skillnames.zh.json"));
