@@ -246,16 +246,17 @@ function LevelInput({
 }) {
   return (
     /*
-      Not an InputGroup: that whole component exists to draw a box around a field
-      and its prefix, and this field has no box. A label next to a bare input
-      matches the value slots beside it exactly.
+      Not an InputGroup: that component exists to draw a box around a field and its
+      prefix, and this field has no box. "Lv", the field and the maximum are still one
+      target - a click anywhere in them puts the caret in the field - and the wrapper
+      carries data-slot, without which a click on "/ 30" reads as a click on the row
+      and switches the whole edit on or off.
     */
-    <div className="flex h-7 shrink-0 items-center gap-1">
-      {/*
-        leading-7 on the text and h-7 with no padding on the input: otherwise the
-        three sit in boxes of different heights and the digits drift off the
-        baseline the labels are on.
-      */}
+    <div
+      data-slot="level-input"
+      onClick={(e) => e.currentTarget.querySelector("input")?.focus()}
+      className="flex h-7 shrink-0 cursor-text items-center gap-0.5"
+    >
       <span className="text-sm leading-7 text-muted-foreground select-none">Lv</span>
       <Input
         type="number"
@@ -268,18 +269,16 @@ function LevelInput({
           const wanted = Number.isFinite(typed) ? Math.round(typed) : min;
           onChange(Math.max(min, Math.min(max, wanted)));
         }}
-        // Centred in a fixed two-digit box, so the number's own width decides neither
-        // where it starts nor where it ends.
-        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 text-center text-sm tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+        /*
+          The ! on the size, border, padding and background is not decoration:
+          Tailwind orders the component's own h-8, w-full, border, px-2.5 and
+          dark:bg-input/30 after these, so a plain h-7 / w-6 / px-0 / dark:bg-transparent
+          loses and the field goes back to a wide padded box.
+        */
+        className={`w-6! h-7! border-0! dark:bg-transparent! px-0! text-center text-sm tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0! ${NO_SPINNER}`}
       />
-      {/*
-        Its own element between two fixed two-digit boxes, so the slash holds one
-        column whatever the two numbers are, with the same gap on either side as laid
-        out. How equal that reads is the font's business: a leading "1" carries a
-        wider side bearing than a trailing digit, so the ink sits slightly off centre
-        on the right - and no alignment change cancels that, only trimming the leading
-        bearing by hand would.
-      */}
+      {/* Two elements, not one string: the maximum keeps its two-digit box and the
+          slash its own column. Folded into one right-aligned span, "/ 30" wrapped. */}
       <span className="text-sm leading-7 text-muted-foreground select-none">/</span>
       <span className="w-5 shrink-0 text-center text-sm leading-7 whitespace-nowrap text-muted-foreground tabular-nums select-none">
         {max}
