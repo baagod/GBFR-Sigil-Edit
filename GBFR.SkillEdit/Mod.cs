@@ -39,8 +39,8 @@ public class Mod : IMod
     private const string ModId = "GBFR.SkillEdit";
     private const string LogFileName = "GBFR.SkillEdit.log";
 
-    // Where Log() appends. Seeded with the %TEMP% fallback; Start() moves it into
-    // the mod's own configuration directory when the loader can name one.
+    // Where Log() appends. Seeded with the %TEMP% fallback; Start() moves it
+    // into the mod's own folder when the loader can name one.
     private static string _logFile = Path.Combine(Path.GetTempPath(), LogFileName);
 
     private ILogger _logger = null!;
