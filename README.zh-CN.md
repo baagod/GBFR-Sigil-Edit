@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-《碧蓝幻想：Relink》的 **运行时技能参数修改工具**。游戏启动时在内存中改写 `system/table/skill_status.tbl` 的行，**不落地任何 `.tbl` 文件，它和其它改表 mod 不冲突。**
+《碧蓝幻想：Relink》的 **技能参数修改工具**。游戏启动时在内存中改写 `system/table/skill_status.tbl` 的行，**不落地任何 `.tbl` 文件，它和其它改表 mod 不冲突。**
 
 常见的改表 mod 会自带一份改好的 `.tbl` 覆盖游戏原文件，两个这样的 mod 改同一张表就会互相覆盖；本 mod 从游戏封包里读出表，只改你指定的行，再通过 `IDataManager` 交回去，磁盘上什么都没变，因此可以和别的 mod 并存。
 
