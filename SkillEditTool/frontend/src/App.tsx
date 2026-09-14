@@ -250,7 +250,7 @@ function LevelInput({
       and its prefix, and this field has no box. A label next to a bare input
       matches the value slots beside it exactly.
     */
-    <div className="flex h-7 shrink-0 items-center gap-0.5">
+    <div className="flex h-7 shrink-0 items-center gap-1">
       {/*
         leading-7 on the text and h-7 with no padding on the input: otherwise the
         three sit in boxes of different heights and the digits drift off the
@@ -268,12 +268,21 @@ function LevelInput({
           const wanted = Number.isFinite(typed) ? Math.round(typed) : min;
           onChange(Math.max(min, Math.min(max, wanted)));
         }}
-        // Narrow and left-aligned, so the digits sit against "Lv" and the
-        // separator that follows them.
-        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 ml-0.5 text-left text-sm tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+        // Centred in a fixed two-digit box, so the number's own width decides neither
+        // where it starts nor where it ends.
+        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 text-center text-sm tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
       />
-      <span className="text-sm leading-7 text-muted-foreground tabular-nums select-none">
-        / {max}
+      {/*
+        Its own element between two fixed two-digit boxes, so the slash holds one
+        column whatever the two numbers are, with the same gap on either side as laid
+        out. How equal that reads is the font's business: a leading "1" carries a
+        wider side bearing than a trailing digit, so the ink sits slightly off centre
+        on the right - and no alignment change cancels that, only trimming the leading
+        bearing by hand would.
+      */}
+      <span className="text-sm leading-7 text-muted-foreground select-none">/</span>
+      <span className="w-5 shrink-0 text-center text-sm leading-7 whitespace-nowrap text-muted-foreground tabular-nums select-none">
+        {max}
       </span>
     </div>
   );
