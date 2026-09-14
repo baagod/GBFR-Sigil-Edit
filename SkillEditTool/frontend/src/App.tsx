@@ -454,6 +454,13 @@ export default function App() {
                 if ((e.target as HTMLElement).closest("[data-slot]")) return;
                 toggle(index);
               }}
+              /*
+                On the row rather than on the name: the labels describe the row as
+                a whole, so any part of it is a reasonable place to ask. Nothing
+                in the row carries a title of its own, so the hover always lands
+                here.
+              */
+              title={slotNotation(edit.Key) || undefined}
               className="flex cursor-pointer items-center gap-2 border-b py-1.5 last:border-b-0"
             >
               <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -474,12 +481,6 @@ export default function App() {
                   className={`w-[222px] shrink-0 truncate text-sm ${
                     edit.Enabled ? "" : "text-muted-foreground"
                   }`}
-                  /*
-                    Only the explanation. The name is already on screen, so
-                    repeating it here would say nothing; a skill whose description
-                    we do not have gets no tooltip at all.
-                  */
-                  title={slotNotation(edit.Key) || undefined}
                 >
                   {name || <span className="font-mono text-muted-foreground">{edit.Key}</span>}
                 </span>
