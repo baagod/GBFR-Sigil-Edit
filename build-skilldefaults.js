@@ -5,7 +5,7 @@
 // Levels are stored 0-based in the table (the game shows level + 1), and the values
 // live on the highest level row, so "max(Level)" is the row to snapshot.
 //
-// Usage: node build-skilldefaults.js [--db <gbfr.db>] [--out <json>] [--tbl <tbl file>]
+// Usage: node build-skilldefaults.js [--root <project dir>]
 
 "use strict";
 const fs = require("fs");
@@ -23,14 +23,14 @@ const ROOT = arg("root", ".");
 // repository: they are shared with the other mods in the workspace and are far
 // too big to belong to any one of them.
 const SHARED = path.join(ROOT, "..");
-const TBL = arg("tbl", path.join(SHARED, "extracted/system/table/skill_status.tbl"));
-const DB = arg("db", path.join(ROOT, "vanilla.db"));
-const OUT = arg("out", path.join(ROOT, "SkillEditTool/assets/skilldefaults.json"));
-const LEVELS_OUT = arg("levels-out", path.join(ROOT, "SkillEditTool/assets/skilllevels.json"));
+const TBL = path.join(SHARED, "extracted/system/table/skill_status.tbl");
+const DB = path.join(ROOT, "vanilla.db");
+const OUT = path.join(ROOT, "SkillEditTool/assets/skilldefaults.json");
+const LEVELS_OUT = path.join(ROOT, "SkillEditTool/assets/skilllevels.json");
 const TOOL = path.join(SHARED, "GBFRDataTools/GBFRDataTools.exe");
 // The Chinese table is the one that decides which skills the tool offers; the
 // other languages carry the same keys.
-const NAMES = arg("names", path.join(ROOT, "SkillEditTool/assets/skillnames.zh.json"));
+const NAMES = path.join(ROOT, "SkillEditTool/assets/skillnames.zh.json");
 const IDS = path.join(SHARED, "GBFRDataTools/Data/ids.txt");
 
 // Not skills anyone edits - leftover rows that happen to have names. Kept in sync

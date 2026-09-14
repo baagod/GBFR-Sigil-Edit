@@ -10,7 +10,6 @@
 // Falls back to skill.Name -> TXT_SKILL_* for skills with no owning sigil.
 //
 // Usage: node build-skillnames.js [--lang zh|en|ja] [--root <project dir>]
-//                                [--db <gbfr.db>] [--msg <text dir>] [--out <json path>]
 //
 // Needs an extracted copy of the game - the tables and the per-language text
 // folder. The generated asset is committed, so only regenerating needs that.
@@ -39,16 +38,15 @@ const ROOT = arg("root", ".");
 // repository: they are shared with the other mods in the workspace and are far
 // too big to belong to any one of them.
 const SHARED = path.join(ROOT, "..");
-const DB = arg("db", path.join(ROOT, "vanilla.db"));
-const MSG_DIR = arg(
-  "msg",
-  path.join(SHARED, "extracted", "system", "table", "text", GAME_LANG[LANG]),
-);
-const IDS = arg("ids", path.join(SHARED, "GBFRDataTools", "Data", "ids.txt"));
-const OUT = arg("out", path.join(ROOT, "SkillEditTool", "assets", `skillnames.${LANG}.json`));
-const EXPLAIN_OUT = arg(
-  "explain-out",
-  path.join(ROOT, "SkillEditTool", "assets", `skillexplain.${LANG}.json`),
+const DB = path.join(ROOT, "vanilla.db");
+const MSG_DIR = path.join(SHARED, "extracted", "system", "table", "text", GAME_LANG[LANG]);
+const IDS = path.join(SHARED, "GBFRDataTools", "Data", "ids.txt");
+const OUT = path.join(ROOT, "SkillEditTool", "assets", `skillnames.${LANG}.json`);
+const EXPLAIN_OUT = path.join(
+  ROOT,
+  "SkillEditTool",
+  "assets",
+  `skillexplain.${LANG}.json`,
 );
 
 // Not skills anyone edits - leftover rows that happen to have names. Kept in sync
