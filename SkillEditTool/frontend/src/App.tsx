@@ -108,15 +108,39 @@ function enforceExclusivity(items: SkillEdit[], keepIndex?: number): SkillEdit[]
 function ValueSlots({
   values,
   defaults,
+  explain,
   onChange,
 }: {
   values: number[];
   defaults?: number[];
+  explain?: string;
   onChange: (next: number[]) => void;
 }) {
   const [touched, setTouched] = useState<ReadonlySet<number>>(new Set());
 
   const vanillaOf = (i: number) => defaults?.[i] ?? 0;
+
+  /*
+    What a slot means, in the game's own words.
+
+    The explanation is one sentence per effect, separated by newlines or slashes,
+    and the placeholder that names a slot identifies the sentence it belongs to.
+    Everything else falls back to the raw field name, which is all that is known
+    for a slot the description never mentions.
+  */
+  const labelFor = (i: number) => {
+    if (explain) {
+      const parts = explain
+        .split(/\n|\s*\/\s*/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const sentence = parts.find((part) => part.includes(`{${i}}`));
+      if (sentence) {
+        return sentence.replace(/\{(\d+)\}/g, (_, d) => String(values[Number(d)] ?? 0));
+      }
+    }
+    return `LevelValue${i + 1} = {${i}}`;
+  };
 
   return (
     // The one flexible part of the row: whatever the name and the level do not
@@ -133,7 +157,7 @@ function ValueSlots({
             type="number"
             step="any"
             aria-label={`LevelValue${i + 1}`}
-            title={`LevelValue${i + 1} = {${i}}`}
+            title={labelFor(i)}
             placeholder={String(vanillaOf(i))}
             // Digits also show when the stored number differs from the game's - a
             // slot edited in Config.json by hand should not look untouched.
@@ -220,6 +244,7 @@ export default function App() {
   const [names, setNames] = useState<Record<string, string>>({});
   const [defaults, setDefaults] = useState<Record<string, number[]>>({});
   const [levels, setLevels] = useState<Record<string, LevelRange>>({});
+  const [explains, setExplains] = useState<Record<string, string>>({});
   const [modsDir, setModsDir] = useState("");
   // "" once we know Reloaded-II cannot be found; null while still asking.
   const [reloadedDir, setReloadedDir] = useState<string | null>(null);
@@ -236,8 +261,14 @@ export default function App() {
   */
   useEffect(() => {
     rememberLang(lang);
-    Call.ByName(`${SERVICE}.NameMap`, lang)
-      .then((map) => setNames((map ?? {}) as Record<string, string>))
+    Promise.all([
+      Call.ByName(`${SERVICE}.NameMap`, lang),
+      Call.ByName(`${SERVICE}.ExplainMap`, lang),
+    ])
+      .then(([map, texts]) => {
+        setNames((map ?? {}) as Record<string, string>);
+        setExplains((texts ?? {}) as Record<string, string>);
+      })
       .catch((err) => setError({ title: t.readFailed, detail: String(err) }));
   }, [lang]);
 

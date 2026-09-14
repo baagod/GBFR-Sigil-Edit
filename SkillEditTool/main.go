@@ -31,6 +31,18 @@ var embeddedNamesJA []byte
 //go:embed assets/skilldefaults.json
 var embeddedDefaults []byte
 
+// The game's own explanation of each skill, per language. {N} in these stands for
+// LevelValue(N+1), so the tool can label the slots it edits.
+//
+//go:embed assets/skillexplain.zh.json
+var embeddedExplainZH []byte
+
+//go:embed assets/skillexplain.en.json
+var embeddedExplainEN []byte
+
+//go:embed assets/skillexplain.ja.json
+var embeddedExplainJA []byte
+
 // Which stored level each skill's values live on, and what a new edit should
 // target. Generated alongside the defaults, same 200 skills.
 //

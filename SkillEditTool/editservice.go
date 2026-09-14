@@ -165,6 +165,33 @@ func (s *EditService) LevelMap() map[string]LevelRange {
 	return levelRanges
 }
 
+// explainTables holds, per language, the game's own explanation of each skill.
+// The text contains {N} placeholders standing for LevelValue(N+1) - the numbers
+// this tool edits - which is what makes a slot's meaning knowable at all.
+var explainTables = map[string]map[string]string{
+	LangZH: decodeTexts(embeddedExplainZH),
+	"en":   decodeTexts(embeddedExplainEN),
+	"ja":   decodeTexts(embeddedExplainJA),
+}
+
+func decodeTexts(raw []byte) map[string]string {
+	texts := make(map[string]string)
+	if len(raw) == 0 {
+		return texts
+	}
+	_ = json.Unmarshal(raw, &texts)
+	return texts
+}
+
+// ExplainMap returns the whole hash -> explanation table for a language, with the
+// same fallback as NameMap.
+func (s *EditService) ExplainMap(lang string) map[string]string {
+	if texts, ok := explainTables[lang]; ok {
+		return texts
+	}
+	return explainTables[LangZH]
+}
+
 // DefaultMap returns the whole key -> vanilla values table.
 func (s *EditService) DefaultMap() map[string][]float64 {
 	return skillDefaults

@@ -41,6 +41,10 @@ const MSG_DIR = arg(
 );
 const IDS = arg("ids", path.join(ROOT, "GBFRDataTools", "Data", "ids.txt"));
 const OUT = arg("out", path.join(ROOT, "SkillEditTool", "assets", `skillnames.${LANG}.json`));
+const EXPLAIN_OUT = arg(
+  "explain-out",
+  path.join(ROOT, "SkillEditTool", "assets", `skillexplain.${LANG}.json`),
+);
 
 // Not skills anyone edits - leftover rows that happen to have names. Kept in sync
 // with the same list in build-skilldefaults.js.
@@ -171,14 +175,42 @@ function main() {
     if (name) result[key] = name;
   }
 
+  /*
+    The tool's per-slot labels: the skill's own explanation, with {N} standing for
+    LevelValue(N+1) - the numbers the tool edits. {N} is positional, verified
+    against sibling skills whose templates use {1} and {2} for the second and
+    third values.
+
+    Taken from the highest level row, the same row the default values come from.
+  */
+  const highest = new Map();
+  for (const row of db.prepare("select Key, LevelDescription, Level from skill_status").all()) {
+    const key = String(row.Key);
+    const best = highest.get(key);
+    if (!best || row.Level > best.Level) highest.set(key, row);
+  }
+  const explain = {};
+  for (const [key, row] of highest) {
+    const hash = norm(key);
+    if (!(hash in result)) continue;
+    const text = textOf(row.LevelDescription);
+    if (text) explain[hash] = text;
+  }
+
   fs.mkdirSync(path.dirname(path.resolve(OUT)), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(result), "utf8");
 
   const size = fs.statSync(OUT).size;
   console.log(`skillnames.json -> ${OUT}`);
   console.log(`  ${Object.keys(result).length} names, ${(size / 1024).toFixed(1)} KB`);
+  fs.writeFileSync(EXPLAIN_OUT, JSON.stringify(explain), "utf8");
+  console.log(`skillexplain.json -> ${EXPLAIN_OUT}`);
+  console.log(`  ${Object.keys(explain).length} explanations`);
   for (const k of ["06719232", "29B07BEB"]) {
     console.log(`  ${k} => ${result[k] ?? "(none)"}`);
+  }
+  for (const k of ["06719232", "B064A634"]) {
+    console.log(`  explain ${k} => ${(explain[k] ?? "(none)").replace(/\n/g, " | ")}`);
   }
 }
 
