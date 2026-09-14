@@ -570,7 +570,9 @@ export default function App() {
           disabled={busy}
           aria-label={t.chooseReloaded}
           title={reloadedDir || defaultDir}
-          className="min-w-0 flex-1 justify-start font-normal"
+          // Hand cursor: this box is a control that opens a dialog, not a button
+          // that does something, and it reads as a field.
+          className="min-w-0 flex-1 cursor-pointer justify-start font-normal"
         >
           <span
             className={`truncate text-xs ${

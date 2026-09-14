@@ -211,24 +211,36 @@ func defaultEdits() []SkillEdit {
 	}
 }
 
-// reloadedDir is the Reloaded-II folder the user picked, or "" until they pick
-// one.
+// reloadedDir is the folder to install into: the one the user picked, or the
+// default location when Reloaded-II is genuinely there.
 //
-// Nothing is searched for. Reloaded-II is a portable folder that people keep
-// wherever they unpacked it, and guessing wrong means writing a mod into some
-// unrelated directory; asking once is both safer and clearer.
+// Only that one place is ever considered. Reloaded-II is portable, so scanning
+// would risk writing a mod into an unrelated folder that happens to share the
+// name - but the default is where it lands when it is unpacked and run without
+// being moved, and stopping to ask when it is sitting right there would be silly.
 func reloadedDir() string {
-	return loadSettings().ReloadedDir
+	if saved := loadSettings().ReloadedDir; saved != "" {
+		return saved
+	}
+	if fallback := defaultReloadedDir(); looksLikeReloaded(fallback) {
+		return fallback
+	}
+	return ""
 }
 
-// DefaultReloadedDir is the path to show as a hint before anything is picked -
-// where Reloaded-II ends up when it is unpacked and run without moving it.
-func (s *EditService) DefaultReloadedDir() string {
+// defaultReloadedDir is where Reloaded-II ends up when it is unpacked and run
+// without moving it.
+func defaultReloadedDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
 	return filepath.Join(home, "Desktop", "Reloaded-II")
+}
+
+// DefaultReloadedDir is the path the UI shows before anything is picked.
+func (s *EditService) DefaultReloadedDir() string {
+	return defaultReloadedDir()
 }
 
 // looksLikeReloaded is what an install is checked against: the launcher has to be

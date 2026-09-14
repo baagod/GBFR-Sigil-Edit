@@ -167,13 +167,26 @@ func TestSavedDirIsUsedAsGiven(t *testing.T) {
 	}
 }
 
-// Nothing is chosen and nothing is searched for, so the UI can ask.
-func TestNoDirChosen(t *testing.T) {
+// Nothing chosen, but Reloaded-II sitting in the default place: use it rather
+// than making the user pick a folder that is already correct.
+func TestDefaultDirIsUsedWhenItIsReal(t *testing.T) {
 	home := hermeticHome(t)
-	// Even a perfect candidate on the desktop is left alone.
-	makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
+
+	// A folder of that name that is not an install must not be adopted.
 	if got := reloadedDir(); got != "" {
-		t.Fatalf("expected nothing to be chosen, got %q", got)
+		t.Fatalf("expected nothing, got %q", got)
+	}
+	if err := os.MkdirAll(filepath.Join(home, "Desktop", "Reloaded-II"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := reloadedDir(); got != "" {
+		t.Fatalf("an empty folder of that name was adopted: %q", got)
+	}
+
+	// With the launcher present it is the install.
+	real := makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
+	if got := reloadedDir(); got != real {
+		t.Fatalf("default install ignored: got %q, want %q", got, real)
 	}
 }
 
