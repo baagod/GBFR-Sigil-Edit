@@ -414,6 +414,13 @@ export default function App() {
     void writeConfig(next, true);
   }
 
+  /** The whole explanation with the current numbers filled in. */
+  function filledExplanation(key: string, values: number[]): string {
+    const text = explains[key.toUpperCase()];
+    if (!text) return "";
+    return text.replace(/\{(\d+)\}/g, (_, d) => String(values[Number(d)] ?? 0));
+  }
+
   const enabledCount = edits.filter((e) => e.Enabled).length;
 
   return (
