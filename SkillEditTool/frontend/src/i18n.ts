@@ -41,7 +41,7 @@ type Dict = {
 
 export const MESSAGES: Record<Lang, Dict> = {
   zh: {
-    title: (enabled, total) => `技能选择（${enabled}/${total}）`,
+    title: (enabled, total) => `技能（${enabled}/${total}）：`,
     empty: "没有改动条目。",
     add: "添加",
     pickSkill: "选择技能…",
@@ -58,7 +58,7 @@ export const MESSAGES: Record<Lang, Dict> = {
     chooseFailed: "选择目录失败",
   },
   en: {
-    title: (enabled, total) => `Skills (${enabled}/${total})`,
+    title: (enabled, total) => `Skills (${enabled}/${total}):`,
     empty: "No edits yet.",
     add: "Add",
     pickSkill: "Pick a skill…",
@@ -75,7 +75,7 @@ export const MESSAGES: Record<Lang, Dict> = {
     chooseFailed: "Could not use that folder",
   },
   ja: {
-    title: (enabled, total) => `スキル選択（${enabled}/${total}）`,
+    title: (enabled, total) => `スキル（${enabled}/${total}）：`,
     empty: "変更はまだありません。",
     add: "追加",
     pickSkill: "スキルを選択…",

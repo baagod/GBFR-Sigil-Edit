@@ -412,10 +412,30 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 flex flex-col gap-4 p-5">
-      <header className="flex items-center justify-between">
-        <h1 className="text-sm font-semibold">
+      {/*
+        One top band: the count, the picker, the add button and the language
+        switch all describe the list as a whole, and putting the picker here
+        instead of on a band of its own gives the rows the room back.
+      */}
+      <header className="flex items-center gap-2">
+        <h1 className="shrink-0 text-sm font-semibold">
           {t.title(enabledCount, edits.length)}
         </h1>
+
+        <div className="min-w-0 flex-1">
+          <SkillPicker
+            items={pickerItems}
+            value={newKey}
+            placeholder={t.pickSkill}
+            searchPlaceholder={t.searchSkill}
+            emptyLabel={t.noMatch}
+            onSelect={setNewKey}
+          />
+        </div>
+
+        <Button onClick={add} disabled={!newKey}>
+          {t.add}
+        </Button>
 
         {/*
           One joined group: ButtonGroup squares off everything but the outer
@@ -519,24 +539,6 @@ export default function App() {
             {t.empty}
           </p>
         )}
-      </div>
-
-      {/* Always on screen: adding a skill is the point of the tool, so it does
-          not hide behind a button. Picking one is the only thing to cancel. */}
-      <div className="flex items-center gap-2">
-        <div className="min-w-0 flex-1">
-          <SkillPicker
-            items={pickerItems}
-            value={newKey}
-            placeholder={t.pickSkill}
-            searchPlaceholder={t.searchSkill}
-            emptyLabel={t.noMatch}
-            onSelect={setNewKey}
-          />
-        </div>
-        <Button onClick={add} disabled={!newKey}>
-          {t.add}
-        </Button>
       </div>
 
       <footer className="flex items-center gap-4 border-t pt-4">
