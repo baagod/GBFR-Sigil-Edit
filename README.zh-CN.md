@@ -40,7 +40,7 @@
 
 - 选择器里是游戏里有显示名的 **200** 个技能；游戏里没有名字的技能不在此列。
 - exe **未签名**，首次运行可能触发 Windows SmartScreen。选「更多信息」→「仍要运行」，或者自己从源码构建。
-- 如果游戏里没有变化，看 `<Reloaded-II>\Mods\GBFR.SkillEdit\GBFR.SkillEdit.log`：mod 会记录改了哪些行，找不到 Config.json 时也会写明（该目录不可写时回退到 `%TEMP%`）。
+- 如果游戏里没有变化，看 `%TEMP%\GBFR.SkillEdit.log`：mod 会记录改了哪些行，找不到 Config.json 时也会写明。
 
 ## 从源码构建
 

@@ -40,7 +40,7 @@ The interface ships in **中文 / English / 日本語**. It follows your system 
 
 - The picker offers the **200** skills the game gives a display name to. Skills without one are not listed.
 - The exe is **unsigned**, so Windows SmartScreen may warn on first run. Choose "More info" → "Run anyway", or build it from source yourself.
-- If nothing changes in game, read `<Reloaded-II>\Mods\GBFR.SkillEdit\GBFR.SkillEdit.log`: the mod records which rows it changed and says so when it cannot find `Config.json` (it falls back to `%TEMP%` when that folder is not writable).
+- If nothing changes in game, read `%TEMP%\GBFR.SkillEdit.log`: the mod records which rows it changed and says so when it cannot find `Config.json`.
 
 ## Building from source
 

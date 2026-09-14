@@ -39,9 +39,10 @@ public class Mod : IMod
     private const string ModId = "GBFR.SkillEdit";
     private const string LogFileName = "GBFR.SkillEdit.log";
 
-    // Where Log() appends. Seeded with the %TEMP% fallback; Start() moves it
-    // into the mod's own folder when the loader can name one.
-    private static string _logFile = Path.Combine(Path.GetTempPath(), LogFileName);
+    // Where Log() appends. %TEMP% rather than the mod's own folder: naming that
+    // folder needs the loader and a fallback for when it cannot be named or
+    // written to, and a log is not worth that ladder.
+    private static readonly string LogFile = Path.Combine(Path.GetTempPath(), LogFileName);
 
     private ILogger _logger = null!;
     private IModLoader _loader = null!;
@@ -51,8 +52,6 @@ public class Mod : IMod
     {
         _loader = (IModLoader)loaderApi;
         _logger = (ILogger)_loader.GetLogger();
-
-        UseModDirectoryForLog();
 
         Log("=== GBFR.SkillEdit start (config-driven) ===");
 
@@ -176,57 +175,12 @@ public class Mod : IMod
     }
 
     /// <summary>
-    /// Moves the log into the mod's per-mod user configuration directory,
-    /// &lt;Reloaded-II&gt;\User\Mods\GBFR.SkillEdit\ — the same folder the tool
-    /// writes Config.json to, resolved the same way LoadConfig() resolves it.
-    ///
-    /// Why not %TEMP%: it is the wrong lifetime and the wrong audience. It is
-    /// shared by every process on the machine, it is cleaned up whenever Windows
-    /// or a cleaner feels like it, and the user who has to send us a log has to
-    /// know to go look there. The log is produced by this mod, so it lives with
-    /// the mod's own files rather than with the loader's user data: one folder
-    /// answers both "what is installed" and "what did it do last run".
-    ///
-    /// Reloaded-II watches this directory, so a log appearing in it could in
-    /// principle be read as the mod having changed on disk. That has not been
-    /// observed, and if it ever is, this path is the one line to change.
-    ///
-    /// Falls back to %TEMP% — the value _logFile already holds — when the loader
-    /// cannot name the directory, or when it turns out not to be writable. A log
-    /// is a nicety, never a reason to stop patching, so every failure here is
-    /// swallowed.
-    /// </summary>
-    private void UseModDirectoryForLog()
-    {
-        try
-        {
-            if (_loader is not IModLoaderV2 v2)
-                return;
-
-            var dir = v2.GetDirectoryForModId(ModId);
-            if (string.IsNullOrWhiteSpace(dir))
-                return;
-
-            Directory.CreateDirectory(dir);
-            var candidate = Path.Combine(dir, LogFileName);
-
-            // Settle writability now rather than on the first Log() call: if the
-            // directory is read-only we want the %TEMP% fallback for the whole
-            // run, not a log that starts here and silently loses later lines.
-            File.AppendAllText(candidate, string.Empty);
-            _logFile = candidate;
-        }
-        catch
-        {
-            // Keep %TEMP%.
-        }
-    }
 
     private static void Log(string message)
     {
         try
         {
-            File.AppendAllText(_logFile, $"{DateTime.Now:HH:mm:ss.fff}  {message}{Environment.NewLine}");
+            File.AppendAllText(LogFile, $"{DateTime.Now:HH:mm:ss.fff}  {message}{Environment.NewLine}");
         }
         catch
         {
