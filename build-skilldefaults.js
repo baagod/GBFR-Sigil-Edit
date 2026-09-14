@@ -18,15 +18,20 @@ const arg = (n, d) => {
 };
 
 const ROOT = arg("root", ".");
-const TBL = arg("tbl", path.join(ROOT, "extracted/system/table/skill_status.tbl"));
+
+// The extracted game copy and the toolkit live one level up, next to this
+// repository: they are shared with the other mods in the workspace and are far
+// too big to belong to any one of them.
+const SHARED = path.join(ROOT, "..");
+const TBL = arg("tbl", path.join(SHARED, "extracted/system/table/skill_status.tbl"));
 const DB = arg("db", path.join(ROOT, "vanilla.db"));
 const OUT = arg("out", path.join(ROOT, "SkillEditTool/assets/skilldefaults.json"));
 const LEVELS_OUT = arg("levels-out", path.join(ROOT, "SkillEditTool/assets/skilllevels.json"));
-const TOOL = path.join(ROOT, "GBFRDataTools/GBFRDataTools.exe");
+const TOOL = path.join(SHARED, "GBFRDataTools/GBFRDataTools.exe");
 // The Chinese table is the one that decides which skills the tool offers; the
 // other languages carry the same keys.
 const NAMES = arg("names", path.join(ROOT, "SkillEditTool/assets/skillnames.zh.json"));
-const IDS = path.join(ROOT, "GBFRDataTools/Data/ids.txt");
+const IDS = path.join(SHARED, "GBFRDataTools/Data/ids.txt");
 
 // Not skills anyone edits - leftover rows that happen to have names. Kept in sync
 // with the same list in build-skillnames.js.

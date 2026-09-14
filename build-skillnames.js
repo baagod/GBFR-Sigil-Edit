@@ -34,12 +34,17 @@ if (!(LANG in GAME_LANG)) {
 }
 
 const ROOT = arg("root", ".");
+
+// The extracted game copy and the toolkit live one level up, next to this
+// repository: they are shared with the other mods in the workspace and are far
+// too big to belong to any one of them.
+const SHARED = path.join(ROOT, "..");
 const DB = arg("db", path.join(ROOT, "vanilla.db"));
 const MSG_DIR = arg(
   "msg",
-  path.join(ROOT, "extracted", "system", "table", "text", GAME_LANG[LANG]),
+  path.join(SHARED, "extracted", "system", "table", "text", GAME_LANG[LANG]),
 );
-const IDS = arg("ids", path.join(ROOT, "GBFRDataTools", "Data", "ids.txt"));
+const IDS = arg("ids", path.join(SHARED, "GBFRDataTools", "Data", "ids.txt"));
 const OUT = arg("out", path.join(ROOT, "SkillEditTool", "assets", `skillnames.${LANG}.json`));
 const EXPLAIN_OUT = arg(
   "explain-out",
