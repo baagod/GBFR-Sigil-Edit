@@ -17,7 +17,7 @@ A typical table mod brings its own edited `.tbl` and overwrites the game's copy,
 1. Set up Reloaded-II, then add `gbfrelink.utility.manager` to it.
 2. Run `SkillEdit.exe`.
 3. Choose your Reloaded-II folder. The box is pre-filled with `%USERPROFILE%\Desktop\Reloaded-II`; that folder is used as-is when it really is a Reloaded-II install, otherwise pick the folder that contains `Reloaded-II.exe`.
-4. Click **Install mod**. The mod itself goes to `<Reloaded-II>\Mods\GBFR.SkillEdit\`, and your edit list to `<Reloaded-II>\User\Mods\GBFR.SkillEdit\Config.json`.
+4. Click **Install mod**. The mod itself goes to `<Reloaded-II>\Mods\GBFR.SkillEdit\`, and your edit list to `%APPDATA%\GBFR.SkillEdit\Config.json`.
 5. Enable `GBFR.SkillEdit` in Reloaded-II (make sure `gbfrelink.utility.manager` is enabled too), then launch the game through Reloaded-II.
 
 ## Using it
@@ -28,9 +28,9 @@ A typical table mod brings its own edited `.tbl` and overwrites the game's copy,
 
 ## Where the config lives
 
-`<Reloaded-II>\User\Mods\GBFR.SkillEdit\Config.json`
+`%APPDATA%\GBFR.SkillEdit\Config.json`
 
-That is the per-mod configuration directory Reloaded-II assigns, and the file the mod reads its edit list from. The tool writes it for you. The mod itself lives in `<Reloaded-II>\Mods\GBFR.SkillEdit\`.
+That is the folder the tool and the mod both work out on their own: no Reloaded-II lookup, and nothing a disk cleanup deletes. The tool writes the file for you; the tool's own settings (`tool.json`) sit beside it. On an install from an earlier version the list is moved here from wherever it used to be, and the stale copy is removed. The mod itself lives in `<Reloaded-II>\Mods\GBFR.SkillEdit\`.
 
 ## Languages
 
@@ -40,7 +40,7 @@ The interface ships in **中文 / English / 日本語**. It follows your system 
 
 - The picker offers the **200** skills the game gives a display name to. Skills without one are not listed.
 - The exe is **unsigned**, so Windows SmartScreen may warn on first run. Choose "More info" → "Run anyway", or build it from source yourself.
-- If nothing changes in game, read `%TEMP%\GBFR.SkillEdit.log`: the mod records which rows it changed and says so when it cannot find `Config.json`.
+- If nothing changes in game, read `%APPDATA%\GBFR.SkillEdit\GBFR.SkillEdit.log`: the mod records which rows it changed, and names the path where it looked, when it cannot find `Config.json`.
 
 ## Building from source
 

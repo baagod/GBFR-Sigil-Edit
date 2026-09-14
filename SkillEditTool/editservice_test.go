@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -23,10 +24,23 @@ func fakeReloaded(t *testing.T) string {
 	return root
 }
 
+// appDataConfig is the path the mod reads: Environment.SpecialFolder.ApplicationData
+// is %APPDATA%, which is also what os.UserConfigDir answers on Windows. Spelled
+// out here rather than via configPath so the test states the location instead of
+// echoing the implementation back at itself.
+func appDataConfig(t *testing.T, name string) string {
+	t.Helper()
+	appData := os.Getenv("APPDATA")
+	if appData == "" {
+		t.Fatal("APPDATA is unset")
+	}
+	return filepath.Join(appData, modFolder, name)
+}
+
 /*
-The mod loads its edit list from IModLoaderV3.GetModConfigDirectory, which is
-User\Mods\<ModId> - not the mod's own folder. Writing anywhere else deploys a
-config the mod never reads, which looks exactly like the mod doing nothing.
+The mod reads its edit list from %APPDATA%\GBFR.SkillEdit\Config.json, the folder
+the tool's own tool.json sits in. Writing anywhere else deploys a config the mod
+never reads, which looks exactly like the mod doing nothing.
 */
 func TestInstallWritesConfigWhereTheModReadsIt(t *testing.T) {
 	root := fakeReloaded(t)
@@ -36,7 +50,7 @@ func TestInstallWritesConfigWhereTheModReadsIt(t *testing.T) {
 		t.Fatalf("Install: %v", err)
 	}
 
-	wantCfg := filepath.Join(root, "User", "Mods", modFolder, "Config.json")
+	wantCfg := appDataConfig(t, "Config.json")
 	raw, err := os.ReadFile(wantCfg)
 	if err != nil {
 		t.Fatalf("Config.json is not where the mod looks for it: %v", err)
@@ -57,8 +71,47 @@ func TestInstallWritesConfigWhereTheModReadsIt(t *testing.T) {
 	}
 }
 
-// A list left at the old location must survive the move, and the stale copy must
-// not be left behind for someone to edit in vain.
+// A list left where the previous release wrote it (Reloaded's per-mod config
+// directory) must survive the move, and the stale copy must not be left behind
+// for someone to edit in vain.
+func TestInstallMigratesPrevConfig(t *testing.T) {
+	root := fakeReloaded(t)
+
+	prev := filepath.Join(root, "User", "Mods", modFolder)
+	if err := os.MkdirAll(prev, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prevPath := filepath.Join(prev, "Config.json")
+	body := []byte(`{"Edits":[{"Enabled":true,"Key":"B064A634","Level":14,"Values":[300,10,300,10]}]}`)
+	if err := os.WriteFile(prevPath, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	service := &EditService{}
+	loaded := service.LoadEdits()
+	if len(loaded) != 1 || loaded[0].Key != "B064A634" || loaded[0].Values[0] != 300 {
+		t.Fatalf("the previous location's config was not picked up: %+v", loaded)
+	}
+	if len(loaded[0].Values) != LevelValueCount {
+		t.Fatalf("loaded values were not padded: %v", loaded[0].Values)
+	}
+
+	if _, err := service.Install(loaded); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if _, err := os.Stat(prevPath); !os.IsNotExist(err) {
+		t.Fatalf("stale Config.json still sits in Reloaded's config directory (err=%v)", err)
+	}
+	raw, err := os.ReadFile(appDataConfig(t, "Config.json"))
+	if err != nil {
+		t.Fatalf("migrated config missing: %v", err)
+	}
+	if !bytes.Contains(raw, []byte("B064A634")) {
+		t.Fatalf("the migrated list is not the one that was there: %s", raw)
+	}
+}
+
+// The same, for the even earlier location: the mod's own folder.
 func TestInstallMigratesLegacyConfig(t *testing.T) {
 	root := fakeReloaded(t)
 
@@ -87,8 +140,64 @@ func TestInstallMigratesLegacyConfig(t *testing.T) {
 	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
 		t.Fatalf("stale Config.json still sits in the mod folder (err=%v)", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "User", "Mods", modFolder, "Config.json")); err != nil {
+	raw, err := os.ReadFile(appDataConfig(t, "Config.json"))
+	if err != nil {
 		t.Fatalf("migrated config missing: %v", err)
+	}
+	if !bytes.Contains(raw, []byte("B064A634")) {
+		t.Fatalf("the migrated list is not the one that was there: %s", raw)
+	}
+}
+
+// Both old locations at once, with the new one already written: the new one wins
+// and is not overwritten by the stale copies, which are still cleared away.
+func TestNewConfigWinsOverLegacy(t *testing.T) {
+	root := fakeReloaded(t)
+
+	legacy := filepath.Join(root, "Mods", modFolder)
+	if err := os.MkdirAll(legacy, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		filepath.Join(root, "User", "Mods", modFolder, "Config.json"),
+		filepath.Join(legacy, "Config.json"),
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(`{"Edits":[{"Enabled":true,"Key":"B064A634","Level":14,"Values":[1]}]}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	current := appDataConfig(t, "Config.json")
+	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(current, []byte(`{"Edits":[{"Enabled":true,"Key":"29B07BEB","Level":14,"Values":[2]}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	service := &EditService{}
+	loaded := service.LoadEdits()
+	if len(loaded) != 1 || loaded[0].Key != "29B07BEB" {
+		t.Fatalf("a stale copy beat the current config: %+v", loaded)
+	}
+
+	if _, err := service.Install(loaded); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	raw, err := os.ReadFile(current)
+	if err != nil {
+		t.Fatalf("Config.json disappeared: %v", err)
+	}
+	if !bytes.Contains(raw, []byte("29B07BEB")) || bytes.Contains(raw, []byte("B064A634")) {
+		t.Fatalf("the current config was replaced or merged with a stale one: %s", raw)
+	}
+	for _, path := range legacyConfigPaths() {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("stale copy %s was left behind (err=%v)", path, err)
+		}
 	}
 }
 

@@ -266,13 +266,29 @@ type settings struct {
 	ReloadedDir string `json:"ReloadedDir"`
 }
 
-// settingsFile is under %APPDATA%; "" when we cannot work out where that is.
-func settingsFile() string {
+// configDir is the folder the tool and the mod share: %APPDATA%\GBFR.SkillEdit.
+//
+// Not %TEMP%: the edit list is the user's own data, and a disk cleanup deletes
+// what lives there. Not the mod's own folder under Mods\ either: naming that
+// means asking Reloaded where the per-mod config directory is and handling the
+// case where that lookup fails. ApplicationData is computable on both sides with
+// no failure branch at all - Go's os.UserConfigDir and C#'s
+// SpecialFolder.ApplicationData resolve to the same folder.
+func configDir() string {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "GBFR.SkillEdit", "tool.json")
+	return filepath.Join(dir, modFolder)
+}
+
+// settingsFile is under %APPDATA%; "" when we cannot work out where that is.
+func settingsFile() string {
+	dir := configDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "tool.json")
 }
 
 func loadSettings() settings {
@@ -313,35 +329,32 @@ func (s *EditService) ModsDir() string {
 	return filepath.Join(root, "Mods")
 }
 
-// configPath is the file the mod loads its edit list from.
-//
-// This is deliberately NOT the mod's own folder under Mods\. The mod asks
-// Reloaded for IModLoaderV3.GetModConfigDirectory, which resolves to
-// User\Mods\<ModId> - the same directory Reloaded keeps every other mod's
-// Config.json and this mod's own ModUserConfig.json in. Writing next to the DLL
-// instead leaves the mod reading a file that does not exist, which applies
-// nothing at all and looks exactly like the mod being broken.
+// configPath is the file the mod loads its edit list from: the same
+// %APPDATA%\GBFR.SkillEdit folder the tool's own tool.json lives in.
 func configPath() string {
-	root := reloadedDir()
-	if root == "" {
+	dir := configDir()
+	if dir == "" {
 		return ""
 	}
-	return filepath.Join(root, "User", "Mods", modFolder, "Config.json")
+	return filepath.Join(dir, "Config.json")
 }
 
-// legacyConfigPath is where earlier builds of this tool wrote Config.json,
-// before the path above was corrected. Read so an existing list survives the
-// move; never written.
-func legacyConfigPath() string {
+// legacyConfigPaths are where earlier builds wrote Config.json, before the list
+// moved to %APPDATA%: first Reloaded's own per-mod config directory, then the
+// mod's folder itself. Read so an existing list survives the move; never written.
+func legacyConfigPaths() []string {
 	root := reloadedDir()
 	if root == "" {
-		return ""
+		return nil
 	}
-	return filepath.Join(root, "Mods", modFolder, "Config.json")
+	return []string{
+		filepath.Join(root, "User", "Mods", modFolder, "Config.json"),
+		filepath.Join(root, "Mods", modFolder, "Config.json"),
+	}
 }
 
-// LoadEdits reads the current edit list from the mod's Config.json, falling
-// back to the pre-move location and then to defaults.
+// LoadEdits reads the current edit list from Config.json, falling back to the
+// locations earlier builds used and then to defaults.
 func (s *EditService) LoadEdits() []SkillEdit {
 	fallback := func() []SkillEdit {
 		edits := defaultEdits()
@@ -351,7 +364,7 @@ func (s *EditService) LoadEdits() []SkillEdit {
 		return edits
 	}
 
-	for _, path := range []string{configPath(), legacyConfigPath()} {
+	for _, path := range append([]string{configPath()}, legacyConfigPaths()...) {
 		if path == "" {
 			continue
 		}
@@ -418,8 +431,8 @@ func (s *EditService) Install(edits []SkillEdit) (string, error) {
 		}
 	}
 
-	// The edit list is mod *user* config, which the mod reads from Reloaded's
-	// per-mod config directory rather than from its own folder.
+	// The edit list goes to the %APPDATA% folder the mod also reads, so neither
+	// side has to resolve anything about the other.
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
 		return "", fmt.Errorf("creating the config folder: %w", err)
 	}
@@ -427,9 +440,12 @@ func (s *EditService) Install(edits []SkillEdit) (string, error) {
 		return "", fmt.Errorf("writing Config.json: %w", err)
 	}
 
-	// Anything still at the old location has just been copied here; leaving it
-	// behind would mean an edit to a file the mod never reads.
-	_ = os.Remove(legacyConfigPath())
+	// Whatever an earlier version left at one of the old locations has just been
+	// carried over by LoadEdits; leaving it behind would mean a list someone can
+	// keep editing that the mod never reads.
+	for _, path := range legacyConfigPaths() {
+		_ = os.Remove(path)
+	}
 
 	// Short on purpose: the frontend shows this on a single fixed-height line and
 	// appends the enabled count. Where the files went is in its hover tooltip.

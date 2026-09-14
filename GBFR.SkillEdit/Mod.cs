@@ -39,10 +39,19 @@ public class Mod : IMod
     private const string ModId = "GBFR.SkillEdit";
     private const string LogFileName = "GBFR.SkillEdit.log";
 
-    // Where Log() appends. %TEMP% rather than the mod's own folder: naming that
-    // folder needs the loader and a fallback for when it cannot be named or
-    // written to, and a log is not worth that ladder.
-    private static readonly string LogFile = Path.Combine(Path.GetTempPath(), LogFileName);
+    // The config and the log both live in %APPDATA%\GBFR.SkillEdit, which the
+    // tool writes to and this reads from. Chosen over %TEMP%, which a disk
+    // cleanup empties (the edit list is the user's data), and over the mod's own
+    // folder under Mods\, which would mean asking the loader for a path and
+    // handling the case where that fails. ApplicationData cannot fail to resolve,
+    // so both sides compute the same folder directly.
+    private static readonly string ConfigDir =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ModId);
+
+    private static readonly string ConfigFile = Path.Combine(ConfigDir, ConfigFileName);
+
+    // Where Log() appends.
+    private static readonly string LogFile = Path.Combine(ConfigDir, LogFileName);
 
     private ILogger _logger = null!;
     private IModLoader _loader = null!;
@@ -112,25 +121,21 @@ public class Mod : IMod
     {
         try
         {
-            if (_loader is IModLoaderV3 v3)
+            var path = ConfigFile;
+            Log($"config path: {path}");
+
+            // Say which of the two failures this is. "no edits applied" alone
+            // cannot be told apart from "every edit is switched off", and the
+            // answer decides whether the tool is writing to the wrong folder.
+            if (!File.Exists(path))
             {
-                var path = Path.Combine(v3.GetModConfigDirectory(ModId), ConfigFileName);
-                Log($"config path: {path}");
-
-                // Say which of the two failures this is. "no edits applied" alone
-                // cannot be told apart from "every edit is switched off", and the
-                // answer decides whether the tool is writing to the wrong folder.
-                if (!File.Exists(path))
-                {
-                    Log("FAIL: no Config.json at that path (the tool deploys the edit list here)");
-                    return new Config();
-                }
-
-                var config = Config.Load(path);
-                Log($"config loaded: {config.Edits.Count} edit(s)");
-                return config;
+                Log($"FAIL: no Config.json at {path} (the tool writes the edit list here)");
+                return new Config();
             }
-            Log("loader is not IModLoaderV3; using built-in defaults");
+
+            var config = Config.Load(path);
+            Log($"config loaded: {config.Edits.Count} edit(s)");
+            return config;
         }
         catch (Exception ex)
         {
@@ -180,6 +185,10 @@ public class Mod : IMod
     {
         try
         {
+            // %TEMP% always existed, so the log always appeared. This folder only
+            // does once the tool has written the config, and the log is worth
+            // most exactly when it has not been run yet.
+            Directory.CreateDirectory(ConfigDir);
             File.AppendAllText(LogFile, $"{DateTime.Now:HH:mm:ss.fff}  {message}{Environment.NewLine}");
         }
         catch

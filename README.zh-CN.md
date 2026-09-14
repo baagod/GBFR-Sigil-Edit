@@ -17,7 +17,7 @@
 1. 装好并配置 Reloaded-II，再把 `gbfrelink.utility.manager` 加进去。
 2. 运行 `SkillEdit.exe`。
 3. 选择 Reloaded-II 目录。输入框默认填 `%USERPROFILE%\Desktop\Reloaded-II`，该目录里确实有 Reloaded-II 时直接用它；否则选有 `Reloaded-II.exe` 的那个目录。
-4. 点「安装 Mod」。mod 本体写入 `<Reloaded-II>\Mods\GBFR.SkillEdit\`，改动配置写入 `<Reloaded-II>\User\Mods\GBFR.SkillEdit\Config.json`。
+4. 点「安装 Mod」。mod 本体写入 `<Reloaded-II>\Mods\GBFR.SkillEdit\`，改动配置写入 `%APPDATA%\GBFR.SkillEdit\Config.json`。
 5. 在 Reloaded-II 里启用 `GBFR.SkillEdit`（同时确认 `gbfrelink.utility.manager` 也已启用），然后用 Reloaded-II 启动游戏。
 
 ## 使用
@@ -28,9 +28,9 @@
 
 ## 配置存放位置
 
-`<Reloaded-II>\User\Mods\GBFR.SkillEdit\Config.json`
+`%APPDATA%\GBFR.SkillEdit\Config.json`
 
-这是 Reloaded-II 为每个 mod 分配的配置目录，也是 mod 读取改动列表的地方。工具会自动写入；mod 本体位于 `<Reloaded-II>\Mods\GBFR.SkillEdit\`。
+这是工具和 mod 各自都能直接算出来的目录：不需要向 Reloaded-II 查路径，也不会被磁盘清理删掉。工具会自动写入；工具自己的设置 `tool.json` 就在旁边。从旧版本升级时，旧位置的改动列表会被迁移到这里，旧文件删掉。mod 本体位于 `<Reloaded-II>\Mods\GBFR.SkillEdit\`。
 
 ## 界面语言
 
@@ -40,7 +40,7 @@
 
 - 选择器里是游戏里有显示名的 **200** 个技能；游戏里没有名字的技能不在此列。
 - exe **未签名**，首次运行可能触发 Windows SmartScreen。选「更多信息」→「仍要运行」，或者自己从源码构建。
-- 如果游戏里没有变化，看 `%TEMP%\GBFR.SkillEdit.log`：mod 会记录改了哪些行，找不到 Config.json 时也会写明。
+- 如果游戏里没有变化，看 `%APPDATA%\GBFR.SkillEdit\GBFR.SkillEdit.log`：mod 会记录改了哪些行，找不到 Config.json 时也会写明它去哪儿找过。
 
 ## 从源码构建
 
