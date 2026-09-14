@@ -10,6 +10,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <!--
+      Both off, so the same source builds the same bytes at any commit - measured:
+      with either one on the DLL differs on every commit, and each release carried a
+      "sync the DLL" commit for no source change.
+
+        - the SDK appends the commit sha to InformationalVersion ("1.0.0+845b8d3...");
+        - SourceLink writes the repository and that sha into the .pdb, and the DLL
+          records the .pdb's id, so the DLL changed along with it.
+
+      Nothing reads either: the mod's version comes from ModConfig.json, and a stack
+      trace in the log keeps its line numbers (the .pdb is still produced).
+    -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <EnableSourceLink>false</EnableSourceLink>
   </PropertyGroup>
 
   <ItemGroup>
