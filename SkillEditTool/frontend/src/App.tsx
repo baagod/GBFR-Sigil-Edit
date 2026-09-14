@@ -191,7 +191,7 @@ function LevelInput({
         three sit in boxes of different heights and the digits drift off the
         baseline the labels are on.
       */}
-      <span className="text-xs leading-7 text-muted-foreground select-none">Lv</span>
+      <span className="text-sm leading-7 text-muted-foreground select-none">Lv</span>
       <Input
         type="number"
         aria-label={label}
@@ -205,9 +205,9 @@ function LevelInput({
         }}
         // Narrow and left-aligned, so the digits sit against "Lv" and the
         // separator that follows them.
-        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 text-left text-xs md:text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 text-left text-sm tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
       />
-      <span className="text-xs leading-7 text-muted-foreground tabular-nums select-none">
+      <span className="text-sm leading-7 text-muted-foreground tabular-nums select-none">
         / {limit}
       </span>
     </div>
