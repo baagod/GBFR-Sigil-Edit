@@ -54,10 +54,6 @@ public class Mod : IMod
     // log at all.
     private static string _logFile = string.Empty;
 
-    // Whether this run has written its first line yet, so the file is started over
-    // once per launch instead of growing across every launch.
-    private static bool _logStarted;
-
     private ILogger _logger = null!;
     private IModLoader _loader = null!;
     private Config _config = new();
@@ -210,9 +206,7 @@ public class Mod : IMod
     }
 
     /// <summary>
-    /// Appends a line to this run's log, starting the file over on the first call
-    /// so it always describes the launch you are looking at rather than every
-    /// launch before it.
+    /// Appends a line to the log beside the mod's own files.
     ///
     /// Nothing here may throw: the first call happens outside Start()'s try, and a
     /// log is never a reason to stop patching.
@@ -224,11 +218,6 @@ public class Mod : IMod
 
         try
         {
-            if (!_logStarted)
-            {
-                File.WriteAllText(_logFile, string.Empty);
-                _logStarted = true;
-            }
             File.AppendAllText(_logFile, $"{DateTime.Now:HH:mm:ss.fff}  {message}{Environment.NewLine}");
         }
         catch

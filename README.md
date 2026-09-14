@@ -29,9 +29,8 @@ A typical table mod brings its own edited `.tbl` and overwrites the game's copy,
 ## Notes
 
 - The interface ships in **中文 / English / 日本語**. It follows your system language on first run, and can be switched in the top-right corner.
-- The picker offers the **200** skills the game gives a display name to. Skills without one are not listed.
 - The exe is **unsigned**, so Windows SmartScreen may warn on first run. Choose "More info" → "Run anyway", or build it from source yourself.
-- If nothing changes in game, read `<Reloaded-II>\Mods\GBFR.SkillEdit\GBFR.SkillEdit.log`: the mod records which rows it changed (rewritten on every launch), and names the path where it looked when it cannot find `Config.json`.
+- If nothing changes in game, read `<Reloaded-II>\Mods\GBFR.SkillEdit\GBFR.SkillEdit.log`: the mod records which rows it changed, and where it went looking for `Config.json`.
 
 ## Building from source
 

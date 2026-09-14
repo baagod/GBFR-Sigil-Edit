@@ -30,7 +30,7 @@
 
 - 界面支持 **中文 / English / 日本語**，首次运行跟随系统语言，右上角可切换。
 - exe **未签名**，首次运行可能触发 Windows SmartScreen。选「更多信息」→「仍要运行」，或者自己从源码构建。
-- 如果游戏里没有变化，看 `<Reloaded-II>\Mods\GBFR.SkillEdit\GBFR.SkillEdit.log`：mod 会记录改了哪些行（每次启动重写），找不到 Config.json 时也会写明它去哪儿找过。
+- 如果游戏里没有变化，看 `<Reloaded-II>\Mods\GBFR.SkillEdit\GBFR.SkillEdit.log`：mod 会记录改了哪些行，以及它去哪儿找过 `Config.json`。
 
 ## 从源码构建
 
