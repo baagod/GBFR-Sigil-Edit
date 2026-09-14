@@ -124,11 +124,11 @@ function ValueSlots({
     <div className="flex min-w-0 flex-1 items-center">
       {Array.from({ length: SLOTS }, (_, i) => (
         <Fragment key={i}>
-          {i > 0 && (
-            <span className="shrink-0 text-muted-foreground/40" aria-hidden>
-              |
-            </span>
-          )}
+          {/* Every slot, the first one too: it separates the values from the level
+              the same way they are separated from each other. */}
+          <span className="shrink-0 text-muted-foreground/40" aria-hidden>
+            |
+          </span>
           <Input
             type="number"
             step="any"
@@ -185,7 +185,7 @@ function LevelInput({
       and its prefix, and this field has no box. A label next to a bare input
       matches the value slots beside it exactly.
     */
-    <div className="flex h-7 shrink-0 items-center gap-1">
+    <div className="flex h-7 shrink-0 items-center gap-0.5">
       <span className="text-xs text-muted-foreground select-none">Lv</span>
       <Input
         type="number"
@@ -198,7 +198,9 @@ function LevelInput({
           const wanted = Number.isFinite(typed) ? Math.round(typed) : 1;
           onChange(Math.max(1, Math.min(limit, wanted)) - 1);
         }}
-        className={`h-7 w-7 min-w-0 border-0 bg-transparent px-0 text-left text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+        // Narrow and left-aligned, so the digits sit against "Lv" and the
+        // separator that follows them.
+        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 text-left text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
       />
       <span className="text-xs text-muted-foreground tabular-nums select-none">
         / {limit}
