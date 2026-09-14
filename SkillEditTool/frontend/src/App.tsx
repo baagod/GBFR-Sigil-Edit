@@ -186,7 +186,12 @@ function LevelInput({
       matches the value slots beside it exactly.
     */
     <div className="flex h-7 shrink-0 items-center gap-0.5">
-      <span className="text-xs text-muted-foreground select-none">Lv</span>
+      {/*
+        leading-7 on the text and h-7 with no padding on the input: otherwise the
+        three sit in boxes of different heights and the digits drift off the
+        baseline the labels are on.
+      */}
+      <span className="text-xs leading-7 text-muted-foreground select-none">Lv</span>
       <Input
         type="number"
         aria-label={label}
@@ -200,9 +205,9 @@ function LevelInput({
         }}
         // Narrow and left-aligned, so the digits sit against "Lv" and the
         // separator that follows them.
-        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 text-left text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 text-left text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
       />
-      <span className="text-xs text-muted-foreground tabular-nums select-none">
+      <span className="text-xs leading-7 text-muted-foreground tabular-nums select-none">
         / {limit}
       </span>
     </div>
