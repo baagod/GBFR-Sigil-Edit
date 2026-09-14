@@ -18,7 +18,7 @@ const arg = (n, d) => {
 };
 
 const ROOT = arg("root", ".");
-const TBL = arg("tbl", path.join(ROOT, "game_extract/system/table/skill_status.tbl"));
+const TBL = arg("tbl", path.join(ROOT, "extracted/system/table/skill_status.tbl"));
 const DB = arg("db", path.join(ROOT, "vanilla.db"));
 const OUT = arg("out", path.join(ROOT, "SkillEditTool/assets/skilldefaults.json"));
 const LEVELS_OUT = arg("levels-out", path.join(ROOT, "SkillEditTool/assets/skilllevels.json"));

@@ -37,7 +37,7 @@ const ROOT = arg("root", ".");
 const DB = arg("db", path.join(ROOT, "vanilla.db"));
 const MSG_DIR = arg(
   "msg",
-  path.join(ROOT, "game_extract", "system", "table", "text", GAME_LANG[LANG]),
+  path.join(ROOT, "extracted", "system", "table", "text", GAME_LANG[LANG]),
 );
 const IDS = arg("ids", path.join(ROOT, "GBFRDataTools", "Data", "ids.txt"));
 const OUT = arg("out", path.join(ROOT, "SkillEditTool", "assets", `skillnames.${LANG}.json`));

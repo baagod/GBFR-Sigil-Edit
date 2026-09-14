@@ -27,7 +27,7 @@ SkillEditTool/SkillEdit.exe
 # neither a build nor a release needs any of this - only regenerating them does,
 # and that requires a copy of the game.
 GBFRDataTools/
-game_extract/
+extracted/
 *.db
 sqlite3.exe
 msg_*.json
