@@ -137,10 +137,6 @@ public class Mod : IMod
     }
 
     /// <summary>
-    /// Walks the table at its 52-byte stride, matches (Key, Level), and overwrites
-    /// LevelValue1..3 in place.
-    /// </summary>
-    /// <summary>
     /// Walks the table at its 52-byte stride, matches (Key, Level), and writes
     /// <paramref name="values"/> over LevelValue1..N. Missing trailing values are
     /// written as zero so the row ends up exactly as the tool described it.
