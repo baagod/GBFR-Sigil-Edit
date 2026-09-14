@@ -579,7 +579,7 @@ export default function App() {
               reloadedDir ? "text-muted-foreground" : "text-muted-foreground/50"
             }`}
           >
-            {reloadedDir ? t.target(`${modsDir}\\GBFR.SkillEdit`) : defaultDir}
+            {reloadedDir ? `${modsDir}\\GBFR.SkillEdit` : defaultDir}
           </span>
         </Button>
       </footer>

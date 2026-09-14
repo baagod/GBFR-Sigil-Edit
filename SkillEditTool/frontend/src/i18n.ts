@@ -29,7 +29,6 @@ type Dict = {
   searchSkill: string;
   noMatch: string;
   install: string;
-  target: (path: string) => string;
   chooseReloaded: string;
   ok: string;
   enable: (name: string) => string;
@@ -49,7 +48,6 @@ export const MESSAGES: Record<Lang, Dict> = {
     searchSkill: "搜索技能名",
     noMatch: "没有匹配的技能",
     install: "安装 Mod",
-    target: (path) => `目标：${path}`,
     chooseReloaded: "选择 Reloaded-II 目录",
     ok: "确定",
     enable: (name) => `启用 ${name}`,
@@ -67,7 +65,6 @@ export const MESSAGES: Record<Lang, Dict> = {
     searchSkill: "Search skills",
     noMatch: "No matching skill",
     install: "Install mod",
-    target: (path) => `Target: ${path}`,
     chooseReloaded: "Select Reloaded-II folder",
     ok: "OK",
     enable: (name) => `Enable ${name}`,
@@ -85,7 +82,6 @@ export const MESSAGES: Record<Lang, Dict> = {
     searchSkill: "スキル名で検索",
     noMatch: "一致するスキルがありません",
     install: "Mod をインストール",
-    target: (path) => `出力先：${path}`,
     chooseReloaded: "Reloaded-II のフォルダを選ぶ",
     ok: "OK",
     enable: (name) => `${name} を有効にする`,
