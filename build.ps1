@@ -112,7 +112,7 @@ if (-not (Test-Path -LiteralPath $distHtml)) {
 Write-Host '==> [4/4] Building SkillEdit.exe (go build)'
 Push-Location $toolDir
 try {
-    & go build -ldflags '-H windowsgui -s -w' -o SkillEdit.exe .
+    & go build -trimpath -ldflags '-H windowsgui -s -w' -o SkillEdit.exe .
     Assert-ExitCode 'go build'
 }
 finally {
