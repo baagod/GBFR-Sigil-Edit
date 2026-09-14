@@ -461,6 +461,51 @@ export default function App() {
         </ButtonGroup>
       </header>
 
+      <div className="flex shrink-0 items-center gap-4 border-b pb-4">
+        {/*
+          The label never changes. Swapping it for a progress word resized the
+          button by 9px, which slid the target line next to it back and forth.
+          The disabled state is the feedback while the write is in flight.
+        */}
+        <Button
+          onClick={install}
+          disabled={busy || shown.length === 0 || !reloadedDir}
+        >
+          {t.install}
+        </Button>
+
+        {/*
+          One line. Failures do not land here - a write error can be long and its
+          useful half is at the end, so it gets a dialog instead. What lands here
+          is the one thing that cannot be worked out on its own: where Reloaded-II
+          is, when the search came up empty.
+        */}
+        {/*
+          The folder itself is the control, the way the skill picker works: one
+          outlined box that opens a dialog. Until one is chosen the box shows
+          where Reloaded-II usually lands, greyed like any placeholder - nothing
+          is searched for.
+        */}
+        <Button
+          variant="outline"
+          onClick={chooseReloadedDir}
+          disabled={busy}
+          aria-label={t.chooseReloaded}
+          title={reloadedDir || defaultDir}
+          // Hand cursor: this box is a control that opens a dialog, not a button
+          // that does something, and it reads as a field.
+          className="min-w-0 flex-1 cursor-pointer justify-start font-normal"
+        >
+          <span
+            className={`truncate text-xs ${
+              reloadedDir ? "text-muted-foreground" : "text-muted-foreground/50"
+            }`}
+          >
+            {reloadedDir ? `${modsDir}\\GBFR.SkillEdit` : defaultDir}
+          </span>
+        </Button>
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         {shown.map(({ edit, index }) => {
           const name = names[edit.Key] ?? "";
@@ -541,50 +586,7 @@ export default function App() {
         )}
       </div>
 
-      <footer className="flex items-center gap-4 border-t pt-4">
-        {/*
-          The label never changes. Swapping it for a progress word resized the
-          button by 9px, which slid the target line next to it back and forth.
-          The disabled state is the feedback while the write is in flight.
-        */}
-        <Button
-          onClick={install}
-          disabled={busy || shown.length === 0 || !reloadedDir}
-        >
-          {t.install}
-        </Button>
 
-        {/*
-          One line. Failures do not land here - a write error can be long and its
-          useful half is at the end, so it gets a dialog instead. What lands here
-          is the one thing that cannot be worked out on its own: where Reloaded-II
-          is, when the search came up empty.
-        */}
-        {/*
-          The folder itself is the control, the way the skill picker works: one
-          outlined box that opens a dialog. Until one is chosen the box shows
-          where Reloaded-II usually lands, greyed like any placeholder - nothing
-          is searched for.
-        */}
-        <Button
-          variant="outline"
-          onClick={chooseReloadedDir}
-          disabled={busy}
-          aria-label={t.chooseReloaded}
-          title={reloadedDir || defaultDir}
-          // Hand cursor: this box is a control that opens a dialog, not a button
-          // that does something, and it reads as a field.
-          className="min-w-0 flex-1 cursor-pointer justify-start font-normal"
-        >
-          <span
-            className={`truncate text-xs ${
-              reloadedDir ? "text-muted-foreground" : "text-muted-foreground/50"
-            }`}
-          >
-            {reloadedDir ? `${modsDir}\\GBFR.SkillEdit` : defaultDir}
-          </span>
-        </Button>
-      </footer>
 
       {/*
         A failed write is worth interrupting for - the edit is not on disk, and
