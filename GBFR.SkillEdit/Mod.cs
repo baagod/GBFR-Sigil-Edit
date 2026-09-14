@@ -59,14 +59,12 @@ public class Mod : IMod
     // log at all.
     private static string _logFile = string.Empty;
 
-    private ILogger _logger = null!;
     private IModLoader _loader = null!;
     private Config _config = new();
 
     public void Start(IModLoaderV1 loaderApi)
     {
         _loader = (IModLoader)loaderApi;
-        _logger = (ILogger)_loader.GetLogger();
 
         UseModDirectoryForLog();
 
