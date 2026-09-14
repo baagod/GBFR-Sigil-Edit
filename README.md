@@ -98,3 +98,16 @@ the frontend bundle and the DLL, so those have to exist first.
 Made by **baago**. Source and releases: `<your-repo-url>`
 
 [中文说明](README.zh-CN.md)
+
+## License
+
+This project is released under the MIT License — see [LICENSE](LICENSE).
+
+Third-party components bundled in this project keep their own licenses:
+
+- [shadcn/ui](https://ui.shadcn.com/) — MIT
+- [Base UI](https://base-ui.com/) — MIT
+- [lucide](https://lucide.dev/) — ISC
+- [Geist](https://vercel.com/font) font — SIL Open Font License 1.1
+
+[中文说明](README.zh-CN.md)

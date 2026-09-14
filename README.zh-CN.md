@@ -80,3 +80,14 @@ Go 构建会把前端产物和 DLL 一起内嵌，所以这两者必须先就位
 作者 **baago**。源码与发布页：`<your-repo-url>`
 
 [English README](README.md)
+
+## 许可证
+
+本项目基于 MIT 协议发布，详见 [LICENSE](LICENSE)。
+
+项目内打包的第三方组件分别遵循各自协议：
+
+- [shadcn/ui](https://ui.shadcn.com/) — MIT
+- [Base UI](https://base-ui.com/) — MIT
+- [lucide](https://lucide.dev/) — ISC
+- [Geist](https://vercel.com/font) 字体 — SIL Open Font License 1.1

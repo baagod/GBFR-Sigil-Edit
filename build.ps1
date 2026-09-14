@@ -25,7 +25,7 @@
 
 .PARAMETER Package
     After a successful build, write dist-release\GBFR.SkillEdit-<version>.zip
-    holding the tool, both READMEs and the mod itself.
+    holding the tool, both READMEs, the LICENSE and the mod itself.
 
 .EXAMPLE
     ./build.ps1
@@ -138,7 +138,7 @@ if ($Package) {
     $staging    = Join-Path $releaseDir 'staging'
     $zip        = Join-Path $releaseDir "GBFR.SkillEdit-$version.zip"
 
-    # Staged rather than zipped in place: the archive has to hold exactly five
+    # Staged rather than zipped in place: the archive has to hold exactly six
     # files, and bin\Release also contains the build's other output.
     Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path (Join-Path $staging 'GBFR.SkillEdit') -Force | Out-Null
@@ -146,6 +146,7 @@ if ($Package) {
     Copy-Item -LiteralPath $exe -Destination $staging -Force
     Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $staging -Force
     Copy-Item -LiteralPath (Join-Path $root 'README.zh-CN.md') -Destination $staging -Force
+    Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $staging -Force
     # For anyone who would rather drop the mod into Mods\ by hand.
     Copy-Item -LiteralPath $modCfg -Destination (Join-Path $staging 'GBFR.SkillEdit') -Force
     Copy-Item -LiteralPath $modDll -Destination (Join-Path $staging 'GBFR.SkillEdit') -Force
