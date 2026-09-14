@@ -2,7 +2,7 @@
   "ModId": "GBFR.SkillEdit",
   "ModName": "GBFR Skill Edit",
   "ModAuthor": "baago",
-  "ModVersion": "1.0.2",
+  "ModVersion": "1.0.3",
   "ModDescription": "Patches skill_status rows at startup, driven by a Config.json written by SkillEditTool. Ships no .tbl: the table is read from the game archive, edited in memory, and handed back through IDataManager.",
   "ModDll": "GBFR.SkillEdit.dll",
   "ModIcon": "",
