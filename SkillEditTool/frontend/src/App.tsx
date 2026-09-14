@@ -120,28 +120,6 @@ function ValueSlots({
 
   const vanillaOf = (i: number) => defaults?.[i] ?? 0;
 
-  /*
-    What a slot means, in the game's own words.
-
-    The explanation is one sentence per effect, separated by newlines or slashes,
-    and the placeholder that names a slot identifies the sentence it belongs to.
-    Everything else falls back to the raw field name, which is all that is known
-    for a slot the description never mentions.
-  */
-  const labelFor = (i: number) => {
-    if (explain) {
-      const parts = explain
-        .split(/\n|\s*\/\s*/)
-        .map((part) => part.trim())
-        .filter(Boolean);
-      const sentence = parts.find((part) => part.includes(`{${i}}`));
-      if (sentence) {
-        return sentence.replace(/\{(\d+)\}/g, (_, d) => String(values[Number(d)] ?? 0));
-      }
-    }
-    return `LevelValue${i + 1} = {${i}}`;
-  };
-
   return (
     // The one flexible part of the row: whatever the name and the level do not
     // need goes to the values, and they share it evenly.
@@ -157,7 +135,6 @@ function ValueSlots({
             type="number"
             step="any"
             aria-label={`LevelValue${i + 1}`}
-            title={labelFor(i)}
             placeholder={String(vanillaOf(i))}
             // Digits also show when the stored number differs from the game's - a
             // slot edited in Config.json by hand should not look untouched.
@@ -414,11 +391,18 @@ export default function App() {
     void writeConfig(next, true);
   }
 
-  /** The whole explanation with the current numbers filled in. */
-  function filledExplanation(key: string, values: number[]): string {
+  /*
+    The skill's own explanation, with each {N} rewritten as the slot it belongs to.
+
+    The game's placeholders are 0-based ({0} is the first value); the row shows
+    numbers, so the tooltip says {1} for the first one and lets the reader count
+    along. Substituting the values was the wrong idea: the numbers are already on
+    screen, what is not obvious is which of them means what.
+  */
+  function slotNotation(key: string): string {
     const text = explains[key.toUpperCase()];
     if (!text) return "";
-    return text.replace(/\{(\d+)\}/g, (_, d) => String(values[Number(d)] ?? 0));
+    return text.replace(/\{(\d+)\}/g, (_, d) => `{${Number(d) + 1}}`);
   }
 
   const enabledCount = edits.filter((e) => e.Enabled).length;
@@ -490,7 +474,9 @@ export default function App() {
                   className={`w-[222px] shrink-0 truncate text-sm ${
                     edit.Enabled ? "" : "text-muted-foreground"
                   }`}
-                  title={name || edit.Key}
+                  title={[name || edit.Key, slotNotation(edit.Key)]
+                    .filter(Boolean)
+                    .join("\n")}
                 >
                   {name || <span className="font-mono text-muted-foreground">{edit.Key}</span>}
                 </span>
