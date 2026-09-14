@@ -3,6 +3,7 @@
 **/obj/
 **/publish/
 dist/
+dist-release/
 node_modules/
 SkillEditTool/SkillEditTool.exe
 *.exe~
