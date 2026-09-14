@@ -23,6 +23,7 @@ export const LANG_LABEL: Record<Lang, string> = {
 
 type Dict = {
   title: (enabled: number, total: number) => string;
+  installTo: string;
   empty: string;
   add: string;
   pickSkill: string;
@@ -42,9 +43,10 @@ type Dict = {
 export const MESSAGES: Record<Lang, Dict> = {
   zh: {
     title: (enabled, total) => `技能（${enabled}/${total}）：`,
+    installTo: "Reloaded-II：",
     empty: "没有改动条目。",
     add: "添加",
-    pickSkill: "选择技能…",
+    pickSkill: "选择...",
     searchSkill: "搜索技能名",
     noMatch: "没有匹配的技能",
     install: "安装 Mod",
@@ -59,6 +61,7 @@ export const MESSAGES: Record<Lang, Dict> = {
   },
   en: {
     title: (enabled, total) => `Skills (${enabled}/${total}):`,
+    installTo: "Reloaded-II:",
     empty: "No edits yet.",
     add: "Add",
     pickSkill: "Pick a skill…",
@@ -76,6 +79,7 @@ export const MESSAGES: Record<Lang, Dict> = {
   },
   ja: {
     title: (enabled, total) => `スキル（${enabled}/${total}）：`,
+    installTo: "Reloaded-II：",
     empty: "変更はまだありません。",
     add: "追加",
     pickSkill: "スキルを選択…",

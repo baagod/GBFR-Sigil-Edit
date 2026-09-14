@@ -413,28 +413,54 @@ export default function App() {
   return (
     <div className="fixed inset-0 flex flex-col gap-4 p-5">
       {/*
-        One top band: the count, the picker, the add button and the language
-        switch all describe the list as a whole, and putting the picker here
-        instead of on a band of its own gives the rows the room back.
+        Two bands, both above the list. The first is what installing means right
+        now - where it goes, the button that does it, and the language switch,
+        which has always sat in that corner. The second is what is about to be
+        added. Below them the rows own everything.
       */}
-      <header className="flex items-center gap-2">
-        <h1 className="shrink-0 text-sm font-semibold">
-          {t.title(enabledCount, edits.length)}
-        </h1>
+      <div className="flex shrink-0 items-center gap-2">
+        {/* Both rows label their control with the same fixed width, so the two
+            inputs sit in one column instead of the second one being indented by
+            the first one's missing label. */}
+        <span className="w-28 shrink-0 text-sm font-semibold whitespace-nowrap">
+          {t.installTo}
+        </span>
 
-        <div className="min-w-0 flex-1">
-          <SkillPicker
-            items={pickerItems}
-            value={newKey}
-            placeholder={t.pickSkill}
-            searchPlaceholder={t.searchSkill}
-            emptyLabel={t.noMatch}
-            onSelect={setNewKey}
-          />
-        </div>
+        {/*
+          The folder itself is the control, the way the skill picker works: one
+          outlined box that opens a dialog. Until one is chosen the box shows
+          where Reloaded-II usually lands, greyed like any placeholder - nothing
+          is searched for.
+        */}
+        <Button
+          variant="outline"
+          onClick={chooseReloadedDir}
+          disabled={busy}
+          aria-label={t.chooseReloaded}
+          title={reloadedDir || defaultDir}
+          // Hand cursor: this box is a control that opens a dialog, not a button
+          // that does something, and it reads as a field.
+          className="min-w-0 flex-1 cursor-pointer justify-start font-normal"
+        >
+          <span
+            className={`truncate text-xs ${
+              reloadedDir ? "text-muted-foreground" : "text-muted-foreground/50"
+            }`}
+          >
+            {reloadedDir ? `${modsDir}\\GBFR.SkillEdit` : defaultDir}
+          </span>
+        </Button>
 
-        <Button onClick={add} disabled={!newKey}>
-          {t.add}
+        {/*
+          The label never changes. Swapping it for a progress word resized the
+          button by 9px, which slid the target line next to it back and forth.
+          The disabled state is the feedback while the write is in flight.
+        */}
+        <Button
+          onClick={install}
+          disabled={busy || shown.length === 0 || !reloadedDir}
+        >
+          {t.install}
         </Button>
 
         {/*
@@ -459,50 +485,28 @@ export default function App() {
             </Button>
           ))}
         </ButtonGroup>
-      </header>
+      </div>
 
-      <div className="flex shrink-0 items-center gap-4 border-b pb-4">
-        {/*
-          The label never changes. Swapping it for a progress word resized the
-          button by 9px, which slid the target line next to it back and forth.
-          The disabled state is the feedback while the write is in flight.
-        */}
-        <Button
-          onClick={install}
-          disabled={busy || shown.length === 0 || !reloadedDir}
-        >
-          {t.install}
-        </Button>
+      <div className="flex shrink-0 items-center gap-2 border-b pb-4">
+        <h1 className="w-28 shrink-0 text-sm font-semibold whitespace-nowrap">
+          {t.title(enabledCount, edits.length)}
+        </h1>
 
-        {/*
-          One line. Failures do not land here - a write error can be long and its
-          useful half is at the end, so it gets a dialog instead. What lands here
-          is the one thing that cannot be worked out on its own: where Reloaded-II
-          is, when the search came up empty.
-        */}
-        {/*
-          The folder itself is the control, the way the skill picker works: one
-          outlined box that opens a dialog. Until one is chosen the box shows
-          where Reloaded-II usually lands, greyed like any placeholder - nothing
-          is searched for.
-        */}
-        <Button
-          variant="outline"
-          onClick={chooseReloadedDir}
-          disabled={busy}
-          aria-label={t.chooseReloaded}
-          title={reloadedDir || defaultDir}
-          // Hand cursor: this box is a control that opens a dialog, not a button
-          // that does something, and it reads as a field.
-          className="min-w-0 flex-1 cursor-pointer justify-start font-normal"
-        >
-          <span
-            className={`truncate text-xs ${
-              reloadedDir ? "text-muted-foreground" : "text-muted-foreground/50"
-            }`}
-          >
-            {reloadedDir ? `${modsDir}\\GBFR.SkillEdit` : defaultDir}
-          </span>
+        <div className="min-w-0 flex-1">
+          <SkillPicker
+            items={pickerItems}
+            value={newKey}
+            placeholder={t.pickSkill}
+            searchPlaceholder={t.searchSkill}
+            emptyLabel={t.noMatch}
+            onSelect={setNewKey}
+          />
+        </div>
+
+        {/* 108px = the language group's 3 x 36, so the two rows' right edges line
+            up on the same grid. */}
+        <Button onClick={add} disabled={!newKey} className="w-[108px] shrink-0">
+          {t.add}
         </Button>
       </div>
 

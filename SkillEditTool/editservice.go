@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -73,6 +74,12 @@ func (s *EditService) ChooseReloadedDir(lang string) (string, error) {
 		ButtonText:           text.Button,
 	}).PromptForSingleSelection()
 	if err != nil {
+		// Closing the dialog is not a failure. Wails reports it as an error and
+		// the wording is the only signal it gives, so treat that as "nothing
+		// chosen" and let the UI carry on.
+		if strings.Contains(strings.ToLower(err.Error()), "cancel") {
+			return "", nil
+		}
 		return "", err
 	}
 	if chosen == "" {
