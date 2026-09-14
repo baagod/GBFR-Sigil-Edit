@@ -8,9 +8,8 @@
 
 ## 前置条件
 
-- Windows
 - [Reloaded-II](https://github.com/Reloaded-Project/Reloaded-II)
-- `gbfrelink.utility.manager`（读取游戏封包表）
+- [gbfrelink.utility.manager](https://github.com/WistfulHopes/gbfrelink.utility.manager)（读取游戏封包表）
 
 ## 安装
 

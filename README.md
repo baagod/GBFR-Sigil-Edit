@@ -8,9 +8,8 @@ A typical table mod brings its own edited `.tbl` and overwrites the game's copy,
 
 ## Requirements
 
-- Windows
 - [Reloaded-II](https://github.com/Reloaded-Project/Reloaded-II)
-- `gbfrelink.utility.manager` (reads the game's archive tables)
+- [gbfrelink.utility.manager](https://github.com/WistfulHopes/gbfrelink.utility.manager) (reads the game's archive tables)
 
 ## Installing
 
