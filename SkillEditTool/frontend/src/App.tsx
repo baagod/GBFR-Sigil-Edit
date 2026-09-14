@@ -205,7 +205,7 @@ function LevelInput({
         }}
         // Narrow and left-aligned, so the digits sit against "Lv" and the
         // separator that follows them.
-        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 text-left text-sm tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 ml-0.5 text-left text-sm tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
       />
       <span className="text-sm leading-7 text-muted-foreground tabular-nums select-none">
         / {limit}
