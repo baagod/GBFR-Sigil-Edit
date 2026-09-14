@@ -26,12 +26,6 @@ A typical table mod brings its own edited `.tbl` and overwrites the game's copy,
 - **Editing numbers**: every row has ten boxes, corresponding to `LevelValue1-10` in the table and to `{1-10}` in the skill's own description. **Hovering anywhere on the row** shows that description, with the placeholders numbered to match the boxes. A box left empty shows the game's value greyed out as a placeholder, and writes that value back.
 - **Taking effect in game**: the parameters are read once, at game startup — **restart the game after changing them**. A running game is unaffected.
 
-## Where the config lives
-
-`%APPDATA%\GBFR.SkillEdit\Config.json`
-
-That is the folder the tool and the mod both work out on their own: no Reloaded-II lookup, and nothing a disk cleanup deletes. The tool writes the file for you; the tool's own settings (`tool.json`) sit beside it. On an install from an earlier version the list is moved here from wherever it used to be, and the stale copy is removed. The mod itself lives in `<Reloaded-II>\Mods\GBFR.SkillEdit\`.
-
 ## Languages
 
 The interface ships in **中文 / English / 日本語**. It follows your system language on first run, and can be switched in the top-right corner.

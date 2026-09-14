@@ -17,7 +17,7 @@
 1. 装好并配置 Reloaded-II，再把 `gbfrelink.utility.manager` 加进去。
 2. 运行 `SkillEdit.exe`。
 3. 选择 Reloaded-II 目录。输入框默认填 `%USERPROFILE%\Desktop\Reloaded-II`，该目录里确实有 Reloaded-II 时直接用它；否则选有 `Reloaded-II.exe` 的那个目录。
-4. 点「安装 Mod」。mod 本体写入 `<Reloaded-II>\Mods\GBFR.SkillEdit\`，改动配置写入 `%APPDATA%\GBFR.SkillEdit\Config.json`。
+4. 点「安装 Mod」。mod 本体写入 `<Reloaded-II>\Mods\GBFR.SkillEdit\`，配置改动写入 `%APPDATA%\GBFR.SkillEdit\Config.json`。
 5. 在 Reloaded-II 里启用 `GBFR.SkillEdit`（同时确认 `gbfrelink.utility.manager` 也已启用），然后用 Reloaded-II 启动游戏。
 
 ## 使用
@@ -25,12 +25,6 @@
 - **添加技能**：在下拉框里选（可直接输入搜索），再点「添加」。新条目会带着该技能的原始数值，只需改你想改的那个数字。
 - **改数字**：每行有十个数字框，对应表里的 `LevelValue1-10`，与技能说明中的 `{1-10}` 对应。**鼠标停在整行** 会显示这条技能的说明，占位符已编号，与数字框对齐。留空的框会把游戏原值灰显为占位符，并存回原值。
 - **在游戏里生效**：参数只在游戏启动时读取一次，**改完必须重启游戏**。对运行中的游戏无任何影响。
-
-## 配置存放位置
-
-`%APPDATA%\GBFR.SkillEdit\Config.json`
-
-这是工具和 mod 各自都能直接算出来的目录：不需要向 Reloaded-II 查路径，也不会被磁盘清理删掉。工具会自动写入；工具自己的设置 `tool.json` 就在旁边。从旧版本升级时，旧位置的改动列表会被迁移到这里，旧文件删掉。mod 本体位于 `<Reloaded-II>\Mods\GBFR.SkillEdit\`。
 
 ## 界面语言
 
