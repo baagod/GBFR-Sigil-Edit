@@ -155,7 +155,7 @@ function ValueSlots({
               reads as one line of numbers separated by |, and the only chrome left
               is a faint wash on the slot being edited so the caret has a home.
             */
-            className={`h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-center text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+            className={`h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-center text-xs md:text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
           />
         </Fragment>
       ))}
@@ -205,7 +205,7 @@ function LevelInput({
         }}
         // Narrow and left-aligned, so the digits sit against "Lv" and the
         // separator that follows them.
-        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 text-left text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+        className={`h-7 w-5 min-w-0 border-0 bg-transparent px-0 py-0 text-left text-xs md:text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
       />
       <span className="text-xs leading-7 text-muted-foreground tabular-nums select-none">
         / {limit}
