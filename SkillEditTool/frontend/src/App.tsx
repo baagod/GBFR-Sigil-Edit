@@ -23,10 +23,24 @@ type SkillEdit = {
   Key: string;
   Level: number;
   Values: number[];
+  /*
+    Which slots someone has actually put a number into, per slot. Only the tool
+    uses it, and only to tell apart "this slot shows the game's number" from "this
+    slot was typed, and happens to hold the same number" - which is what decides
+    whether a slot follows the level. Go ignores the field, so it never reaches
+    Config.json or the mod.
+  */
+  Typed: boolean[];
 };
 
-/** One skill's vanilla values, and the levels they live on. */
-type SkillInfo = { Values: number[]; Default: number; Max: number };
+/**
+ * One skill's vanilla numbers per level. Levels is indexed by level - 1, so
+ * Levels[3] is the row the game shows as level 4 - which is what a slot's
+ * placeholder, and the value an emptied box writes back, have to come from.
+ * Min/Max are the levels that carry numbers: a skill whose values exist on one
+ * level only has Min == Max.
+ */
+type SkillInfo = { Levels: number[][]; Default: number; Max: number; Min: number };
 
 const SERVICE = "main.EditService";
 const SLOTS = 10;
@@ -98,16 +112,56 @@ function enforceExclusivity(items: SkillEdit[], keepIndex?: number): SkillEdit[]
  * Nothing is ever "no input": emptying a box puts that slot back to the game's
  * number, and the table gets a concrete value for every slot either way.
  */
+/*
+  What a value box may hold while it is being typed: an optional minus sign, digits,
+  and at most one decimal point - so "-", "0." and "-.5" are all reachable states.
+  A keystroke or paste that would put anything else in the box is simply dropped,
+  which is how exponent notation stays out: a number input used to accept 1e999, and
+  JSON turns that into null, which the tool then saved as a 0.
+*/
+const PARTIAL_NUMBER = /^-?\d*\.?\d*$/;
+
+/** ...and what counts as a number once the box is done with: -3, 30, 0.6, .5 */
+const NUMBER = /^-?(\d+(\.\d*)?|\.\d+)$/;
+
+/** The typed flags with one slot set or cleared. */
+const withSlot = (typed: boolean[], i: number, set: boolean) => {
+  const next = typed.slice();
+  next[i] = set;
+  return next;
+};
+
+/**
+ * What an edit's values become when it moves to another level: a slot nobody has
+ * typed follows the level, and one that was typed keeps its number - even when that
+ * number happens to equal the level's own, which is why this cannot be decided by
+ * comparing values.
+ */
+function valuesForLevel(
+  values: number[],
+  typed: boolean[],
+  now: number[] | undefined,
+): number[] {
+  if (!now) return values;
+  return values.map((value, i) => (typed[i] ? value : (now[i] ?? value)));
+}
+
 function ValueSlots({
   values,
+  typed,
   defaults,
   onChange,
 }: {
   values: number[];
+  typed: boolean[];
   defaults?: number[];
-  onChange: (next: number[]) => void;
+  onChange: (values: number[], typed: boolean[]) => void;
 }) {
-  const [touched, setTouched] = useState<ReadonlySet<number>>(new Set());
+  // What is actually in a box while it has focus. Without this a half-typed "-" or
+  // "0." could not stay on screen: the box would snap back to the committed number
+  // on the next render. Dropped on blur, so a half-typed entry falls back to the
+  // value it started from.
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
 
   const vanillaOf = (i: number) => defaults?.[i] ?? 0;
 
@@ -123,31 +177,47 @@ function ValueSlots({
             |
           </span>
           <Input
-            type="number"
-            step="any"
+            type="text"
+            inputMode="decimal"
             aria-label={`LevelValue${i + 1}`}
             placeholder={String(vanillaOf(i))}
             // Digits also show when the stored number differs from the game's - a
             // slot edited in Config.json by hand should not look untouched.
-            value={touched.has(i) || values[i] !== vanillaOf(i) ? values[i] : ""}
+            value={
+              drafts[i] ??
+              (typed[i] || values[i] !== vanillaOf(i) ? String(values[i]) : "")
+            }
             onChange={(e) => {
               const text = e.target.value;
-              const next = [...values];
-              next[i] = text === "" ? vanillaOf(i) : Number(text);
-              setTouched((prev) => {
-                const marked = new Set(prev);
-                if (text === "") marked.delete(i);
-                else marked.add(i);
-                return marked;
-              });
-              onChange(next);
+              if (!PARTIAL_NUMBER.test(text)) return;
+
+              // Whatever survived the filter is what the box shows from here.
+              setDrafts((prev) => ({ ...prev, [i]: text }));
+
+              if (text === "") {
+                // Emptied: the game's own value goes back, its placeholder shows
+                // again, and the slot follows the level from here on.
+                const next = [...values];
+                next[i] = vanillaOf(i);
+                onChange(next, withSlot(typed, i, false));
+                return;
+              }
+
+              // A number commits. Anything else is half-typed, so it stays on screen
+              // and the committed numbers are left alone until it becomes one.
+              if (NUMBER.test(text)) {
+                const next = [...values];
+                next[i] = Number(text);
+                onChange(next, withSlot(typed, i, true));
+              }
             }}
+            onBlur={() => setDrafts(({ [i]: _dropped, ...rest }) => rest)}
             /*
               Bare text, not a field: no border, no fill, no focus ring. The row
               reads as one line of numbers separated by |, and the only chrome left
               is a faint wash on the slot being edited so the caret has a home.
             */
-            className={`h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-center text-xs md:text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent ${NO_SPINNER}`}
+            className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-center text-xs md:text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent"
           />
         </Fragment>
       ))}
@@ -156,16 +226,20 @@ function ValueSlots({
 }
 
 /**
- * The level the game shows for this row, with the skill's own maximum beside it
- * and the field clamped to that maximum.
+ * The level the game shows for this row, with the skill's own range beside it and
+ * the field clamped to that range. A skill whose numbers exist on one level only
+ * has min == max, and the field then says so rather than accepting a level the game
+ * keeps empty.
  */
 function LevelInput({
   level,
+  min,
   max,
   label,
   onChange,
 }: {
   level: number;
+  min: number;
   max: number;
   label: string;
   onChange: (level: number) => void;
@@ -186,13 +260,13 @@ function LevelInput({
       <Input
         type="number"
         aria-label={label}
-        min={1}
+        min={min}
         max={max}
         value={level}
         onChange={(e) => {
           const typed = Number(e.target.value);
-          const wanted = Number.isFinite(typed) ? Math.round(typed) : 1;
-          onChange(Math.max(1, Math.min(max, wanted)));
+          const wanted = Number.isFinite(typed) ? Math.round(typed) : min;
+          onChange(Math.max(min, Math.min(max, wanted)));
         }}
         // Narrow and left-aligned, so the digits sit against "Lv" and the
         // separator that follows them.
@@ -253,7 +327,18 @@ export default function App() {
       Call.ByName(`${SERVICE}.DefaultReloadedDir`) as Promise<string>,
     ]);
     const loaded = enforceExclusivity(
-      (list ?? []).map((e) => ({ ...e, Values: pad(e.Values ?? []) })),
+      (list ?? []).map((e) => {
+        const values = pad(e.Values ?? []);
+        // A number that is not the level's own was put there by someone - by hand
+        // in Config.json, or on a level this edit has since left - so it counts as
+        // typed and stops following the level.
+        const vanilla = skillMap?.[e.Key.toUpperCase()]?.Levels?.[e.Level - 1];
+        return {
+          ...e,
+          Values: values,
+          Typed: values.map((value, i) => value !== (vanilla?.[i] ?? value)),
+        };
+      }),
     );
     setEdits(loaded);
     setSkills(skillMap ?? {});
@@ -261,11 +346,8 @@ export default function App() {
     setReloadedDir(root ?? "");
     setDefaultDir(fallback ?? "");
 
-    // The file on disk may hold several enabled edits for one row; write the
-    // normalised list back so what is stored matches what is shown.
-    if ((list ?? []).some((e, i) => e.Enabled !== loaded[i].Enabled)) {
-      await writeConfig(loaded, true);
-    }
+    // The file on disk may hold several enabled edits for one row. Nothing is
+    // written here: the normalised list is what the Install button writes.
   }
 
   useEffect(() => {
@@ -305,23 +387,22 @@ export default function App() {
   }, [edits, names]);
 
   /*
-    Writes are silent on purpose.
+    Installing is the only thing that writes.
 
-    Every edit already saves itself in the background. Announcing each one made
-    the line below flicker between two strings on every keystroke and every
-    checkbox click, so that line reports state instead - it is derived from the
-    edit list and therefore only changes when the list really changes. A failure
-    is the one thing worth interrupting for.
+    Editing the list changes what is on screen and nothing else, so the mod's files
+    and Config.json change only when the user asks for it - a keystroke used to
+    re-deploy the whole mod. A failure is therefore only possible from the button,
+    and is the one thing worth interrupting for.
   */
-  async function writeConfig(items: SkillEdit[], quiet: boolean) {
-    if (!quiet) setBusy(true);
+  async function install(items: SkillEdit[]) {
+    setBusy(true);
     try {
       await Call.ByName(`${SERVICE}.Install`, items);
       setError(null);
     } catch (err) {
       setError({ title: t.writeFailed, detail: String(err) });
     } finally {
-      if (!quiet) setBusy(false);
+      setBusy(false);
     }
   }
 
@@ -346,6 +427,20 @@ export default function App() {
     commit(enforceExclusivity(next, next[rowIndex].Enabled ? rowIndex : undefined));
   }
 
+  /*
+    Moving to another level takes the untouched slots with it.
+
+    A slot nobody has typed is only showing the game's number, so it becomes the new
+    level's number. Whatever was typed stays exactly as typed - including a number
+    that happens to equal one of the levels' own, which is the case the old
+    compare-the-values rule got wrong.
+  */
+  function changeLevel(rowIndex: number, level: number) {
+    const edit = edits[rowIndex];
+    const now = skills[edit.Key.toUpperCase()]?.Levels?.[level - 1];
+    update(rowIndex, { Level: level, Values: valuesForLevel(edit.Values, edit.Typed, now) });
+  }
+
   function remove(rowIndex: number) {
     commit(enforceExclusivity(edits.filter((_, i) => i !== rowIndex)));
   }
@@ -359,22 +454,28 @@ export default function App() {
   function add() {
     if (!newKey) return;
     const key = newKey.toUpperCase();
+    // The row of the level the edit starts on, not some other level's numbers:
+    // leaving every slot alone has to write the game's own row back untouched.
+    const level = skills[key]?.Default ?? 15;
     const next = [
       ...edits,
       {
         Enabled: true,
         Key: newKey,
-        Level: skills[key]?.Default ?? 15,
-        Values: pad(skills[key]?.Values ?? []),
+        Level: level,
+        Values: pad(skills[key]?.Levels?.[level - 1] ?? []),
+        // Nothing is typed yet: every slot starts out as the level's own numbers,
+        // so they all follow the level until someone sets one.
+        Typed: Array.from({ length: SLOTS }, () => false),
       },
     ];
     setNewKey("");
     commit(enforceExclusivity(next, next.length - 1));
   }
 
+  /** Every edit goes through here: the list on screen is the whole state. */
   function commit(next: SkillEdit[]) {
     setEdits(next);
-    void writeConfig(next, true);
   }
 
   /*
@@ -440,7 +541,7 @@ export default function App() {
           The disabled state is the feedback while the write is in flight.
         */}
         <Button
-          onClick={() => writeConfig(edits, false)}
+          onClick={() => install(edits)}
           disabled={busy || shown.length === 0 || !reloadedDir}
         >
           {t.install}
@@ -542,15 +643,22 @@ export default function App() {
 
                 <LevelInput
                   level={edit.Level}
+                  min={skills[edit.Key.toUpperCase()]?.Min ?? 1}
                   max={skills[edit.Key.toUpperCase()]?.Max ?? 15}
                   label={t.level}
-                  onChange={(level) => update(index, { Level: level })}
+                  onChange={(level) => changeLevel(index, level)}
                 />
 
+                {/*
+                  Keyed by the level so a half-typed entry is dropped when the level
+                  moves: the number being typed was for the level it was typed on.
+                */}
                 <ValueSlots
+                  key={edit.Level}
                   values={edit.Values}
-                  defaults={skills[edit.Key.toUpperCase()]?.Values}
-                  onChange={(values) => update(index, { Values: values })}
+                  typed={edit.Typed}
+                  defaults={skills[edit.Key.toUpperCase()]?.Levels?.[edit.Level - 1]}
+                  onChange={(values, typed) => update(index, { Values: values, Typed: typed })}
                 />
 
                 <Button
