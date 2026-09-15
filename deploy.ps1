@@ -53,8 +53,9 @@ if (Get-Process -Name 'granblue_fantasy_relink' -ErrorAction SilentlyContinue) {
     throw 'The game is running; close it first (its Reloaded-II mods are loaded from the Mods folder).'
 }
 
-# 3. The tool is one of the files being replaced, so stop it and wait until it is
-# really gone rather than racing its shutdown.
+# 3. The tool is one of the files being replaced, so stop it and wait for it to go.
+# Windows only releases the running image a moment after the process has left the
+# list, so the delete below retries rather than trusting the wait to cover that.
 Get-Process -Name 'SigilEdit' -ErrorAction SilentlyContinue |
     Stop-Process -Force -ErrorAction SilentlyContinue
 Wait-Process -Name 'SigilEdit' -Timeout 15 -ErrorAction SilentlyContinue
@@ -62,7 +63,19 @@ Wait-Process -Name 'SigilEdit' -Timeout 15 -ErrorAction SilentlyContinue
 # 4. Replace the deployed folder. The mod's log goes with it: the mod starts that
 # file over on its next launch, so a leftover one is only ever yesterday's.
 if (Test-Path -LiteralPath $Target) {
-    Remove-Item -LiteralPath $Target -Recurse -Force
+    $removed = $false
+    foreach ($retry in 1..20) {
+        try {
+            Remove-Item -LiteralPath $Target -Recurse -Force -ErrorAction Stop
+            $removed = $true
+            break
+        } catch {
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    if (-not $removed) {
+        throw "Could not replace $Target - something is still holding its files (the tool?). Close it and run this again."
+    }
 }
 New-Item -ItemType Directory -Path (Split-Path -Parent $Target) -Force | Out-Null
 Copy-Item -Path $source -Destination (Split-Path -Parent $Target) -Recurse -Force
