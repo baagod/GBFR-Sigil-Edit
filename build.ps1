@@ -113,7 +113,12 @@ if (-not (Test-Path -LiteralPath $distHtml)) {
 Write-Host '==> [3/3] Building SigilEdit.exe (go build)'
 Push-Location $toolDir
 try {
-    & go build -trimpath -ldflags '-H windowsgui -s -w' -o SigilEdit.exe .
+    # -buildvcs=false for the same reason the csproj turns SourceLink and the
+    # informational version off: Go otherwise stamps the commit sha and a
+    # "modified" flag into the binary, so the same sources built before and after
+    # a commit are not the same bytes. Measured: it was the only difference between
+    # two builds of one unchanged tree.
+    & go build -trimpath -buildvcs=false -ldflags '-H windowsgui -s -w' -o SigilEdit.exe .
     Assert-ExitCode 'go build'
 }
 finally {
