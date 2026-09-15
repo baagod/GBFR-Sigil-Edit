@@ -254,12 +254,16 @@ internal sealed class HotApply
 
         for (var attempt = 0; attempt < PrewarmMaxAttempts && !_stopped; attempt++)
         {
-            // An apply that ran while waiting has already seeded the cache with
-            // a fresher scan; its work outranks everything done here.
+            // An apply that ran while waiting has already seeded the cache; that
+            // is the only gate, so a scan already in flight can still finish
+            // after one and overwrite it. Harmless: every read of the cache is
+            // re-verified with ContentsMatch, so a stale one costs a full scan,
+            // never a missed write.
             if (_cachedAddresses.Count > 0)
                 return;
 
             List<long> found;
+            var scan = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 found = TableLocator.FindCopies(_currentTable);
@@ -269,16 +273,17 @@ internal sealed class HotApply
                 _log("boot locate EXCEPTION: " + ex);
                 break;
             }
+            scan.Stop();
 
             var set = found.OrderBy(address => address).ToArray();
             if (_prewarmPrevious is not null && _prewarmPrevious.SequenceEqual(set))
             {
                 _cachedAddresses = set.ToList();
-                _log($"boot locate: copy set stable ({found.Count} copy/copies) after {attempt + 1} attempt(s); live applies skip the scan entirely");
+                _log($"boot locate: copy set stable ({found.Count} copy/copies) after {attempt + 1} attempt(s), {scan.ElapsedMilliseconds} ms on the last pass; live applies skip the scan entirely");
                 return;
             }
 
-            _log($"boot locate attempt {attempt + 1}: {found.Count} table copy/copies found; waiting for the set to stabilize");
+            _log($"boot locate attempt {attempt + 1}: {found.Count} table copy/copies found in {scan.ElapsedMilliseconds} ms; waiting for the set to stabilize");
             _prewarmPrevious = set;
 
             for (var waited = 0; waited < PrewarmRetryMs && !_stopped; waited += 250)
