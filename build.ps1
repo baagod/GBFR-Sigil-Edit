@@ -2,31 +2,31 @@
 <#
 .SYNOPSIS
     Builds the GBFR.SkillEdit mod DLL and the SkillEditTool executable, and
-    optionally packs a release zip.
+    optionally packs the mod folder and a release zip.
 
 .DESCRIPTION
     The order of the steps is a constraint, not a preference:
 
         1. dotnet build          -> GBFR.SkillEdit\bin\Release\GBFR.SkillEdit.dll
-        2. copy that DLL         -> SkillEditTool\assets\GBFR.SkillEdit.dll
-           and ModConfig.json    -> SkillEditTool\assets\ModConfig.json
-        3. npm ci + tsc + npm run build -> SkillEditTool\frontend\dist
-        4. go build              -> SkillEditTool\SkillEdit.exe
+        2. npm ci + tsc + npm run build -> SkillEditTool\frontend\dist
+        3. go build              -> SkillEditTool\SkillEdit.exe
 
-    main.go embeds both the frontend bundle and the mod binary at compile time
-    (//go:embed all:frontend/dist and //go:embed assets/GBFR.SkillEdit.dll). Go
-    reads those files from disk while compiling, so they have to exist first: if
-    either is missing, `go build` stops with "pattern ...: no matching files
-    found", and if either is stale the executable silently ships the previous
-    version. That is why the DLL and the frontend are built and put in place
-    before the Go build runs.
+    main.go embeds the frontend bundle at compile time
+    (//go:embed all:frontend/dist). Go reads those files from disk while
+    compiling, so they have to exist first: if the bundle is missing, `go build`
+    stops with "pattern ...: no matching files found", and if it is stale the
+    executable silently ships the previous frontend. That is why the frontend is
+    built and put in place before the Go build runs.
 
     Every step is checked; the first failure stops the script with a non-zero
     exit code.
 
 .PARAMETER Package
-    After a successful build, write dist\GBFR.SkillEdit-<version>.zip
-    holding the tool, both READMEs, the LICENSE and the mod itself.
+    After a successful build, assemble dist\GBFR.SkillEdit\ - the folder that is
+    the whole mod: the DLL, its manifest and the tool - and write
+    dist\GBFR.SkillEdit-<version>.zip holding that folder and the documents.
+    Unzipping the folder into Reloaded-II\Mods\ is the entire deployment; there
+    is no install step inside the tool.
 
 .EXAMPLE
     ./build.ps1
@@ -46,8 +46,6 @@ $root     = $PSScriptRoot
 $csproj   = Join-Path $root 'GBFR.SkillEdit\GBFR.SkillEdit.csproj'
 $modDll   = Join-Path $root 'GBFR.SkillEdit\bin\Release\GBFR.SkillEdit.dll'
 $modCfg   = Join-Path $root 'GBFR.SkillEdit\ModConfig.json'
-$assetDll = Join-Path $root 'SkillEditTool\assets\GBFR.SkillEdit.dll'
-$assetCfg = Join-Path $root 'SkillEditTool\assets\ModConfig.json'
 $toolDir  = Join-Path $root 'SkillEditTool'
 $frontend = Join-Path $toolDir 'frontend'
 $exe      = Join-Path $toolDir 'SkillEdit.exe'
@@ -79,7 +77,7 @@ if (-not $npm) {
     throw "'npm' was not found on PATH. It ships with Node.js; reinstall Node.js and reopen this shell."
 }
 
-Write-Host '==> [1/4] Building the mod DLL (dotnet build -c Release)'
+Write-Host '==> [1/3] Building the mod DLL (dotnet build -c Release)'
 & dotnet build $csproj -c Release --nologo
 Assert-ExitCode 'dotnet build'
 if (-not (Test-Path -LiteralPath $modDll)) {
@@ -88,13 +86,7 @@ if (-not (Test-Path -LiteralPath $modDll)) {
     throw "dotnet build reported success but '$modDll' does not exist."
 }
 
-Write-Host '==> [2/4] Copying the DLL and ModConfig.json to SkillEditTool\assets (the files go:embed reads)'
-Copy-Item -LiteralPath $modDll -Destination $assetDll -Force
-# Copied rather than kept as a second hand-maintained file: the manifest is
-# embedded into the exe, so a stale copy would install the wrong version.
-Copy-Item -LiteralPath $modCfg -Destination $assetCfg -Force
-
-Write-Host '==> [3/4] Building the frontend (npm)'
+Write-Host '==> [2/3] Building the frontend (npm)'
 Push-Location $frontend
 try {
     if (Test-Path -LiteralPath (Join-Path $frontend 'node_modules')) {
@@ -118,7 +110,7 @@ if (-not (Test-Path -LiteralPath $distHtml)) {
     throw "The frontend build did not produce '$distHtml'."
 }
 
-Write-Host '==> [4/4] Building SkillEdit.exe (go build)'
+Write-Host '==> [3/3] Building SkillEdit.exe (go build)'
 Push-Location $toolDir
 try {
     & go build -trimpath -ldflags '-H windowsgui -s -w' -o SkillEdit.exe .
@@ -132,7 +124,7 @@ if (-not (Test-Path -LiteralPath $exe)) {
 }
 
 if ($Package) {
-    Write-Host '==> Packaging a release zip'
+    Write-Host '==> Packaging the mod folder and a release zip'
 
     $version = ''
     if (Test-Path -LiteralPath $modCfg) {
@@ -144,21 +136,30 @@ if ($Package) {
     }
 
     $releaseDir = Join-Path $root 'dist'
+    $modOut     = Join-Path $releaseDir 'GBFR.SkillEdit'
     $staging    = Join-Path $releaseDir 'staging'
     $zip        = Join-Path $releaseDir "GBFR.SkillEdit-$version.zip"
 
-    # Staged rather than zipped in place: the archive has to hold exactly six
-    # files, and bin\Release also contains the build's other output.
-    Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Path (Join-Path $staging 'GBFR.SkillEdit') -Force | Out-Null
+    # The mod folder exactly as Reloaded-II sees it. The tool rides along with the
+    # mod it edits: dropping this one folder into Mods\ is the whole deployment,
+    # and it is what deploy.ps1 copies.
+    #
+    # dist\ rather than bin\Release: the mod's own build output holds other files
+    # too, and only these three belong in the Mods folder.
+    Remove-Item -LiteralPath $modOut -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Path $modOut -Force | Out-Null
+    Copy-Item -LiteralPath $modDll -Destination $modOut -Force
+    Copy-Item -LiteralPath $modCfg -Destination $modOut -Force
+    Copy-Item -LiteralPath $exe -Destination $modOut -Force
 
-    Copy-Item -LiteralPath $exe -Destination $staging -Force
+    # Staged rather than zipped in place: the archive has to hold the mod folder
+    # and the three documents, and nothing else that is lying around in dist\.
+    Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Path $staging -Force | Out-Null
+    Copy-Item -LiteralPath $modOut -Destination $staging -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $staging -Force
     Copy-Item -LiteralPath (Join-Path $root 'README.zh-CN.md') -Destination $staging -Force
     Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $staging -Force
-    # For anyone who would rather drop the mod into Mods\ by hand.
-    Copy-Item -LiteralPath $modCfg -Destination (Join-Path $staging 'GBFR.SkillEdit') -Force
-    Copy-Item -LiteralPath $modDll -Destination (Join-Path $staging 'GBFR.SkillEdit') -Force
 
     Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
     Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zip
@@ -176,6 +177,8 @@ if ($Package) {
     finally {
         $archive.Dispose()
     }
+    Write-Host ''
+    Write-Host "Mod folder: $modOut (this is what goes into Reloaded-II\Mods\)"
 }
 
 Write-Host ''

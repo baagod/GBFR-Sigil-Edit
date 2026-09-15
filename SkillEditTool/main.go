@@ -10,12 +10,6 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-//go:embed assets/GBFR.SkillEdit.dll
-var embeddedDll []byte
-
-//go:embed assets/ModConfig.json
-var embeddedCfg []byte
-
 // One skill-name table per UI language, each built from that language's own text
 // in the game. The hashes are identical across all three.
 //
@@ -59,8 +53,9 @@ func main() {
 		},
 	})
 
-	// Only known once the app exists: the folder picker needs a window to belong to.
-	edits.app = app
+	// The write waits for the editing to stop, so closing the window can beat it:
+	// the list the debounce is still holding goes out on the way down.
+	app.OnShutdown(edits.flushNow)
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "GBFR Skill Edit",

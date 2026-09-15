@@ -4,7 +4,10 @@
 **/publish/
 dist/
 node_modules/
-SkillEditTool/SkillEdit.exe
+# Any go build output in the tool folder. SkillEdit.exe is what build.ps1 asks
+# for; a bare `go build .` names the binary after the module (skilledittool.exe),
+# and that stray copy is not a second tool.
+SkillEditTool/*.exe
 *.exe~
 *.zip
 

@@ -23,77 +23,61 @@ export const LANG_LABEL: Record<Lang, string> = {
 
 type Dict = {
   title: (enabled: number, total: number) => string;
-  installTo: string;
   empty: string;
   add: string;
   pickSkill: string;
   searchSkill: string;
   noMatch: string;
-  install: string;
-  chooseReloaded: string;
   ok: string;
   enable: (name: string) => string;
   remove: (name: string) => string;
   level: string;
   readFailed: string;
   writeFailed: string;
-  chooseFailed: string;
 };
 
 export const MESSAGES: Record<Lang, Dict> = {
   zh: {
     title: (enabled, total) => `技能（${enabled}/${total}）：`,
-    installTo: "Reloaded-II：",
     empty: "没有改动条目。",
     add: "添加",
     pickSkill: "选择...",
     searchSkill: "搜索技能名",
     noMatch: "没有匹配的技能",
-    install: "安装 Mod",
-    chooseReloaded: "选择 Reloaded-II 目录",
     ok: "确定",
     enable: (name) => `启用 ${name}`,
     remove: (name) => `删除 ${name}`,
     level: "等级",
     readFailed: "读取失败",
     writeFailed: "写入失败",
-    chooseFailed: "选择目录失败",
   },
   en: {
     title: (enabled, total) => `Skills (${enabled}/${total}):`,
-    installTo: "Reloaded-II:",
     empty: "No edits yet.",
     add: "Add",
     pickSkill: "Select...",
     searchSkill: "Search skills",
     noMatch: "No matching skill",
-    install: "Install Mod",
-    chooseReloaded: "Select Reloaded-II folder",
     ok: "OK",
     enable: (name) => `Enable ${name}`,
     remove: (name) => `Remove ${name}`,
     level: "Level",
     readFailed: "Could not read",
     writeFailed: "Could not write",
-    chooseFailed: "Could not use that folder",
   },
   ja: {
     title: (enabled, total) => `スキル（${enabled}/${total}）：`,
-    installTo: "Reloaded-II：",
     empty: "変更はまだありません。",
     add: "追加",
     pickSkill: "選択...",
     searchSkill: "スキル名で検索",
     noMatch: "一致するスキルがありません",
-    install: "Mod をインストール",
-    chooseReloaded: "Reloaded-II のフォルダを選ぶ",
     ok: "OK",
     enable: (name) => `${name} を有効にする`,
     remove: (name) => `${name} を削除`,
     level: "レベル",
     readFailed: "読み込みに失敗しました",
     writeFailed: "書き込みに失敗しました",
-    chooseFailed: "フォルダを設定できませんでした",
   },
 };
 

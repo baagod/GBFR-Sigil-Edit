@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
-	"strings"
+	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"golang.org/x/sys/windows"
@@ -36,24 +37,26 @@ type Config struct {
 // Go identifier so it keeps its original casing.
 const modFolder = "GBFR.SkillEdit"
 
-// modDllName must match the assembly shipped in assets/.
-const modDllName = "GBFR.SkillEdit.dll"
-
-// logFileName is the log the mod writes beside its own files. Kept here so an
-// install can clear it: the mod starts the file over each launch, so a leftover
-// one is only ever yesterday's.
-const logFileName = "GBFR.SkillEdit.log"
-
-// hotApplyEventName is the win32 event the running mod waits on. Install sets
+// hotApplyEventName is the win32 event the running mod waits on. The tool sets
 // it after writing Config.json, and the mod - which lives inside the game -
 // then re-applies the edit list to the game's in-memory table, without a
 // restart. The string is shared with HotApply.EventName in the mod's C#
 // source; nothing links the two, so a rename has to touch both files.
 const hotApplyEventName = "GBFR.SkillEdit.HotApply"
 
+// debounceDelay is how long the edit list has to sit still before it is written:
+// a burst of keystrokes ends in one Config.json write and one live apply,
+// instead of one per keystroke.
+const debounceDelay = 500 * time.Millisecond
+
+// saveFailedEvent carries a failed write to the frontend, which shows it in the
+// same dialog an immediate failure gets. The name is mirrored in App.tsx;
+// nothing links the two, so a rename has to touch both files.
+const saveFailedEvent = "GBFR.SkillEdit.SaveFailed"
+
 // signalHotApply wakes the mod, when one is running to wake. Everything else -
 // the game closed, the mod disabled, its event not created yet - is the normal
-// install path and not an error, because the mod reads Config.json again on
+// save path and not an error, because the mod reads Config.json again on
 // its next launch anyway.
 func signalHotApply(name string) bool {
 	namePtr, err := windows.UTF16PtrFromString(name)
@@ -69,62 +72,14 @@ func signalHotApply(name string) bool {
 }
 
 // EditService is the Wails-exposed backend.
+//
+// It also holds the list the debounce has not written yet. Every SaveEdits call
+// replaces that list and restarts the timer, so what lands on disk is always the
+// last state on screen, never a mixture of keystrokes.
 type EditService struct {
-	// app is only needed for the folder picker, which has to belong to a window.
-	app *application.App
-}
-
-// ReloadedDir is the Reloaded-II folder the tool deploys into, or "" when one has
-// not been found or picked yet.
-func (s *EditService) ReloadedDir() string {
-	return reloadedDir()
-}
-
-// pickerText is the folder dialog's own copy. The OS draws that dialog, so these
-// strings have to cross into Go rather than live in the frontend's dictionary.
-var pickerText = map[string]struct{ Title, Button string }{
-	LangZH: {"选择 Reloaded-II 目录", "选择"},
-	"en":   {"Select the Reloaded-II folder", "Select"},
-	"ja":   {"Reloaded-II のフォルダを選ぶ", "選択"},
-}
-
-// ChooseReloadedDir asks the user for the Reloaded-II folder and remembers it.
-// An empty result means they cancelled.
-func (s *EditService) ChooseReloadedDir(lang string) (string, error) {
-	if s.app == nil {
-		return "", fmt.Errorf("no window available for a folder picker")
-	}
-	text, ok := pickerText[lang]
-	if !ok {
-		text = pickerText[LangZH]
-	}
-	chosen, err := s.app.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{
-		CanChooseDirectories: true,
-		CanChooseFiles:       false,
-		Title:                text.Title,
-		ButtonText:           text.Button,
-	}).PromptForSingleSelection()
-	if err != nil {
-		// Closing the dialog is not a failure. Wails reports it as an error and
-		// the wording is the only signal it gives, so treat that as "nothing
-		// chosen" and let the UI carry on.
-		if strings.Contains(strings.ToLower(err.Error()), "cancel") {
-			return "", nil
-		}
-		return "", err
-	}
-	if chosen == "" {
-		return "", nil
-	}
-	// Accepted as-is: whether it is really a Reloaded-II install is settled when
-	// something is actually installed there, so a wrong pick fails loudly then
-	// rather than silently here.
-	absolute, err := filepath.Abs(chosen)
-	if err != nil {
-		absolute = chosen
-	}
-	saveSettings(settings{ReloadedDir: absolute})
-	return absolute, nil
+	mu      sync.Mutex
+	pending []SkillEdit
+	timer   *time.Timer
 }
 
 // LangZH is the language the tool falls back to when asked for one it has no
@@ -228,54 +183,6 @@ func defaultEdits() []SkillEdit {
 	}
 }
 
-// reloadedDir is the folder to install into: the one the user picked, or the
-// default location when Reloaded-II is genuinely there.
-//
-// Only that one place is ever considered. Reloaded-II is portable, so scanning
-// would risk writing a mod into an unrelated folder that happens to share the
-// name - but the default is where it lands when it is unpacked and run without
-// being moved, and stopping to ask when it is sitting right there would be silly.
-func reloadedDir() string {
-	if saved := loadSettings().ReloadedDir; saved != "" {
-		return saved
-	}
-	if fallback := defaultReloadedDir(); looksLikeReloaded(fallback) {
-		return fallback
-	}
-	return ""
-}
-
-// defaultReloadedDir is where Reloaded-II ends up when it is unpacked and run
-// without moving it.
-func defaultReloadedDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Desktop", "Reloaded-II")
-}
-
-// DefaultReloadedDir is the path the UI shows before anything is picked.
-func (s *EditService) DefaultReloadedDir() string {
-	return defaultReloadedDir()
-}
-
-// looksLikeReloaded is what an install is checked against: the launcher has to be
-// there, so a mod is never written into a folder that merely has the right name.
-func looksLikeReloaded(dir string) bool {
-	if dir == "" {
-		return false
-	}
-	info, err := os.Stat(filepath.Join(dir, "Reloaded-II.exe"))
-	return err == nil && !info.IsDir()
-}
-
-// settings is the tool's own state, kept outside the mod so that it survives
-// reinstalls. Losing it only costs one folder pick.
-type settings struct {
-	ReloadedDir string `json:"ReloadedDir"`
-}
-
 // configDir is the folder the tool and the mod share: %APPDATA%\GBFR.SkillEdit.
 //
 // Not %TEMP%: the edit list is the user's own data, and a disk cleanup deletes
@@ -292,55 +199,8 @@ func configDir() string {
 	return filepath.Join(dir, modFolder)
 }
 
-// settingsFile is under %APPDATA%; "" when we cannot work out where that is.
-func settingsFile() string {
-	dir := configDir()
-	if dir == "" {
-		return ""
-	}
-	return filepath.Join(dir, "tool.json")
-}
-
-func loadSettings() settings {
-	var loaded settings
-	path := settingsFile()
-	if path == "" {
-		return loaded
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return loaded
-	}
-	_ = json.Unmarshal(raw, &loaded)
-	return loaded
-}
-
-// saveSettings is best effort: failing to remember the folder costs the user one
-// extra pick next launch, which is not worth interrupting them for.
-func saveSettings(value settings) {
-	path := settingsFile()
-	if path == "" {
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return
-	}
-	if raw, err := json.MarshalIndent(value, "", "  "); err == nil {
-		_ = os.WriteFile(path, raw, 0o644)
-	}
-}
-
-// ModsDir returns the Reloaded-II mods folder, or "" when it cannot be found.
-func (s *EditService) ModsDir() string {
-	root := reloadedDir()
-	if root == "" {
-		return ""
-	}
-	return filepath.Join(root, "Mods")
-}
-
-// configPath is the file the mod loads its edit list from: the same
-// %APPDATA%\GBFR.SkillEdit folder the tool's own tool.json lives in.
+// configPath is the file the mod loads its edit list from, in the
+// %APPDATA%\GBFR.SkillEdit folder that is the tool's and the mod's shared state.
 func configPath() string {
 	dir := configDir()
 	if dir == "" {
@@ -365,75 +225,110 @@ func (s *EditService) LoadEdits() []SkillEdit {
 	return edits
 }
 
-// Install writes the mod binary into the Reloaded-II mods folder and the edit
-// list into the mod's user config directory.
-func (s *EditService) Install(edits []SkillEdit) (string, error) {
-	mods := s.ModsDir()
-	cfgPath := configPath()
-	current := reloadedDir()
-	if mods == "" || cfgPath == "" {
-		return "", fmt.Errorf("no Reloaded-II folder has been chosen yet")
-	}
-	// Checked here, not when the folder was picked: this is the moment it matters.
-	if !looksLikeReloaded(current) {
-		return "", fmt.Errorf("%s has no Reloaded-II.exe, so it is not a Reloaded-II folder", current)
-	}
-	target := filepath.Join(mods, modFolder)
-
-	if err := os.MkdirAll(target, 0o755); err != nil {
-		return "", fmt.Errorf("creating the mod folder: %w", err)
+// SaveEdits takes the newest edit list and restarts the debounce, so the write
+// happens when the editing stops rather than while it is going on: a burst of
+// keystrokes ends in one Config.json write and, when the mod is up, one live
+// apply.
+//
+// The write is deliberately not done here. Every call hands over the whole state
+// and resets the debounce timer; whatever the timer sees when it finally fires
+// is the last state on screen. The frontend stays dumb - it calls this on every
+// change and never waits for an answer.
+//
+// Only "this list cannot be accepted at all" comes back as an error; a write
+// that fails when the timer fires has no caller left to return to and is logged.
+func (s *EditService) SaveEdits(edits []SkillEdit) (string, error) {
+	if configPath() == "" {
+		return "", fmt.Errorf("could not resolve the %%APPDATA%% config folder")
 	}
 
 	for i := range edits {
 		edits[i].Values = padValues(edits[i].Values)
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pending = edits
+	if s.timer == nil {
+		s.timer = time.AfterFunc(debounceDelay, s.flush)
+	} else {
+		s.timer.Reset(debounceDelay)
+	}
+
+	// Short on purpose: the frontend reports success silently and only the
+	// failure gets a dialog.
+	return fmt.Sprintf("%d 条改动待写入", len(edits)), nil
+}
+
+// writeEdits puts the list where the mod reads it: %APPDATA%\GBFR.SkillEdit\
+// Config.json, the folder neither side has to ask the other about.
+//
+// The mod binary is NOT touched - it ships beside this tool inside
+// Reloaded-II\Mods\GBFR.SkillEdit\, and only Config.json changes from editing.
+// Putting it there is ship-time packaging, not something a keystroke does.
+func writeEdits(edits []SkillEdit) error {
+	cfgPath := configPath()
+	if cfgPath == "" {
+		return fmt.Errorf("could not resolve the %%APPDATA%% config folder")
+	}
+
 	cfgBytes, err := json.MarshalIndent(Config{Edits: edits}, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("serialising the edit list: %w", err)
+		return fmt.Errorf("serialising the edit list: %w", err)
 	}
 
-	// The mod itself: the DLL and the manifest that tells Reloaded how to load it.
-	//
-	// A running game keeps the DLL open, and the very point of the hot apply is
-	// clicking here while a game is up - so a copy that already holds exactly
-	// these bytes is skipped rather than rewritten. A rebuilt DLL still goes
-	// through, and a locked one fails loudly: those edits cannot land in a
-	// running game until it is restarted with the new mod anyway.
-	modFiles := map[string][]byte{
-		"ModConfig.json": embeddedCfg,
-		modDllName:       embeddedDll,
-	}
-	for name, data := range modFiles {
-		if len(data) == 0 {
-			return "", fmt.Errorf("embedded asset %s is empty", name)
-		}
-		if deployed, err := os.ReadFile(filepath.Join(target, name)); err == nil && bytes.Equal(deployed, data) {
-			continue
-		}
-		if err := os.WriteFile(filepath.Join(target, name), data, 0o644); err != nil {
-			return "", fmt.Errorf("writing %s: %w", name, err)
-		}
-	}
-
-	// The edit list goes to the %APPDATA% folder the mod also reads, so neither
-	// side has to resolve anything about the other.
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
-		return "", fmt.Errorf("creating the config folder: %w", err)
+		return fmt.Errorf("creating the config folder: %w", err)
 	}
 	if err := os.WriteFile(cfgPath, cfgBytes, 0o644); err != nil {
-		return "", fmt.Errorf("writing Config.json: %w", err)
+		return fmt.Errorf("writing Config.json: %w", err)
 	}
+	return nil
+}
 
-	// An install is a fresh start, so the previous run's log goes with it: the mod
-	// starts the file over on its next launch anyway, and until then a stale log
-	// sitting beside the files is worse than none.
-	_ = os.Remove(filepath.Join(target, logFileName))
+// flush is what the debounce fires: the editing has stopped, so the
+// list goes out and the running game is told about it.
+func (s *EditService) flush() {
+	s.mu.Lock()
+	edits := s.pending
+	s.mu.Unlock()
+	s.publish(edits)
+}
 
-	// Short on purpose: the frontend shows this on a single fixed-height line and
-	// appends the enabled count. Where the files went is in its hover tooltip.
-	if signalHotApply(hotApplyEventName) {
-		return fmt.Sprintf("已部署 %d 条改动（已通知游戏实时应用）", len(edits)), nil
+// flushNow writes the pending list at once, for shutdown: the window can close
+// inside the debounce window, and the edit just typed is the one the user means
+// to keep. Nothing has ever been saved when pending is nil, and that is not a
+// write.
+func (s *EditService) flushNow() {
+	s.mu.Lock()
+	if s.timer != nil {
+		s.timer.Stop()
 	}
-	return fmt.Sprintf("已部署 %d 条改动", len(edits)), nil
+	edits := s.pending
+	s.mu.Unlock()
+
+	if edits == nil {
+		return
+	}
+	s.publish(edits)
+}
+
+// publish is the one place the list leaves the tool.
+//
+// A failure here has no caller to travel back to: the call that handed the list
+// over has already returned, and this runs on the timer's goroutine. So it
+// is logged - the next edit re-arms the timer with the newest list, and that is
+// the retry - and pushed to the frontend, because a list that never reached the
+// disk looks exactly like the mod doing nothing.
+func (s *EditService) publish(edits []SkillEdit) {
+	if err := writeEdits(edits); err != nil {
+		log.Printf("GBFR.SkillEdit: %v", err)
+		// Get is the app this process is running, and nil in a test, where
+		// there is no frontend to tell.
+		if app := application.Get(); app != nil {
+			app.Event.Emit(saveFailedEvent, err.Error())
+		}
+		return
+	}
+	signalHotApply(hotApplyEventName)
 }

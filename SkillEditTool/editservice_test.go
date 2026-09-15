@@ -6,25 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/windows"
 )
-
-// fakeReloaded points os.UserHomeDir at a throwaway folder and gives it the two
-// directories Reloaded creates, so the whole deploy path can be exercised
-// without touching the real installation.
-func fakeReloaded(t *testing.T) string {
-	t.Helper()
-	home := hermeticHome(t)
-
-	root := makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
-	if err := os.MkdirAll(filepath.Join(root, "User", "Mods"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// Nothing is searched for, so an install only counts once it has been chosen.
-	saveSettings(settings{ReloadedDir: root})
-	return root
-}
 
 // appDataConfig is the path the mod reads: Environment.SpecialFolder.ApplicationData
 // is %APPDATA%, which is also what os.UserConfigDir answers on Windows. Spelled
@@ -39,18 +24,36 @@ func appDataConfig(t *testing.T, name string) string {
 	return filepath.Join(appData, modFolder, name)
 }
 
-/*
-The mod reads its edit list from %APPDATA%\GBFR.SkillEdit\Config.json, the folder
-the tool's own tool.json sits in. Writing anywhere else deploys a config the mod
-never reads, which looks exactly like the mod doing nothing.
-*/
-func TestInstallWritesConfigWhereTheModReadsIt(t *testing.T) {
-	root := fakeReloaded(t)
+// hermeticHome points %APPDATA% - the one path the tool and the mod share - at a
+// throwaway folder, so the tests never write into the real one.
+func hermeticHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
+	return home
+}
 
+/*
+SaveEdits is the whole write path now: the mod ships inside
+Reloaded-II\Mods\GBFR.SkillEdit\ beside this tool, so editing only ever writes
+the config the mod reads. Writing anywhere else hands the running game a list
+that is not the one on screen, which looks exactly like the mod doing nothing.
+
+flushNow stands in for the debounce's timer here, so the assertions are about
+where the list lands rather than about waiting a second for it.
+*/
+func TestSaveEditsWritesConfigWhereTheModReadsIt(t *testing.T) {
+	hermeticHome(t)
+
+	service := &EditService{}
 	edits := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
-	if _, err := (&EditService{}).Install(edits); err != nil {
-		t.Fatalf("Install: %v", err)
+	if _, err := service.SaveEdits(edits); err != nil {
+		t.Fatalf("SaveEdits: %v", err)
 	}
+	service.flushNow()
 
 	wantCfg := appDataConfig(t, "Config.json")
 	raw, err := os.ReadFile(wantCfg)
@@ -64,13 +67,94 @@ func TestInstallWritesConfigWhereTheModReadsIt(t *testing.T) {
 	if len(cfg.Edits) != 1 || cfg.Edits[0].Key != "06719232" || cfg.Edits[0].Values[0] != 30 {
 		t.Fatalf("Config.json round-trip lost data: %+v", cfg.Edits)
 	}
+}
 
-	// The mods folder still has to receive the mod itself.
-	for _, name := range []string{modDllName, "ModConfig.json"} {
-		if _, err := os.Stat(filepath.Join(root, "Mods", modFolder, name)); err != nil {
-			t.Fatalf("%s was not deployed: %v", name, err)
-		}
+/*
+The debounce is trailing-edge, which is a statement about when nothing is written
+as much as about when something is: while the editing goes on, the file the mod
+reads must still be the old one - and every call has to restart the quiet second,
+so the write that does happen carries the last state and not the first.
+*/
+func TestSaveEditsWaitsForTheEditingToStop(t *testing.T) {
+	hermeticHome(t)
+
+	service := &EditService{}
+	cfgPath := appDataConfig(t, "Config.json")
+
+	first := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
+	if _, err := service.SaveEdits(first); err != nil {
+		t.Fatalf("SaveEdits: %v", err)
 	}
+	time.Sleep(debounceDelay / 4)
+	if _, err := os.Stat(cfgPath); err == nil {
+		t.Fatal("Config.json was written while the debounce window was still open")
+	}
+
+	// A second keystroke restarts the window: the first one must not have left a
+	// write behind it, and neither may this one yet.
+	last := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{300}}}
+	if _, err := service.SaveEdits(last); err != nil {
+		t.Fatalf("SaveEdits: %v", err)
+	}
+	time.Sleep(debounceDelay / 4)
+	if _, err := os.Stat(cfgPath); err == nil {
+		t.Fatal("a second edit did not restart the debounce window")
+	}
+
+	// Quiet from here on: the last state is what lands, once.
+	raw := waitForConfig(t, cfgPath)
+	var cfg Config
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("Config.json is not valid JSON: %v", err)
+	}
+	if len(cfg.Edits) != 1 || cfg.Edits[0].Values[0] != 300 {
+		t.Fatalf("the write is not the last state on screen: %+v", cfg.Edits)
+	}
+}
+
+// waitForConfig polls until the debounce has fired, so the test never states the
+// exact moment the timer runs - only that it does, inside a generous deadline.
+func waitForConfig(t *testing.T, path string) []byte {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if raw, err := os.ReadFile(path); err == nil {
+			return raw
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Config.json was never written to %s", path)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+/*
+A write that cannot be made is logged and pushed to the frontend, and neither of
+those may take the tool with it: the failure happens on the debounce timer's
+goroutine, where a panic has no caller to catch it. There is no window in a test,
+so this also covers the "no app to tell" branch.
+*/
+func TestSaveEditsSurvivesAWriteItCannotMake(t *testing.T) {
+	home := hermeticHome(t)
+
+	// A file where the config folder belongs: every mkdir and write under it has
+	// to fail, which is the real shape of a locked or read-only %APPDATA%.
+	blocked := filepath.Join(home, "AppData", "Roaming", modFolder)
+	if err := os.MkdirAll(filepath.Dir(blocked), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blocked, []byte("not a folder"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	service := &EditService{}
+	edits := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
+	if _, err := service.SaveEdits(edits); err != nil {
+		t.Fatalf("SaveEdits: %v", err)
+	}
+	// Accepting the list does not depend on the disk, so the write is what fails -
+	// and flushNow is where the debounce's timer would have landed.
+	service.flushNow()
 }
 
 // The list the tool edits is the one the mod reads, so it has to come back out of
@@ -110,122 +194,6 @@ func TestLoadEditsFallsBackToDefaults(t *testing.T) {
 		if len(edit.Values) != LevelValueCount {
 			t.Fatalf("%s: default values were not padded: %v", edit.Key, edit.Values)
 		}
-	}
-}
-
-// An install is identified by its launcher, so a mod is never written into a
-// folder that merely has the right name.
-func TestLooksLikeReloaded(t *testing.T) {
-	dir := t.TempDir()
-
-	if looksLikeReloaded(dir) {
-		t.Fatal("an empty folder was accepted")
-	}
-	if err := os.MkdirAll(filepath.Join(dir, "Mods"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if looksLikeReloaded(dir) {
-		t.Fatal("a Mods folder on its own was accepted")
-	}
-	if err := os.WriteFile(filepath.Join(dir, "Reloaded-II.exe"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if !looksLikeReloaded(dir) {
-		t.Fatal("a folder with Reloaded-II.exe was rejected")
-	}
-	if looksLikeReloaded("") {
-		t.Fatal("an empty path was accepted")
-	}
-}
-
-// hermeticHome points every path the discovery consults at a throwaway folder, so
-// the tests never see the machine's real Reloaded-II.
-func hermeticHome(t *testing.T) string {
-	t.Helper()
-	home := t.TempDir()
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("HOME", home)
-	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
-	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
-	return home
-}
-
-func makeReloaded(t *testing.T, dir string) string {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Join(dir, "Mods"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "Reloaded-II.exe"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
-
-// A folder chosen earlier wins over searching, and the search skips over to the
-// next launch without asking again.
-func TestSavedReloadedDirWins(t *testing.T) {
-	home := hermeticHome(t)
-	saved := makeReloaded(t, filepath.Join(home, "Somewhere", "Reloaded-II"))
-	saveSettings(settings{ReloadedDir: saved})
-
-	if got := reloadedDir(); got != saved {
-		t.Fatalf("saved folder ignored: got %q, want %q", got, saved)
-	}
-}
-
-// The chosen folder is used exactly as given, valid or not: an install that has
-// moved is reported when something is installed, not silently replaced by
-// whatever else happens to be lying around.
-func TestSavedDirIsUsedAsGiven(t *testing.T) {
-	home := hermeticHome(t)
-	chosen := filepath.Join(home, "Somewhere", "Reloaded-II")
-	saveSettings(settings{ReloadedDir: chosen})
-
-	// A real-looking install elsewhere must not win over the choice.
-	makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
-	if got := reloadedDir(); got != chosen {
-		t.Fatalf("got %q, want the chosen %q", got, chosen)
-	}
-}
-
-// Nothing chosen, but Reloaded-II sitting in the default place: use it rather
-// than making the user pick a folder that is already correct.
-func TestDefaultDirIsUsedWhenItIsReal(t *testing.T) {
-	home := hermeticHome(t)
-
-	// A folder of that name that is not an install must not be adopted.
-	if got := reloadedDir(); got != "" {
-		t.Fatalf("expected nothing, got %q", got)
-	}
-	if err := os.MkdirAll(filepath.Join(home, "Desktop", "Reloaded-II"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if got := reloadedDir(); got != "" {
-		t.Fatalf("an empty folder of that name was adopted: %q", got)
-	}
-
-	// With the launcher present it is the install.
-	real := makeReloaded(t, filepath.Join(home, "Desktop", "Reloaded-II"))
-	if got := reloadedDir(); got != real {
-		t.Fatalf("default install ignored: got %q, want %q", got, real)
-	}
-}
-
-// The picker's answer is remembered for next time.
-func TestSaveSettingsRoundTrip(t *testing.T) {
-	hermeticHome(t)
-	want := `C:\Somewhere\Reloaded-II`
-	saveSettings(settings{ReloadedDir: want})
-
-	path := settingsFile()
-	if path == "" {
-		t.Fatal("no settings path")
-	}
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("settings were not written: %v", err)
-	}
-	if got := loadSettings().ReloadedDir; got != want {
-		t.Fatalf("settings round-trip lost the value: got %q, want %q", got, want)
 	}
 }
 
@@ -415,13 +383,13 @@ func TestSignalHotApplyWithoutTheGame(t *testing.T) {
 	}
 }
 
-// Install has to wake the running mod after writing its config, so the values
+// SaveEdits has to wake the running mod after writing its config, so the values
 // land in a live game without a restart. The test simulates the mod by holding
 // the event open under the mod's own name: if a real game happens to be up on
 // this machine, CreateEvent hands back that same kernel object, and the signal
 // lands on it either way.
-func TestInstallSignalsTheRunningMod(t *testing.T) {
-	fakeReloaded(t)
+func TestSaveEditsSignalsTheRunningMod(t *testing.T) {
+	hermeticHome(t)
 
 	ptr, err := windows.UTF16PtrFromString(hotApplyEventName)
 	if err != nil {
@@ -435,16 +403,18 @@ func TestInstallSignalsTheRunningMod(t *testing.T) {
 	// CreateEvent may have opened an already-signalled object; start clean.
 	_ = windows.ResetEvent(event)
 
+	service := &EditService{}
 	edits := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
-	if _, err := (&EditService{}).Install(edits); err != nil {
-		t.Fatalf("Install: %v", err)
+	if _, err := service.SaveEdits(edits); err != nil {
+		t.Fatalf("SaveEdits: %v", err)
 	}
+	service.flushNow()
 
 	state, err := windows.WaitForSingleObject(event, 0)
 	if err != nil {
 		t.Fatalf("waiting on the mod's event: %v", err)
 	}
 	if state != windows.WAIT_OBJECT_0 {
-		t.Fatal("Install did not signal the mod's event, so a running game would not hot-apply")
+		t.Fatal("the write did not signal the mod's event, so a running game would not hot-apply")
 	}
 }

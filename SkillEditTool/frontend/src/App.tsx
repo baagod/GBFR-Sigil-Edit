@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Call } from "@wailsio/runtime";
+import { Call, Events } from "@wailsio/runtime";
 import { Trash2 } from "lucide-react";
 
 import {
@@ -43,6 +43,12 @@ type SkillEdit = {
 type SkillInfo = { Levels: number[][]; Default: number; Max: number; Min: number };
 
 const SERVICE = "main.EditService";
+/*
+  Mirrors saveFailedEvent in editservice.go. The debounced write happens after the
+  call that asked for it has returned, so a failure there has no answer to return
+  and arrives as this event instead.
+*/
+const SAVE_FAILED = "GBFR.SkillEdit.SaveFailed";
 const SLOTS = 10;
 
 /*
@@ -293,13 +299,7 @@ export default function App() {
   const [names, setNames] = useState<Record<string, string>>({});
   const [skills, setSkills] = useState<Record<string, SkillInfo>>({});
   const [explains, setExplains] = useState<Record<string, string>>({});
-  // Where Reloaded-II usually lands, shown greyed until a folder is picked.
-  const [defaultDir, setDefaultDir] = useState("");
-  const [modsDir, setModsDir] = useState("");
-  // "" once we know Reloaded-II cannot be found; null while still asking.
-  const [reloadedDir, setReloadedDir] = useState<string | null>(null);
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
-  const [busy, setBusy] = useState(false);
   const [newKey, setNewKey] = useState("");
 
   const t = MESSAGES[lang];
@@ -322,17 +322,10 @@ export default function App() {
       .catch((err) => setError({ title: t.readFailed, detail: String(err) }));
   }, [lang]);
 
-  /*
-    The Reloaded-II folder is the user's to name: it is portable, and everything
-    the tool shows depends on the answer, which is why picking one reloads all of it.
-  */
   async function loadAll() {
-    const [list, skillMap, dir, root, fallback] = await Promise.all([
+    const [list, skillMap] = await Promise.all([
       Call.ByName(`${SERVICE}.LoadEdits`) as Promise<SkillEdit[]>,
       Call.ByName(`${SERVICE}.SkillMap`) as Promise<Record<string, SkillInfo>>,
-      Call.ByName(`${SERVICE}.ModsDir`) as Promise<string>,
-      Call.ByName(`${SERVICE}.ReloadedDir`) as Promise<string>,
-      Call.ByName(`${SERVICE}.DefaultReloadedDir`) as Promise<string>,
     ]);
     const loaded = enforceExclusivity(
       (list ?? []).map((e) => {
@@ -350,30 +343,26 @@ export default function App() {
     );
     setEdits(loaded);
     setSkills(skillMap ?? {});
-    setModsDir(dir ?? "");
-    setReloadedDir(root ?? "");
-    setDefaultDir(fallback ?? "");
-
-    // The file on disk may hold several enabled edits for one row. Nothing is
-    // written here: the normalised list is what the Install button writes.
   }
 
   useEffect(() => {
     loadAll().catch((err) => setError({ title: t.readFailed, detail: String(err) }));
   }, []);
 
-  async function chooseReloadedDir() {
-    try {
-      const chosen = (await Call.ByName(
-        `${SERVICE}.ChooseReloadedDir`,
-        lang,
-      )) as string;
-      if (!chosen) return; // cancelled
-      await loadAll();
-    } catch (err) {
-      setError({ title: t.chooseFailed, detail: String(err) });
-    }
-  }
+  /*
+    A write that failed after the debounce, pushed from the backend - see
+    SAVE_FAILED. It gets the same dialog as the immediate failures, because from
+    the reader's side they are one thing: the edit is not on disk. Re-subscribed
+    when the language changes so the title follows the switch, and the function
+    On hands back is the unsubscribe React runs on the way out.
+  */
+  useEffect(
+    () =>
+      Events.On(SAVE_FAILED, (event) => {
+        setError({ title: t.writeFailed, detail: String(event.data) });
+      }),
+    [lang],
+  );
 
   /** Every skill that has a display name, alphabetical. */
   const pickerItems: PickerItem[] = useMemo(
@@ -393,26 +382,6 @@ export default function App() {
         return byName !== 0 ? byName : a.index - b.index;
       });
   }, [edits, names]);
-
-  /*
-    Installing is the only thing that writes.
-
-    Editing the list changes what is on screen and nothing else, so the mod's files
-    and Config.json change only when the user asks for it - a keystroke used to
-    re-deploy the whole mod. A failure is therefore only possible from the button,
-    and is the one thing worth interrupting for.
-  */
-  async function install(items: SkillEdit[]) {
-    setBusy(true);
-    try {
-      await Call.ByName(`${SERVICE}.Install`, items);
-      setError(null);
-    } catch (err) {
-      setError({ title: t.writeFailed, detail: String(err) });
-    } finally {
-      setBusy(false);
-    }
-  }
 
   /*
     Flip one checkbox and re-apply the invariant, keeping the row the user just
@@ -481,9 +450,21 @@ export default function App() {
     commit(enforceExclusivity(next, next.length - 1));
   }
 
-  /** Every edit goes through here: the list on screen is the whole state. */
+  /*
+    Every edit goes through here: the list on screen is the whole state, and it is
+    also what the running game ends up with.
+
+    The frontend is deliberately dumb about when that happens. It hands the whole
+    list over on every change and does not wait for an answer; the backend's
+    trailing debounce turns a burst of keystrokes into a single Config.json write
+    and one live apply, and only a list that cannot be accepted at all comes back
+    as a failure worth interrupting for.
+  */
   function commit(next: SkillEdit[]) {
     setEdits(next);
+    Call.ByName(`${SERVICE}.SaveEdits`, next).catch((err) =>
+      setError({ title: MESSAGES[lang].writeFailed, detail: String(err) }),
+    );
   }
 
   /*
@@ -505,55 +486,25 @@ export default function App() {
   return (
     <div className="fixed inset-0 flex flex-col gap-4 p-5">
       {/*
-        Two bands, both above the list. The first is what installing means right
-        now - where it goes, the button that does it, and the language switch,
-        which has always sat in that corner. The second is what is about to be
-        added. Below them the rows own everything.
+        One band above the list: what is about to be added, and the language
+        switch, which has always sat in that corner - now on the title row since
+        the install row went away. Below it the rows own everything.
       */}
-      <div className="flex shrink-0 items-center gap-2">
-        {/* Both rows label their control with the same fixed width, so the two
-            inputs sit in one column instead of the second one being indented by
-            the first one's missing label. */}
-        <span className="w-28 shrink-0 text-sm font-semibold whitespace-nowrap">
-          {t.installTo}
-        </span>
+      <div className="flex shrink-0 items-center gap-2 border-b pb-4">
+        <h1 className="w-28 shrink-0 text-sm font-semibold whitespace-nowrap">
+          {t.title(enabledCount, edits.length)}
+        </h1>
 
-        {/*
-          The folder itself is the control, the way the skill picker works: one
-          outlined box that opens a dialog. Until one is chosen the box shows
-          where Reloaded-II usually lands, greyed like any placeholder - nothing
-          is searched for.
-        */}
-        <Button
-          variant="outline"
-          onClick={chooseReloadedDir}
-          disabled={busy}
-          aria-label={t.chooseReloaded}
-          title={reloadedDir || defaultDir}
-          // Hand cursor: this box is a control that opens a dialog, not a button
-          // that does something, and it reads as a field.
-          className="min-w-0 flex-1 cursor-pointer justify-start font-normal"
-        >
-          <span
-            className={`truncate text-xs ${
-              reloadedDir ? "text-muted-foreground" : "text-muted-foreground/50"
-            }`}
-          >
-            {reloadedDir ? `${modsDir}\\GBFR.SkillEdit` : defaultDir}
-          </span>
-        </Button>
-
-        {/*
-          The label never changes. Swapping it for a progress word resized the
-          button by 9px, which slid the target line next to it back and forth.
-          The disabled state is the feedback while the write is in flight.
-        */}
-        <Button
-          onClick={() => install(edits)}
-          disabled={busy || shown.length === 0 || !reloadedDir}
-        >
-          {t.install}
-        </Button>
+        <div className="min-w-0 flex-1">
+          <SkillPicker
+            items={pickerItems}
+            value={newKey}
+            placeholder={t.pickSkill}
+            searchPlaceholder={t.searchSkill}
+            emptyLabel={t.noMatch}
+            onSelect={setNewKey}
+          />
+        </div>
 
         {/*
           One joined group: ButtonGroup squares off everything but the outer
@@ -577,26 +528,7 @@ export default function App() {
             </Button>
           ))}
         </ButtonGroup>
-      </div>
 
-      <div className="flex shrink-0 items-center gap-2 border-b pb-4">
-        <h1 className="w-28 shrink-0 text-sm font-semibold whitespace-nowrap">
-          {t.title(enabledCount, edits.length)}
-        </h1>
-
-        <div className="min-w-0 flex-1">
-          <SkillPicker
-            items={pickerItems}
-            value={newKey}
-            placeholder={t.pickSkill}
-            searchPlaceholder={t.searchSkill}
-            emptyLabel={t.noMatch}
-            onSelect={setNewKey}
-          />
-        </div>
-
-        {/* 108px = the language group's 3 x 36, so the two rows' right edges line
-            up on the same grid. */}
         <Button onClick={add} disabled={!newKey} className="w-[108px] shrink-0">
           {t.add}
         </Button>
@@ -693,8 +625,10 @@ export default function App() {
 
       {/*
         A failed write is worth interrupting for - the edit is not on disk, and
-        the reason is usually something the user has to fix (a running game holds
-        the DLL open, a folder is read-only). Closing it clears the error.
+        the reason is usually something the user has to fix (Config.json locked by
+        something else, a folder that cannot be written). Both kinds of failure
+        land here: the immediate one, and the debounced one pushed from the
+        backend. Closing it clears the error.
       */}
       <AlertDialog
         open={error !== null}
@@ -707,7 +641,7 @@ export default function App() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{error?.title}</AlertDialogTitle>
-            <AlertDialogDescription className="break-words">
+            <AlertDialogDescription className="wrap-anywhere">
               {error?.detail}
             </AlertDialogDescription>
           </AlertDialogHeader>
