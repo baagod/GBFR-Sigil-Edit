@@ -57,10 +57,7 @@ if (Get-Process -Name 'granblue_fantasy_relink' -ErrorAction SilentlyContinue) {
 # really gone rather than racing its shutdown.
 Get-Process -Name 'SigilEdit' -ErrorAction SilentlyContinue |
     Stop-Process -Force -ErrorAction SilentlyContinue
-$deadline = (Get-Date).AddSeconds(15)
-while ((Get-Process -Name 'SigilEdit' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
-    Start-Sleep -Milliseconds 200
-}
+Wait-Process -Name 'SigilEdit' -Timeout 15 -ErrorAction SilentlyContinue
 
 # 4. Replace the deployed folder. The mod's log goes with it: the mod starts that
 # file over on its next launch, so a leftover one is only ever yesterday's.

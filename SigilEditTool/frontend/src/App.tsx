@@ -388,9 +388,7 @@ export default function App() {
       Call.ByName(`${SERVICE}.TraitMap`) as Promise<Record<string, TraitInfo>>,
     ]);
     const loaded = enforceExclusivity(
-      // A Key that is not even a string is not an edit: it is a hand-broken
-      // Config.json, and one of those must not take the whole list down with it.
-      (list ?? []).filter((e) => typeof e.Key === "string").map((e) => {
+      (list ?? []).map((e) => {
         // Every table the tool serves is keyed by the uppercase hash, and a Key
         // written into Config.json by hand can be lower case. Normalising here is
         // what lets every lookup below use the Key as it stands, instead of the
