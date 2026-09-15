@@ -82,7 +82,7 @@ public class Mod : IMod
 
         try
         {
-            _config = LoadConfig();
+            _config = LoadConfig() ?? new Config();
 
             if (!_loader.GetController<IDataManager>().TryGetTarget(out var dm) || dm is null)
             {
@@ -111,7 +111,13 @@ public class Mod : IMod
             // Wired regardless of the applied count: with every edit disabled the
             // game holds the vanilla table, `file` holds the same bytes, so a
             // later edit can still be live-applied the same way.
-            _hotApply = new HotApply(Log, file, () => BuildEditedTable(LoadConfig(), out _), RegisterWithManager);
+            //
+            // A config that cannot be read yields NO table: an empty edit list
+            // would build the vanilla bytes, and writing those to the running
+            // game would undo the live edits instead of leaving them alone.
+            _hotApply = new HotApply(Log, file,
+                () => LoadConfig() is { } config ? BuildEditedTable(config, out _) : null,
+                RegisterWithManager);
             _hotApply.Start();
         }
         catch (Exception ex)
@@ -203,7 +209,14 @@ public class Mod : IMod
         Log("hot apply: table re-registered, future game parses serve the new values");
     }
 
-    private Config LoadConfig()
+    /// <summary>
+    /// The edit list as it stands on disk, or null when it cannot be read: no
+    /// file, no permission, a write caught halfway, a hand edit that broke the
+    /// JSON. Null is NOT an empty list - an empty list is a real answer ("every
+    /// edit is switched off") and produces the vanilla table, so a hot apply
+    /// handed null must do nothing instead of writing those bytes over the game.
+    /// </summary>
+    private Config? LoadConfig()
     {
         try
         {
@@ -216,7 +229,7 @@ public class Mod : IMod
             if (!File.Exists(path))
             {
                 Log($"FAIL: no Config.json at {path} (the tool writes the edit list here)");
-                return new Config();
+                return null;
             }
 
             var config = Config.Load(path);
@@ -225,9 +238,9 @@ public class Mod : IMod
         }
         catch (Exception ex)
         {
-            Log("config load failed, using defaults: " + ex);
+            Log("config load failed: " + ex);
         }
-        return new Config();
+        return null;
     }
 
     /// <summary>

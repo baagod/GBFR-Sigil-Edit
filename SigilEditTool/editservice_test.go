@@ -385,19 +385,24 @@ func TestSignalHotApplyWithoutTheGame(t *testing.T) {
 
 // SaveEdits has to wake the running mod after writing its config, so the values
 // land in a live game without a restart. The test simulates the mod by holding
-// the event open under the mod's own name: if a real game happens to be up on
-// this machine, CreateEvent hands back that same kernel object, and the signal
-// lands on it either way.
+// an event open under the name the write signals, borrowed for the duration:
+// the mod's own name would be the running game's event on this machine, and
+// signalling that is the one thing a test must never do.
 func TestSaveEditsSignalsTheRunningMod(t *testing.T) {
 	hermeticHome(t)
 
-	ptr, err := windows.UTF16PtrFromString(hotApplyEventName)
+	testName := fmt.Sprintf("GBFR.SigilEdit.HotApply.Test.Signal.%d", os.Getpid())
+	original := hotApplyEventName
+	hotApplyEventName = testName
+	defer func() { hotApplyEventName = original }()
+
+	ptr, err := windows.UTF16PtrFromString(testName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	event, err := windows.CreateEvent(nil, 0, 0, ptr)
 	if err != nil {
-		t.Fatalf("creating the mod's event: %v", err)
+		t.Fatalf("creating the test event: %v", err)
 	}
 	defer windows.CloseHandle(event)
 	// CreateEvent may have opened an already-signalled object; start clean.

@@ -208,7 +208,7 @@ internal sealed class HotApply
 
         if (candidates.Count == 0)
         {
-            _log("hot apply: FAIL - the table could not be located in memory; the edits still take effect on the next game start");
+            _log("hot apply: FAIL - no in-memory copy located; the edit list is re-registered, but the game's loaded table was left alone");
             return;
         }
 
@@ -220,7 +220,7 @@ internal sealed class HotApply
         }
         else
         {
-            _log("hot apply: FAIL - no in-memory copy could be written; the edits still take effect on the next game start");
+            _log("hot apply: FAIL - no in-memory copy could be written; the edit list is re-registered, but the loaded table still holds the old values");
         }
     }
 

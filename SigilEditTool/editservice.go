@@ -42,7 +42,10 @@ const modFolder = "GBFR.SigilEdit"
 // then re-applies the edit list to the game's in-memory table, without a
 // restart. The string is shared with HotApply.EventName in the mod's C#
 // source; nothing links the two, so a rename has to touch both files.
-const hotApplyEventName = "GBFR.SigilEdit.HotApply"
+//
+// A variable only so a test can point it at a name no real game is listening
+// on: creating the mod's own name in a test would signal a running game.
+var hotApplyEventName = "GBFR.SigilEdit.HotApply"
 
 // debounceDelay is how long the edit list has to sit still before it is written:
 // a burst of keystrokes ends in one Config.json write and one live apply,
@@ -286,18 +289,25 @@ func writeEdits(edits []SigilTrait) error {
 }
 
 // flush is what the debounce fires: the editing has stopped, so the
-// list goes out and the running game is told about it.
+// list goes out and the running game is told about it. The list is taken rather
+// than read, so the shutdown flush that follows finds nothing left to write a
+// second time - and a timer that fires after the take has nothing to send.
 func (s *EditService) flush() {
 	s.mu.Lock()
 	edits := s.pending
+	s.pending = nil
 	s.mu.Unlock()
+
+	if edits == nil {
+		return
+	}
 	s.publish(edits)
 }
 
 // flushNow writes the pending list at once, for shutdown: the window can close
 // inside the debounce window, and the edit just typed is the one the user means
-// to keep. Nothing has ever been saved when pending is nil, and that is not a
-// write.
+// to keep. A list the debounce already wrote is no longer pending, so this
+// finds nothing and writes nothing.
 func (s *EditService) flushNow() {
 	s.mu.Lock()
 	if s.timer != nil {
