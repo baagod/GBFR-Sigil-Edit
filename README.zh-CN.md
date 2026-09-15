@@ -35,7 +35,7 @@
 
 ## 从源码构建
 
-需要 .NET SDK 8、Node.js 20+、Go 1.25+。
+需要 .NET SDK 8、Node.js 20+、Go 1.25+。只有**重新生成游戏资产**（`tools/build-assets.js`，构建与发版都不走它）要求更高：**Node 22.5+**，因为它用内置的 `node:sqlite` 读游戏数据库。
 
 ```powershell
 ./build.ps1            # -> SigilEditTool/SigilEdit.exe

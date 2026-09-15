@@ -566,7 +566,7 @@ export default function App() {
           out at the end of the row.
 
           With nothing picked there is nothing to add, and the button says so by
-          going quiet - the secondary variant - rather than by being a half
+          going quiet - the outline variant - rather than by being a half
           transparent filled button, which reads as a washed out call to action.
           That is the pattern the shadcn docs use for a button that cannot be
           pressed yet (their disabled examples are outline and secondary).
@@ -577,7 +577,7 @@ export default function App() {
         <Button
           onClick={add}
           disabled={!newKey}
-          variant={newKey ? "default" : "secondary"}
+          variant={newKey ? "default" : "outline"}
           className="w-16"
         >
           {t.add}

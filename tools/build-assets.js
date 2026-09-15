@@ -12,6 +12,12 @@
 // only regenerating them does. On a fresh setup run names --lang zh first:
 // skillinfo.json is keyed off the Chinese name table, which is what decides which
 // traits the tool offers.
+//
+// Node 22.5 or newer, for the built-in node:sqlite this reads the game's DB with.
+// 22.5 to 22.12 also need --experimental-sqlite; 22.13/23.4 and up do not
+// (node:sqlite landed in 22.5 and left the flag behind in 22.13 and 23.4).
+// Building and releasing the mod do not need that: build.ps1 runs vite, which is
+// happy on the Node 20 the READMEs ask for.
 
 "use strict";
 const fs = require("fs");
@@ -75,8 +81,23 @@ function hasSkillStatus() {
 }
 
 function openDb() {
-  const { DatabaseSync } = require("node:sqlite");
+  const { DatabaseSync } = requireNodeSqlite();
   return new DatabaseSync(DB);
+}
+
+// node:sqlite is the one thing here that a Node 20 cannot do, and its absence
+// otherwise surfaces as a bare "Cannot find module 'node:sqlite'" from inside a
+// require, with nothing to say which version or flag is wanted.
+function requireNodeSqlite() {
+  try {
+    return require("node:sqlite");
+  } catch {
+    throw new Error(
+      `node:sqlite is needed to read the game's DB, and it arrived in Node 22.5 ` +
+        `(22.5-22.12 need --experimental-sqlite; 22.13/23.4+ do not). ` +
+        `This is ${process.version}.`,
+    );
+  }
 }
 
 // ids.txt maps hash -> short id (and the reverse). gem columns store short ids like

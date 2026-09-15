@@ -35,7 +35,7 @@ A typical table mod brings its own edited `.tbl` and overwrites the game's copy,
 
 ## Building from source
 
-Needs .NET SDK 8, Node.js 20+, Go 1.25+.
+Needs .NET SDK 8, Node.js 20+, Go 1.25+. Only regenerating the game-derived assets (`tools/build-assets.js`, which no build and no release needs) asks for more: **Node 22.5+**, for the built-in `node:sqlite` it reads the game's database with.
 
 ```powershell
 ./build.ps1          # -> SigilEditTool/SigilEdit.exe
