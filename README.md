@@ -6,7 +6,9 @@ A **sigil-trait editor** for *Granblue Fantasy: Relink*. At game startup it rewr
 
 > A word on the name: what it edits are the **traits a sigil carries** - the `ATK`, `DMG Cap`, `Autorevive` entries with a `Lv` you see on the sigil screen - not character skills. The game's own data calls them `skill` (the table is `skill_status`, and a sigil record points at them through `skill1`/`skill2`), which is where this mod's old name came from; it is **Sigil Edit** now to keep that apart from character skills. The `skill_status` table name in the code stays as the game spells it.
 
-A typical table mod brings its own edited `.tbl` and overwrites the game's copy, so two mods touching the same table clobber each other. This mod reads the table out of the game's archive, changes only the rows you name, and hands it back through `IDataManager`. Nothing on disk changes, which is why it can live alongside other mods.
+A typical table mod brings its own edited `.tbl` and overwrites the game's copy, so two mods touching the same table clobber each other. This mod reads the table out of the game's archive, changes only the rows you name, and hands it back through `IDataManager`. Nothing on disk changes.
+
+That is still one file per path, though: `IDataManager` serves a single version of `system/table/skill_status.tbl`, so this mod and a mod that serves that same table do not merge row by row. Whichever of the two registered last is the version the game parses, and this mod re-registers on every edit. Mods that edit other tables are unaffected.
 
 ## Requirements
 
