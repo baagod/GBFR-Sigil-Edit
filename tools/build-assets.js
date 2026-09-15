@@ -1,5 +1,5 @@
 // Build the assets the tool embeds: the game's own numbers, names and explanations
-// for every skill it offers.
+// for every trait it offers (the game calls these rows skills).
 //
 // Usage:
 //   node tools/build-assets.js db                     -> skillinfo.json
@@ -11,7 +11,7 @@
 // The assets are committed, so neither a build nor a release needs any of this -
 // only regenerating them does. On a fresh setup run names --lang zh first:
 // skillinfo.json is keyed off the Chinese name table, which is what decides which
-// skills the tool offers.
+// traits the tool offers.
 
 "use strict";
 const fs = require("fs");
@@ -37,10 +37,10 @@ const TBL = path.join(SHARED, "extracted/system/table/skill_status.tbl");
 const DB = path.join(SHARED, "extracted", "gbfr.db");
 const TOOL = path.join(SHARED, "GBFRDataTools/GBFRDataTools.exe");
 const IDS = path.join(SHARED, "GBFRDataTools/Data/ids.txt");
-const ASSETS = path.join(ROOT, "SkillEditTool", "assets");
+const ASSETS = path.join(ROOT, "SigilEditTool", "assets");
 
 // Not skills anyone edits - leftover rows that happen to have names. One list, not
-// one per stage: whether the tool offers a skill and what it is called have to
+// one per stage: whether the tool offers a trait and what it is called have to
 // agree, and two copies of this only ever drift apart.
 const EXCLUDED = new Set([
   "9AD8B5E6", // 7net

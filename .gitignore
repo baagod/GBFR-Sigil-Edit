@@ -4,10 +4,10 @@
 **/publish/
 dist/
 node_modules/
-# Any go build output in the tool folder. SkillEdit.exe is what build.ps1 asks
-# for; a bare `go build .` names the binary after the module (skilledittool.exe),
+# Any go build output in the tool folder. SigilEdit.exe is what build.ps1 asks
+# for; a bare `go build .` names the binary after the module (sigiledittool.exe),
 # and that stray copy is not a second tool.
-SkillEditTool/*.exe
+SigilEditTool/*.exe
 *.exe~
 *.zip
 
@@ -26,7 +26,7 @@ SkillEditTool/*.exe
 #
 # The game's own tables, the toolchain that reads them, and the databases the
 # asset scripts build from. The assets those scripts produce
-# (SkillEditTool/assets/skillnames.*.json and skillinfo.json) are committed, so
+# (SigilEditTool/assets/skillnames.*.json and skillinfo.json) are committed, so
 # neither a build nor a release needs any of this - only regenerating them does,
 # and that requires a copy of the game.
 GBFRDataTools/

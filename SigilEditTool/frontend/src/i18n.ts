@@ -4,8 +4,14 @@
   Kept as a plain object rather than an i18n library: there are twenty strings and
   three languages, so a dependency would be more machinery than the problem.
 
-  Skill names are NOT here - those come from the game's own text tables, one per
+  Trait names are NOT here - those come from the game's own text tables, one per
   language, and are fetched from the Go side.
+
+  The wording differs per language on purpose: the thing being edited is a trait a
+  sigil carries, which the game's own data calls a "skill" (table `skill_status`),
+  so Japanese keeps スキル and English says sigil traits; Chinese labels the list
+  因子选择. The picker's own placeholder is just "..." in every language - the
+  label beside it already says what it is for.
 */
 
 export const LANGS = ["zh", "en", "ja"] as const;
@@ -25,8 +31,8 @@ type Dict = {
   title: (enabled: number, total: number) => string;
   empty: string;
   add: string;
-  pickSkill: string;
-  searchSkill: string;
+  pickTrait: string;
+  searchTrait: string;
   noMatch: string;
   ok: string;
   enable: (name: string) => string;
@@ -38,12 +44,12 @@ type Dict = {
 
 export const MESSAGES: Record<Lang, Dict> = {
   zh: {
-    title: (enabled, total) => `技能（${enabled}/${total}）：`,
+    title: (enabled, total) => `因子选择（${enabled}/${total}）：`,
     empty: "没有改动条目。",
     add: "添加",
-    pickSkill: "选择...",
-    searchSkill: "搜索技能名",
-    noMatch: "没有匹配的技能",
+    pickTrait: "...",
+    searchTrait: "搜索因子",
+    noMatch: "没有匹配的因子",
     ok: "确定",
     enable: (name) => `启用 ${name}`,
     remove: (name) => `删除 ${name}`,
@@ -52,12 +58,12 @@ export const MESSAGES: Record<Lang, Dict> = {
     writeFailed: "写入失败",
   },
   en: {
-    title: (enabled, total) => `Skills (${enabled}/${total}):`,
+    title: (enabled, total) => `Sigil traits (${enabled}/${total}):`,
     empty: "No edits yet.",
     add: "Add",
-    pickSkill: "Select...",
-    searchSkill: "Search skills",
-    noMatch: "No matching skill",
+    pickTrait: "...",
+    searchTrait: "Search traits",
+    noMatch: "No matching trait",
     ok: "OK",
     enable: (name) => `Enable ${name}`,
     remove: (name) => `Remove ${name}`,
@@ -69,8 +75,8 @@ export const MESSAGES: Record<Lang, Dict> = {
     title: (enabled, total) => `スキル（${enabled}/${total}）：`,
     empty: "変更はまだありません。",
     add: "追加",
-    pickSkill: "選択...",
-    searchSkill: "スキル名で検索",
+    pickTrait: "...",
+    searchTrait: "スキル名で検索",
     noMatch: "一致するスキルがありません",
     ok: "OK",
     enable: (name) => `${name} を有効にする`,

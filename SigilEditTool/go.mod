@@ -1,4 +1,4 @@
-module skilledittool
+module sigiledittool
 
 go 1.25.0
 

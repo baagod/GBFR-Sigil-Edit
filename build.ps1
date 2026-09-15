@@ -1,15 +1,15 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Builds the GBFR.SkillEdit mod DLL and the SkillEditTool executable, and
+    Builds the GBFR.SigilEdit mod DLL and the SigilEditTool executable, and
     optionally packs the mod folder and a release zip.
 
 .DESCRIPTION
     The order of the steps is a constraint, not a preference:
 
-        1. dotnet build          -> GBFR.SkillEdit\bin\Release\GBFR.SkillEdit.dll
-        2. npm ci + tsc + npm run build -> SkillEditTool\frontend\dist
-        3. go build              -> SkillEditTool\SkillEdit.exe
+        1. dotnet build          -> GBFR.SigilEdit\bin\Release\GBFR.SigilEdit.dll
+        2. npm ci + tsc + npm run build -> SigilEditTool\frontend\dist
+        3. go build              -> SigilEditTool\SigilEdit.exe
 
     main.go embeds the frontend bundle at compile time
     (//go:embed all:frontend/dist). Go reads those files from disk while
@@ -22,9 +22,9 @@
     exit code.
 
 .PARAMETER Package
-    After a successful build, assemble dist\GBFR.SkillEdit\ - the folder that is
+    After a successful build, assemble dist\GBFR.SigilEdit\ - the folder that is
     the whole mod: the DLL, its manifest and the tool - and write
-    dist\GBFR.SkillEdit-<version>.zip holding that folder and the documents.
+    dist\GBFR.SigilEdit-<version>.zip holding that folder and the documents.
     Unzipping the folder into Reloaded-II\Mods\ is the entire deployment; there
     is no install step inside the tool.
 
@@ -43,12 +43,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $root     = $PSScriptRoot
-$csproj   = Join-Path $root 'GBFR.SkillEdit\GBFR.SkillEdit.csproj'
-$modDll   = Join-Path $root 'GBFR.SkillEdit\bin\Release\GBFR.SkillEdit.dll'
-$modCfg   = Join-Path $root 'GBFR.SkillEdit\ModConfig.json'
-$toolDir  = Join-Path $root 'SkillEditTool'
+$csproj   = Join-Path $root 'GBFR.SigilEdit\GBFR.SigilEdit.csproj'
+$modDll   = Join-Path $root 'GBFR.SigilEdit\bin\Release\GBFR.SigilEdit.dll'
+$modCfg   = Join-Path $root 'GBFR.SigilEdit\ModConfig.json'
+$toolDir  = Join-Path $root 'SigilEditTool'
 $frontend = Join-Path $toolDir 'frontend'
-$exe      = Join-Path $toolDir 'SkillEdit.exe'
+$exe      = Join-Path $toolDir 'SigilEdit.exe'
 $distHtml = Join-Path $frontend 'dist\index.html'
 
 function Assert-Tool {
@@ -110,10 +110,10 @@ if (-not (Test-Path -LiteralPath $distHtml)) {
     throw "The frontend build did not produce '$distHtml'."
 }
 
-Write-Host '==> [3/3] Building SkillEdit.exe (go build)'
+Write-Host '==> [3/3] Building SigilEdit.exe (go build)'
 Push-Location $toolDir
 try {
-    & go build -trimpath -ldflags '-H windowsgui -s -w' -o SkillEdit.exe .
+    & go build -trimpath -ldflags '-H windowsgui -s -w' -o SigilEdit.exe .
     Assert-ExitCode 'go build'
 }
 finally {
@@ -136,9 +136,9 @@ if ($Package) {
     }
 
     $releaseDir = Join-Path $root 'dist'
-    $modOut     = Join-Path $releaseDir 'GBFR.SkillEdit'
+    $modOut     = Join-Path $releaseDir 'GBFR.SigilEdit'
     $staging    = Join-Path $releaseDir 'staging'
-    $zip        = Join-Path $releaseDir "GBFR.SkillEdit-$version.zip"
+    $zip        = Join-Path $releaseDir "GBFR.SigilEdit-$version.zip"
 
     # The mod folder exactly as Reloaded-II sees it. The tool rides along with the
     # mod it edits: dropping this one folder into Mods\ is the whole deployment,

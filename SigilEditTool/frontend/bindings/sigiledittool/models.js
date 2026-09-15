@@ -7,14 +7,14 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
- * SkillEdit mirrors the mod's Config.cs SkillEdit: one skill_status row override.
+ * SigilTrait mirrors the mod's Config.cs SigilTrait: one skill_status row override.
  * Values maps positionally onto LevelValue1..10, which is what the skill's own
  * description uses as {0}, {1}, {2} ...
  */
-export class SkillEdit {
+export class SigilTrait {
     /**
-     * Creates a new SkillEdit instance.
-     * @param {Partial<SkillEdit>} [$$source = {}] - The source object to create the SkillEdit.
+     * Creates a new SigilTrait instance.
+     * @param {Partial<SigilTrait>} [$$source = {}] - The source object to create the SigilTrait.
      */
     constructor($$source = {}) {
         if (!("Enabled" in $$source)) {
@@ -50,9 +50,9 @@ export class SkillEdit {
     }
 
     /**
-     * Creates a new SkillEdit instance from a string or object.
+     * Creates a new SigilTrait instance from a string or object.
      * @param {any} [$$source = {}]
-     * @returns {SkillEdit}
+     * @returns {SigilTrait}
      */
     static createFrom($$source = {}) {
         const $$createField3_0 = $$createType0;
@@ -60,28 +60,28 @@ export class SkillEdit {
         if ("Values" in $$parsedSource) {
             $$parsedSource["Values"] = $$createField3_0($$parsedSource["Values"]);
         }
-        return new SkillEdit(/** @type {Partial<SkillEdit>} */($$parsedSource));
+        return new SigilTrait(/** @type {Partial<SigilTrait>} */($$parsedSource));
     }
 }
 
 /**
- * SkillInfo is one row of the generated skillinfo.json: every level of a skill the
+ * TraitInfo is one row of the generated skillinfo.json: every level of a trait the
  * tool offers, so a newly added edit starts from the game's own numbers instead of
  * zeros, and so the value shown for a slot - and the one an emptied box writes back
  * - is the game's number for the level the edit names.
  * 
  * Levels is indexed by level - 1: Levels[3] is the row whose Level field is 4.
  * 
- * Default is the level a new edit should start on: the skill's own maximum when
- * that is a normal 20 or less, otherwise the usual 15, except for the few skills
+ * Default is the level a new edit should start on: the trait's own maximum when
+ * that is a normal 20 or less, otherwise the usual 15, except for the few traits
  * whose values only exist higher up. Min and Max are what the level field is
- * clamped to - Min is the lowest level carrying numbers, so a skill whose numbers
+ * clamped to - Min is the lowest level carrying numbers, so a trait whose numbers
  * exist on one level only cannot be moved off it.
  */
-export class SkillInfo {
+export class TraitInfo {
     /**
-     * Creates a new SkillInfo instance.
-     * @param {Partial<SkillInfo>} [$$source = {}] - The source object to create the SkillInfo.
+     * Creates a new TraitInfo instance.
+     * @param {Partial<TraitInfo>} [$$source = {}] - The source object to create the TraitInfo.
      */
     constructor($$source = {}) {
         if (!("Levels" in $$source)) {
@@ -117,9 +117,9 @@ export class SkillInfo {
     }
 
     /**
-     * Creates a new SkillInfo instance from a string or object.
+     * Creates a new TraitInfo instance from a string or object.
      * @param {any} [$$source = {}]
-     * @returns {SkillInfo}
+     * @returns {TraitInfo}
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType1;
@@ -127,7 +127,7 @@ export class SkillInfo {
         if ("Levels" in $$parsedSource) {
             $$parsedSource["Levels"] = $$createField0_0($$parsedSource["Levels"]);
         }
-        return new SkillInfo(/** @type {Partial<SkillInfo>} */($$parsedSource));
+        return new TraitInfo(/** @type {Partial<TraitInfo>} */($$parsedSource));
     }
 }
 

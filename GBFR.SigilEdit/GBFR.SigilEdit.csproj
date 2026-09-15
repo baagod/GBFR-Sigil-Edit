@@ -3,8 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputType>Library</OutputType>
-    <AssemblyName>GBFR.SkillEdit</AssemblyName>
-    <RootNamespace>GBFR.SkillEdit</RootNamespace>
+    <AssemblyName>GBFR.SigilEdit</AssemblyName>
+    <RootNamespace>GBFR.SigilEdit</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <ImplicitUsings>enable</ImplicitUsings>

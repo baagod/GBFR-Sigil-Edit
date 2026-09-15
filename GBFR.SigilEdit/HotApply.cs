@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace GBFR.SkillEdit;
+namespace GBFR.SigilEdit;
 
 /// <summary>
 /// Applies config edits to the game's ALREADY-LOADED skill_status table, so a
@@ -30,7 +30,7 @@ internal sealed class HotApply
     /// Shared by name with the tool's signalHotApply - the two sides have no
     /// build-time link, so a rename has to touch both.
     /// </summary>
-    public const string EventName = "GBFR.SkillEdit.HotApply";
+    public const string EventName = "GBFR.SigilEdit.HotApply";
 
     private readonly Action<string> _log;
 
@@ -102,13 +102,13 @@ internal sealed class HotApply
             return;
         }
 
-        var waiter = new Thread(WaitLoop) { IsBackground = true, Name = "GBFR.SkillEdit hot apply" };
+        var waiter = new Thread(WaitLoop) { IsBackground = true, Name = "GBFR.SigilEdit hot apply" };
         waiter.Start();
 
         // The boot-side locate: does the memory walk while the game boots, so
         // the user never waits for it at the click. It stops on its own once
         // the address set is stable (or the first apply seeds the cache).
-        var bootLocator = new Thread(PrewarmLoop) { IsBackground = true, Name = "GBFR.SkillEdit boot locate" };
+        var bootLocator = new Thread(PrewarmLoop) { IsBackground = true, Name = "GBFR.SigilEdit boot locate" };
         bootLocator.Start();
     }
 

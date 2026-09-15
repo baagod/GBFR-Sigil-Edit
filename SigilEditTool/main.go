@@ -10,8 +10,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-// One skill-name table per UI language, each built from that language's own text
-// in the game. The hashes are identical across all three.
+// One trait-name table per UI language, each built from that language's own text
+// in the game. The hashes are identical across all three. The files are named
+// after the game's own table (skill_status), which is what calls these rows skills.
 //
 //go:embed assets/skillnames.zh.json
 var embeddedNamesZH []byte
@@ -22,13 +23,13 @@ var embeddedNamesEN []byte
 //go:embed assets/skillnames.ja.json
 var embeddedNamesJA []byte
 
-// Every skill's vanilla LevelValue1..10 and the levels those values live on, in
+// Every trait's vanilla LevelValue1..10 and the levels those values live on, in
 // one generated table: both halves describe the same row.
 //
 //go:embed assets/skillinfo.json
 var embeddedSkillInfo []byte
 
-// The game's own explanation of each skill, per language. {N} in these stands for
+// The game's own explanation of each trait, per language. {N} in these stands for
 // LevelValue(N+1), so the tool can label the slots it edits.
 //
 //go:embed assets/skillexplain.zh.json
@@ -44,7 +45,7 @@ func main() {
 	edits := &EditService{}
 
 	app := application.New(application.Options{
-		Name: "GBFRSkillEdits",
+		Name: "GBFRSigilEdits",
 		Services: []application.Service{
 			application.NewService(edits),
 		},
@@ -58,7 +59,7 @@ func main() {
 	app.OnShutdown(edits.flushNow)
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title: "GBFR Skill Edit",
+		Title: "GBFR Sigil Edit",
 		/*
 			Wails sizes the outer window, and Windows spends 8px per side on the
 			resize frame, so 816 here is 800 of *client* area for the frontend to

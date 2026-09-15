@@ -15,10 +15,10 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { SkillPicker, type PickerItem } from "./SkillPicker";
+import { TraitPicker, type PickerItem } from "./TraitPicker";
 import { LANGS, LANG_LABEL, MESSAGES, initialLang, rememberLang, type Lang } from "./i18n";
 
-type SkillEdit = {
+type SigilTrait = {
   Enabled: boolean;
   Key: string;
   Level: number;
@@ -34,13 +34,13 @@ type SkillEdit = {
 };
 
 /**
- * One skill's vanilla numbers per level. Levels is indexed by level - 1, so
+ * One trait's vanilla numbers per level. Levels is indexed by level - 1, so
  * Levels[3] is the row the game shows as level 4 - which is what a slot's
  * placeholder, and the value an emptied box writes back, have to come from.
- * Min/Max are the levels that carry numbers: a skill whose values exist on one
+ * Min/Max are the levels that carry numbers: a trait whose values exist on one
  * level only has Min == Max.
  */
-type SkillInfo = { Levels: number[][]; Default: number; Max: number; Min: number };
+type TraitInfo = { Levels: number[][]; Default: number; Max: number; Min: number };
 
 const SERVICE = "main.EditService";
 /*
@@ -48,19 +48,19 @@ const SERVICE = "main.EditService";
   call that asked for it has returned, so a failure there has no answer to return
   and arrives as this event instead.
 */
-const SAVE_FAILED = "GBFR.SkillEdit.SaveFailed";
+const SAVE_FAILED = "GBFR.SigilEdit.SaveFailed";
 const SLOTS = 10;
 
 /*
   A number input draws its own spinner arrows, which ignore the theme and look
   like a light-mode form control next to everything else. These fields are typed
-  into, never stepped.
+  into and wheel-stepped; the arrows are chrome nobody asked for.
 */
 const NO_SPINNER =
   "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
 /** Two edits collide when they write the same row: same hash and same level. */
-const target = (e: SkillEdit) => `${e.Key}@${e.Level}`;
+const target = (e: SigilTrait) => `${e.Key}@${e.Level}`;
 
 /*
   A row's React key must not depend on that row's own fields.
@@ -70,7 +70,7 @@ const target = (e: SkillEdit) => `${e.Key}@${e.Level}`;
   after a single character. The hash plus the position in the unsorted list is
   stable for every edit that does not add or remove a row.
 */
-const rowId = (e: SkillEdit, index: number) => `${e.Key}#${index}`;
+const rowId = (e: SigilTrait, index: number) => `${e.Key}#${index}`;
 
 const pad = (values: number[]) =>
   Array.from({ length: SLOTS }, (_, i) => values[i] ?? 0);
@@ -87,7 +87,7 @@ const pad = (values: number[]) =>
   Without the keepIndex case, ticking a row that sits earlier in the list would be
   undone by its own normalisation and the user could never select it.
 */
-function enforceExclusivity(items: SkillEdit[], keepIndex?: number): SkillEdit[] {
+function enforceExclusivity(items: SigilTrait[], keepIndex?: number): SigilTrait[] {
   // The address the clicked row writes; nothing is kept when normalising from disk.
   const keep = keepIndex !== undefined ? target(items[keepIndex]) : undefined;
 
@@ -117,15 +117,22 @@ function enforceExclusivity(items: SkillEdit[], keepIndex?: number): SkillEdit[]
  *
  * Nothing is ever "no input": emptying a box puts that slot back to the game's
  * number, and the table gets a concrete value for every slot either way.
+ *
+ * A number is what the box shows, not what is typed into it. What is typed has to
+ * pass through states that are not numbers yet - "-" on the way to -5, "0." on the
+ * way to 0.6 - so the box keeps that half-typed text on screen while it has focus,
+ * and drops it on blur. Dropping it is what puts back the value the box started
+ * from. As soon as the text is a number it is committed and the box renders from
+ * the number instead, which is what makes "06" read back as 6.
  */
 /*
-  What a value box may hold while it is being typed: an optional minus sign, digits,
-  and at most one decimal point - so "-", "0." and "-.5" are all reachable states.
-  A keystroke or paste that would put anything else in the box is simply dropped,
-  which is how exponent notation stays out: a number input used to accept 1e999, and
-  JSON turns that into null, which the tool then saved as a 0.
+  What a box may hold: an optional leading minus sign, digits, and at most one
+  decimal point - so "-", "0." and "-.5" are all reachable states, while a second
+  minus, a second point, a letter or exponent notation never reach the box. Keeping
+  exponent notation out matters: a number input used to accept 1e999, and JSON turns
+  that into null, which the tool then saved as a 0.
 */
-const PARTIAL_NUMBER = /^-?\d*\.?\d*$/;
+const HALF_TYPED = /^-?\d*\.?\d*$/;
 
 /** ...and what counts as a number once the box is done with: -3, 30, 0.6, .5 */
 const NUMBER = /^-?(\d+(\.\d*)?|\.\d+)$/;
@@ -163,11 +170,9 @@ function ValueSlots({
   defaults?: number[];
   onChange: (values: number[], typed: boolean[]) => void;
 }) {
-  // What is actually in a box while it has focus. Without this a half-typed "-" or
-  // "0." could not stay on screen: the box would snap back to the committed number
-  // on the next render. Dropped on blur, so a half-typed entry falls back to the
-  // value it started from.
-  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  // The half-typed text of the box being edited, if any: "-" or "0." cannot be a
+  // committed number, so they live here and nowhere else. Dropped on blur.
+  const [halfTyped, setHalfTyped] = useState<Record<number, string>>({});
 
   const vanillaOf = (i: number) => defaults?.[i] ?? 0;
 
@@ -190,34 +195,72 @@ function ValueSlots({
             // Digits also show when the stored number differs from the game's - a
             // slot edited in Config.json by hand should not look untouched.
             value={
-              drafts[i] ??
+              halfTyped[i] ??
               (typed[i] || values[i] !== vanillaOf(i) ? String(values[i]) : "")
             }
             onChange={(e) => {
               const text = e.target.value;
-              if (!PARTIAL_NUMBER.test(text)) return;
 
-              // Whatever survived the filter is what the box shows from here.
-              setDrafts((prev) => ({ ...prev, [i]: text }));
+              // A keystroke that could never become a number - a second minus, a
+              // second point, a letter, exponent notation - is dropped, and the box
+              // is left showing what it already had.
+              if (!HALF_TYPED.test(text)) return;
 
               if (text === "") {
-                // Emptied: the game's own value goes back, its placeholder shows
+                // Emptied: the game's own number goes back, its placeholder shows
                 // again, and the slot follows the level from here on.
+                setHalfTyped(({ [i]: _dropped, ...rest }) => rest);
                 const next = [...values];
                 next[i] = vanillaOf(i);
                 onChange(next, withSlot(typed, i, false));
                 return;
               }
 
-              // A number commits. Anything else is half-typed, so it stays on screen
-              // and the committed numbers are left alone until it becomes one.
-              if (NUMBER.test(text)) {
-                const next = [...values];
-                next[i] = Number(text);
-                onChange(next, withSlot(typed, i, true));
+              if (!NUMBER.test(text)) {
+                // Still half-typed: on screen until it is a number, or until the
+                // box is left, which puts back the value it started from.
+                setHalfTyped((prev) => ({ ...prev, [i]: text }));
+                return;
               }
+
+              // A number: committed, and rendered from the number from here on, so
+              // "06" reads back as 6.
+              setHalfTyped(({ [i]: _dropped, ...rest }) => rest);
+              const next = [...values];
+              next[i] = Number(text);
+              onChange(next, withSlot(typed, i, true));
             }}
-            onBlur={() => setDrafts(({ [i]: _dropped, ...rest }) => rest)}
+            onBlur={() => setHalfTyped(({ [i]: _dropped, ...rest }) => rest)}
+            /*
+              Stepping by one, which a number input would have given for free: these
+              boxes have to hold "-" and "0." to be typed into, and a number input
+              cannot report those. A step replaces whatever was half typed, because
+              the number is what the box is for from then on.
+            */
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+              // Otherwise the arrow moves the caret to the end of the box, and on a
+              // list that scrolls it would scroll that too.
+              e.preventDefault();
+              const next = [...values];
+              next[i] =
+                Math.round((values[i] + (e.key === "ArrowUp" ? 1 : -1)) * 100) / 100;
+              setHalfTyped(({ [i]: _dropped, ...rest }) => rest);
+              onChange(next, withSlot(typed, i, true));
+            }}
+            /*
+              Only a focused box steps, and only then does it swallow the wheel - the
+              same rule a number input had, and what keeps a wheel over the list
+              scrolling the list instead of rewriting a trait.
+            */
+            onWheel={(e) => {
+              if (document.activeElement !== e.currentTarget) return;
+              e.preventDefault();
+              const next = [...values];
+              next[i] = Math.round((values[i] + (e.deltaY < 0 ? 1 : -1)) * 100) / 100;
+              setHalfTyped(({ [i]: _dropped, ...rest }) => rest);
+              onChange(next, withSlot(typed, i, true));
+            }}
             /*
               Bare text, not a field: no border, no fill, no focus ring. The row
               reads as one line of numbers separated by |, and the only chrome left
@@ -232,8 +275,8 @@ function ValueSlots({
 }
 
 /**
- * The level the game shows for this row, with the skill's own range beside it and
- * the field clamped to that range. A skill whose numbers exist on one level only
+ * The level the game shows for this row, with the trait's own range beside it and
+ * the field clamped to that range. A trait whose numbers exist on one level only
  * has min == max, and the field then says so rather than accepting a level the game
  * keeps empty.
  */
@@ -295,9 +338,9 @@ function LevelInput({
 
 export default function App() {
   const [lang, setLang] = useState<Lang>(initialLang);
-  const [edits, setEdits] = useState<SkillEdit[]>([]);
+  const [edits, setEdits] = useState<SigilTrait[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
-  const [skills, setSkills] = useState<Record<string, SkillInfo>>({});
+  const [traits, setTraits] = useState<Record<string, TraitInfo>>({});
   const [explains, setExplains] = useState<Record<string, string>>({});
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
   const [newKey, setNewKey] = useState("");
@@ -305,7 +348,7 @@ export default function App() {
   const t = MESSAGES[lang];
 
   /*
-    Skill names come from the game's own text for the chosen language, so they are
+    Trait names come from the game's own text for the chosen language, so they are
     fetched again whenever it changes. The edit list is language-neutral and is
     deliberately left alone.
   */
@@ -323,9 +366,9 @@ export default function App() {
   }, [lang]);
 
   async function loadAll() {
-    const [list, skillMap] = await Promise.all([
-      Call.ByName(`${SERVICE}.LoadEdits`) as Promise<SkillEdit[]>,
-      Call.ByName(`${SERVICE}.SkillMap`) as Promise<Record<string, SkillInfo>>,
+    const [list, traitMap] = await Promise.all([
+      Call.ByName(`${SERVICE}.LoadEdits`) as Promise<SigilTrait[]>,
+      Call.ByName(`${SERVICE}.TraitMap`) as Promise<Record<string, TraitInfo>>,
     ]);
     const loaded = enforceExclusivity(
       (list ?? []).map((e) => {
@@ -333,7 +376,7 @@ export default function App() {
         // A number that is not the level's own was put there by someone - by hand
         // in Config.json, or on a level this edit has since left - so it counts as
         // typed and stops following the level.
-        const vanilla = skillMap?.[e.Key.toUpperCase()]?.Levels?.[e.Level - 1];
+        const vanilla = traitMap?.[e.Key.toUpperCase()]?.Levels?.[e.Level - 1];
         return {
           ...e,
           Values: values,
@@ -342,7 +385,7 @@ export default function App() {
       }),
     );
     setEdits(loaded);
-    setSkills(skillMap ?? {});
+    setTraits(traitMap ?? {});
   }
 
   useEffect(() => {
@@ -364,7 +407,7 @@ export default function App() {
     [lang],
   );
 
-  /** Every skill that has a display name, alphabetical. */
+  /** Every trait that has a display name, alphabetical. */
   const pickerItems: PickerItem[] = useMemo(
     () =>
       Object.entries(names)
@@ -374,7 +417,7 @@ export default function App() {
   );
 
   const shown = useMemo(() => {
-    const label = (e: SkillEdit) => names[e.Key] ?? e.Key;
+    const label = (e: SigilTrait) => names[e.Key] ?? e.Key;
     return edits
       .map((edit, index) => ({ edit, index }))
       .sort((a, b) => {
@@ -397,7 +440,7 @@ export default function App() {
   }
 
   /** Replace one edit, then re-apply the invariant around it. */
-  function update(rowIndex: number, patch: Partial<SkillEdit>) {
+  function update(rowIndex: number, patch: Partial<SigilTrait>) {
     const next = edits.map((item, i) =>
       i === rowIndex ? { ...item, ...patch } : item,
     );
@@ -414,7 +457,7 @@ export default function App() {
   */
   function changeLevel(rowIndex: number, level: number) {
     const edit = edits[rowIndex];
-    const now = skills[edit.Key.toUpperCase()]?.Levels?.[level - 1];
+    const now = traits[edit.Key.toUpperCase()]?.Levels?.[level - 1];
     update(rowIndex, { Level: level, Values: valuesForLevel(edit.Values, edit.Typed, now) });
   }
 
@@ -423,9 +466,9 @@ export default function App() {
   }
 
   /*
-    A new edit starts from the skill's own vanilla LevelValue1..10 rather than
+    A new edit starts from the trait's own vanilla LevelValue1..10 rather than
     zeros, so the only thing to change is the number being tuned, and on the level
-    that skill keeps its values on - which is not 15 for every skill. Unknown keys
+    that trait keeps its values on - which is not 15 for every trait. Unknown keys
     fall back to the old behaviour.
   */
   function add() {
@@ -433,14 +476,14 @@ export default function App() {
     const key = newKey.toUpperCase();
     // The row of the level the edit starts on, not some other level's numbers:
     // leaving every slot alone has to write the game's own row back untouched.
-    const level = skills[key]?.Default ?? 15;
+    const level = traits[key]?.Default ?? 15;
     const next = [
       ...edits,
       {
         Enabled: true,
         Key: newKey,
         Level: level,
-        Values: pad(skills[key]?.Levels?.[level - 1] ?? []),
+        Values: pad(traits[key]?.Levels?.[level - 1] ?? []),
         // Nothing is typed yet: every slot starts out as the level's own numbers,
         // so they all follow the level until someone sets one.
         Typed: Array.from({ length: SLOTS }, () => false),
@@ -460,7 +503,7 @@ export default function App() {
     and one live apply, and only a list that cannot be accepted at all comes back
     as a failure worth interrupting for.
   */
-  function commit(next: SkillEdit[]) {
+  function commit(next: SigilTrait[]) {
     setEdits(next);
     Call.ByName(`${SERVICE}.SaveEdits`, next).catch((err) =>
       setError({ title: MESSAGES[lang].writeFailed, detail: String(err) }),
@@ -468,7 +511,7 @@ export default function App() {
   }
 
   /*
-    The skill's own explanation, with each {N} rewritten as the slot it belongs to.
+    The trait's own explanation, with each {N} rewritten as the slot it belongs to.
 
     The game's placeholders are 0-based ({0} is the first value); the row shows
     numbers, so the tooltip says {1} for the first one and lets the reader count
@@ -491,28 +534,41 @@ export default function App() {
         the install row went away. Below it the rows own everything.
       */}
       <div className="flex shrink-0 items-center gap-2 border-b pb-4">
-        <h1 className="w-28 shrink-0 text-sm font-semibold whitespace-nowrap">
+        {/*
+          Natural width: the old fixed 112px was there to line this label up with
+          the install row's label, and with that row gone it only left a hole
+          between the count and the picker.
+        */}
+        <h1 className="shrink-0 text-sm font-semibold whitespace-nowrap">
           {t.title(enabledCount, edits.length)}
         </h1>
 
         <div className="min-w-0 flex-1">
-          <SkillPicker
+          <TraitPicker
             items={pickerItems}
             value={newKey}
-            placeholder={t.pickSkill}
-            searchPlaceholder={t.searchSkill}
+            placeholder={t.pickTrait}
+            searchPlaceholder={t.searchTrait}
             emptyLabel={t.noMatch}
             onSelect={setNewKey}
           />
         </div>
+
+        {/* Adds what the picker shows, so it sits next to the picker rather than
+            out at the end of the row. No fixed width: the label is two characters
+            in every language, and a reserved 108px was mostly empty button. */}
+        <Button onClick={add} disabled={!newKey}>
+          {t.add}
+        </Button>
 
         {/*
           One joined group: ButtonGroup squares off everything but the outer
           corners and drops the inner borders, so the three read as one control.
           The label is each language's own short form, so it never needs
           translating, and the chosen one keeps the filled (primary) fill.
+          Held off the Add button: adding and switching language are unrelated.
         */}
-        <ButtonGroup>
+        <ButtonGroup className="ml-2">
           {LANGS.map((code) => (
             <Button
               key={code}
@@ -528,10 +584,6 @@ export default function App() {
             </Button>
           ))}
         </ButtonGroup>
-
-        <Button onClick={add} disabled={!newKey} className="w-[108px] shrink-0">
-          {t.add}
-        </Button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -583,21 +635,16 @@ export default function App() {
 
                 <LevelInput
                   level={edit.Level}
-                  min={skills[edit.Key.toUpperCase()]?.Min ?? 1}
-                  max={skills[edit.Key.toUpperCase()]?.Max ?? 15}
+                  min={traits[edit.Key.toUpperCase()]?.Min ?? 1}
+                  max={traits[edit.Key.toUpperCase()]?.Max ?? 15}
                   label={t.level}
                   onChange={(level) => changeLevel(index, level)}
                 />
 
-                {/*
-                  Keyed by the level so a half-typed entry is dropped when the level
-                  moves: the number being typed was for the level it was typed on.
-                */}
                 <ValueSlots
-                  key={edit.Level}
                   values={edit.Values}
                   typed={edit.Typed}
-                  defaults={skills[edit.Key.toUpperCase()]?.Levels?.[edit.Level - 1]}
+                  defaults={traits[edit.Key.toUpperCase()]?.Levels?.[edit.Level - 1]}
                   onChange={(values, typed) => update(index, { Values: values, Typed: typed })}
                 />
 

@@ -1,12 +1,12 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Copies the built mod folder into Reloaded-II\Mods\GBFR.SkillEdit.
+    Copies the built mod folder into Reloaded-II\Mods\GBFR.SigilEdit.
 
 .DESCRIPTION
     The deployment is a folder copy, because the folder *is* the mod: the DLL,
     its manifest and the tool that edits it. Run build.ps1 -Package first - the
-    copy comes from dist\GBFR.SkillEdit\, which is exactly what the release zip
+    copy comes from dist\GBFR.SigilEdit\, which is exactly what the release zip
     holds.
 
     The tool is relaunched from the deployed copy afterwards, so what is running
@@ -19,29 +19,29 @@
     ./deploy.ps1
 
 .EXAMPLE
-    ./deploy.ps1 -Target 'D:\Reloaded-II\Mods\GBFR.SkillEdit'
+    ./deploy.ps1 -Target 'D:\Reloaded-II\Mods\GBFR.SigilEdit'
 #>
 [CmdletBinding()]
 param(
-    [string]$Target = 'C:\Users\baago\Desktop\Reloaded-II\Mods\GBFR.SkillEdit'
+    [string]$Target = 'C:\Users\baago\Desktop\Reloaded-II\Mods\GBFR.SigilEdit'
 )
 
 $ErrorActionPreference = 'Stop'
 
 $root   = $PSScriptRoot
-$source = Join-Path $root 'dist\GBFR.SkillEdit'
+$source = Join-Path $root 'dist\GBFR.SigilEdit'
 
 # 0. Refuse a target that is not the mod folder: the replacement below is a
 # recursive delete, so a mistyped -Target must never hit an unrelated path.
 $resolvedTarget = [IO.Path]::GetFullPath($Target).TrimEnd('\')
-if (-not $resolvedTarget.EndsWith('\GBFR.SkillEdit', [StringComparison]::OrdinalIgnoreCase)) {
+if (-not $resolvedTarget.EndsWith('\GBFR.SigilEdit', [StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to deploy to a path that is not the mod folder: $Target"
 }
 
 # 1. The built folder has to be complete. Keep in sync with the files build.ps1
-# copies into dist\GBFR.SkillEdit\ - a mod missing its manifest or its DLL looks
+# copies into dist\GBFR.SigilEdit\ - a mod missing its manifest or its DLL looks
 # deployed and then does nothing.
-foreach ($required in @('GBFR.SkillEdit.dll', 'ModConfig.json', 'SkillEdit.exe')) {
+foreach ($required in @('GBFR.SigilEdit.dll', 'ModConfig.json', 'SigilEdit.exe')) {
     if (-not (Test-Path -LiteralPath (Join-Path $source $required) -PathType Leaf)) {
         throw "Built mod folder is incomplete: $source (missing $required). Run build.ps1 -Package first."
     }
@@ -55,10 +55,10 @@ if (Get-Process -Name 'granblue_fantasy_relink' -ErrorAction SilentlyContinue) {
 
 # 3. The tool is one of the files being replaced, so stop it and wait until it is
 # really gone rather than racing its shutdown.
-Get-Process -Name 'SkillEdit' -ErrorAction SilentlyContinue |
+Get-Process -Name 'SigilEdit' -ErrorAction SilentlyContinue |
     Stop-Process -Force -ErrorAction SilentlyContinue
 $deadline = (Get-Date).AddSeconds(15)
-while ((Get-Process -Name 'SkillEdit' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+while ((Get-Process -Name 'SigilEdit' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 200
 }
 
@@ -71,5 +71,5 @@ New-Item -ItemType Directory -Path (Split-Path -Parent $Target) -Force | Out-Nul
 Copy-Item -Path $source -Destination (Split-Path -Parent $Target) -Recurse -Force
 
 # 5. Reopen the editor from the copy that was just deployed.
-Start-Process -FilePath (Join-Path $Target 'SkillEdit.exe')
+Start-Process -FilePath (Join-Path $Target 'SigilEdit.exe')
 Write-Output "Deployed build to: $Target"

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace GBFR.SkillEdit;
+namespace GBFR.SigilEdit;
 
 /// <summary>
 /// One skill-status override: which row, and the LevelValue slots to write.
@@ -11,7 +11,7 @@ namespace GBFR.SkillEdit;
 /// does not use are simply left at zero. Descriptions are all the information
 /// available about a slot's meaning, so it is not modelled here.
 /// </summary>
-public class SkillEdit
+public class SigilTrait
 {
     /// <summary>How many LevelValue slots the table has.</summary>
     public const int LevelValueCount = 10;
@@ -29,7 +29,7 @@ public class SkillEdit
 }
 
 /// <summary>
-/// The mod's Config.json. Written by the standalone SkillEditTool, read here at
+/// The mod's Config.json. Written by the standalone SigilEditTool, read here at
 /// startup.
 ///
 /// This type deliberately implements NO Reloaded configuration interface: doing so
@@ -40,7 +40,7 @@ public class SkillEdit
 public class Config
 {
     [JsonPropertyName("Edits")]
-    public List<SkillEdit> Edits { get; set; } = [];
+    public List<SigilTrait> Edits { get; set; } = [];
 
     private static readonly JsonSerializerOptions Options = new()
     {

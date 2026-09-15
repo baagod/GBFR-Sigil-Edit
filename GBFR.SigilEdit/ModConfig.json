@@ -1,0 +1,28 @@
+{
+  "ModId": "GBFR.SigilEdit",
+  "ModName": "GBFR Sigil Edit",
+  "ModAuthor": "baago",
+  "ModVersion": "1.1.0",
+  "ModDescription": "Edits the traits a sigil carries - the game's own data calls them skills (table skill_status), which is what the old name referred to. Ships no .tbl: the table is read from the game archive, and only the rows you name are changed. SigilEdit.exe writes %APPDATA%\\GBFR.SigilEdit\\Config.json and signals a named event, and the running game re-applies the list to the table it already has in memory.",
+  "ModDll": "GBFR.SigilEdit.dll",
+  "ModIcon": "",
+  "ModR2RManagedDll32": "",
+  "ModR2RManagedDll64": "",
+  "ModNativeDll32": "",
+  "ModNativeDll64": "",
+  "Tags": [],
+  "CanUnload": true,
+  "HasExports": false,
+  "IsLibrary": false,
+  "ReleaseMetadataFileName": "GBFR.SigilEdit.ReleaseMetadata.json",
+  "PluginData": {},
+  "IsUniversalMod": false,
+  "ModDependencies": [
+    "gbfrelink.utility.manager"
+  ],
+  "OptionalDependencies": [],
+  "SupportedAppId": [
+    "granblue_fantasy_relink.exe"
+  ],
+  "ProjectUrl": ""
+}

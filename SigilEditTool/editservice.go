@@ -17,10 +17,10 @@ import (
 // how many numbers describe one edit.
 const LevelValueCount = 10
 
-// SkillEdit mirrors the mod's Config.cs SkillEdit: one skill_status row override.
+// SigilTrait mirrors the mod's Config.cs SigilTrait: one skill_status row override.
 // Values maps positionally onto LevelValue1..10, which is what the skill's own
 // description uses as {0}, {1}, {2} ...
-type SkillEdit struct {
+type SigilTrait struct {
 	Enabled bool      `json:"Enabled"`
 	Key     string    `json:"Key"`
 	Level   int       `json:"Level"`
@@ -29,20 +29,20 @@ type SkillEdit struct {
 
 // Config mirrors the mod's Config.cs. The mod deserialises exactly this shape.
 type Config struct {
-	Edits []SkillEdit `json:"Edits"`
+	Edits []SigilTrait `json:"Edits"`
 }
 
 // modFolder is both the Reloaded-II folder name and the mod's ModId, matching
 // this project's convention (GBFR.PreEquippedSigils does the same). It is not a
 // Go identifier so it keeps its original casing.
-const modFolder = "GBFR.SkillEdit"
+const modFolder = "GBFR.SigilEdit"
 
 // hotApplyEventName is the win32 event the running mod waits on. The tool sets
 // it after writing Config.json, and the mod - which lives inside the game -
 // then re-applies the edit list to the game's in-memory table, without a
 // restart. The string is shared with HotApply.EventName in the mod's C#
 // source; nothing links the two, so a rename has to touch both files.
-const hotApplyEventName = "GBFR.SkillEdit.HotApply"
+const hotApplyEventName = "GBFR.SigilEdit.HotApply"
 
 // debounceDelay is how long the edit list has to sit still before it is written:
 // a burst of keystrokes ends in one Config.json write and one live apply,
@@ -52,7 +52,7 @@ const debounceDelay = 500 * time.Millisecond
 // saveFailedEvent carries a failed write to the frontend, which shows it in the
 // same dialog an immediate failure gets. The name is mirrored in App.tsx;
 // nothing links the two, so a rename has to touch both files.
-const saveFailedEvent = "GBFR.SkillEdit.SaveFailed"
+const saveFailedEvent = "GBFR.SigilEdit.SaveFailed"
 
 // signalHotApply wakes the mod, when one is running to wake. Everything else -
 // the game closed, the mod disabled, its event not created yet - is the normal
@@ -78,7 +78,7 @@ func signalHotApply(name string) bool {
 // last state on screen, never a mixture of keystrokes.
 type EditService struct {
 	mu      sync.Mutex
-	pending []SkillEdit
+	pending []SigilTrait
 	timer   *time.Timer
 }
 
@@ -113,43 +113,44 @@ func (s *EditService) NameMap(lang string) map[string]string {
 	return nameTables[LangZH]
 }
 
-// SkillInfo is one row of the generated skillinfo.json: every level of a skill the
+// TraitInfo is one row of the generated skillinfo.json: every level of a trait the
 // tool offers, so a newly added edit starts from the game's own numbers instead of
 // zeros, and so the value shown for a slot - and the one an emptied box writes back
 // - is the game's number for the level the edit names.
 //
 // Levels is indexed by level - 1: Levels[3] is the row whose Level field is 4.
 //
-// Default is the level a new edit should start on: the skill's own maximum when
-// that is a normal 20 or less, otherwise the usual 15, except for the few skills
+// Default is the level a new edit should start on: the trait's own maximum when
+// that is a normal 20 or less, otherwise the usual 15, except for the few traits
 // whose values only exist higher up. Min and Max are what the level field is
-// clamped to - Min is the lowest level carrying numbers, so a skill whose numbers
+// clamped to - Min is the lowest level carrying numbers, so a trait whose numbers
 // exist on one level only cannot be moved off it.
-type SkillInfo struct {
+type TraitInfo struct {
 	Levels  [][]float64 `json:"Levels"`
 	Default int         `json:"Default"`
 	Max     int         `json:"Max"`
 	Min     int         `json:"Min"`
 }
 
-// skillInfo maps a skill_status Key to that skill's own numbers and levels.
-// Populated once from the embedded skillinfo.json.
-var skillInfo = loadSkillInfo()
+// traitInfo maps a skill_status Key - a trait hash, the game calls these rows
+// skills - to that trait's own numbers and levels. Populated once from the
+// embedded skillinfo.json.
+var traitInfo = loadTraitInfo()
 
-func loadSkillInfo() map[string]SkillInfo {
-	info := make(map[string]SkillInfo)
+func loadTraitInfo() map[string]TraitInfo {
+	info := make(map[string]TraitInfo)
 	_ = json.Unmarshal(embeddedSkillInfo, &info)
 	return info
 }
 
-// SkillMap returns the whole hash -> skill table, so the frontend can resolve a
+// TraitMap returns the whole hash -> trait table, so the frontend can resolve a
 // new edit's starting values and its level bound locally instead of one call per
 // row.
-func (s *EditService) SkillMap() map[string]SkillInfo {
-	return skillInfo
+func (s *EditService) TraitMap() map[string]TraitInfo {
+	return traitInfo
 }
 
-// explainTables holds, per language, the game's own explanation of each skill.
+// explainTables holds, per language, the game's own explanation of each trait.
 // The text contains {N} placeholders standing for LevelValue(N+1) - the numbers
 // this tool edits - which is what makes a slot's meaning knowable at all.
 var explainTables = map[string]map[string]string{
@@ -176,14 +177,14 @@ func padValues(values []float64) []float64 {
 }
 
 // defaultEdits is what the tool starts from when no config exists yet.
-func defaultEdits() []SkillEdit {
-	return []SkillEdit{
+func defaultEdits() []SigilTrait {
+	return []SigilTrait{
 		{Enabled: true, Key: "06719232", Level: 15, Values: padValues([]float64{30, 1, 20})},
 		{Enabled: true, Key: "29B07BEB", Level: 15, Values: padValues([]float64{2})},
 	}
 }
 
-// configDir is the folder the tool and the mod share: %APPDATA%\GBFR.SkillEdit.
+// configDir is the folder the tool and the mod share: %APPDATA%\GBFR.SigilEdit.
 //
 // Not %TEMP%: the edit list is the user's own data, and a disk cleanup deletes
 // what lives there. Not the mod's own folder under Mods\ either: naming that
@@ -200,7 +201,7 @@ func configDir() string {
 }
 
 // configPath is the file the mod loads its edit list from, in the
-// %APPDATA%\GBFR.SkillEdit folder that is the tool's and the mod's shared state.
+// %APPDATA%\GBFR.SigilEdit folder that is the tool's and the mod's shared state.
 func configPath() string {
 	dir := configDir()
 	if dir == "" {
@@ -211,7 +212,7 @@ func configPath() string {
 
 // LoadEdits reads the current edit list from Config.json, falling back to the
 // built-in defaults when there is nothing to read.
-func (s *EditService) LoadEdits() []SkillEdit {
+func (s *EditService) LoadEdits() []SigilTrait {
 	edits := defaultEdits()
 	if raw, err := os.ReadFile(configPath()); err == nil {
 		var cfg Config
@@ -237,7 +238,7 @@ func (s *EditService) LoadEdits() []SkillEdit {
 //
 // Only "this list cannot be accepted at all" comes back as an error; a write
 // that fails when the timer fires has no caller left to return to and is logged.
-func (s *EditService) SaveEdits(edits []SkillEdit) (string, error) {
+func (s *EditService) SaveEdits(edits []SigilTrait) (string, error) {
 	if configPath() == "" {
 		return "", fmt.Errorf("could not resolve the %%APPDATA%% config folder")
 	}
@@ -260,13 +261,13 @@ func (s *EditService) SaveEdits(edits []SkillEdit) (string, error) {
 	return fmt.Sprintf("%d 条改动待写入", len(edits)), nil
 }
 
-// writeEdits puts the list where the mod reads it: %APPDATA%\GBFR.SkillEdit\
+// writeEdits puts the list where the mod reads it: %APPDATA%\GBFR.SigilEdit\
 // Config.json, the folder neither side has to ask the other about.
 //
 // The mod binary is NOT touched - it ships beside this tool inside
-// Reloaded-II\Mods\GBFR.SkillEdit\, and only Config.json changes from editing.
+// Reloaded-II\Mods\GBFR.SigilEdit\, and only Config.json changes from editing.
 // Putting it there is ship-time packaging, not something a keystroke does.
-func writeEdits(edits []SkillEdit) error {
+func writeEdits(edits []SigilTrait) error {
 	cfgPath := configPath()
 	if cfgPath == "" {
 		return fmt.Errorf("could not resolve the %%APPDATA%% config folder")
@@ -320,9 +321,9 @@ func (s *EditService) flushNow() {
 // is logged - the next edit re-arms the timer with the newest list, and that is
 // the retry - and pushed to the frontend, because a list that never reached the
 // disk looks exactly like the mod doing nothing.
-func (s *EditService) publish(edits []SkillEdit) {
+func (s *EditService) publish(edits []SigilTrait) {
 	if err := writeEdits(edits); err != nil {
-		log.Printf("GBFR.SkillEdit: %v", err)
+		log.Printf("GBFR.SigilEdit: %v", err)
 		// Get is the app this process is running, and nil in a test, where
 		// there is no frontend to tell.
 		if app := application.Get(); app != nil {

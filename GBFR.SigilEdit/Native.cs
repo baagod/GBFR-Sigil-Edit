@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace GBFR.SkillEdit;
+namespace GBFR.SigilEdit;
 
 /// <summary>
 /// The handful of kernel32 memory calls the hot apply needs.

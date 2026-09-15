@@ -8,6 +8,6 @@ export {
 };
 
 export {
-    SkillEdit,
-    SkillInfo
+    SigilTrait,
+    TraitInfo
 } from "./models.js";

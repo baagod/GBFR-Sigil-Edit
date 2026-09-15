@@ -38,7 +38,7 @@ func hermeticHome(t *testing.T) string {
 
 /*
 SaveEdits is the whole write path now: the mod ships inside
-Reloaded-II\Mods\GBFR.SkillEdit\ beside this tool, so editing only ever writes
+Reloaded-II\Mods\GBFR.SigilEdit\ beside this tool, so editing only ever writes
 the config the mod reads. Writing anywhere else hands the running game a list
 that is not the one on screen, which looks exactly like the mod doing nothing.
 
@@ -49,7 +49,7 @@ func TestSaveEditsWritesConfigWhereTheModReadsIt(t *testing.T) {
 	hermeticHome(t)
 
 	service := &EditService{}
-	edits := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
+	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
 	if _, err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestSaveEditsWaitsForTheEditingToStop(t *testing.T) {
 	service := &EditService{}
 	cfgPath := appDataConfig(t, "Config.json")
 
-	first := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
+	first := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
 	if _, err := service.SaveEdits(first); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestSaveEditsWaitsForTheEditingToStop(t *testing.T) {
 
 	// A second keystroke restarts the window: the first one must not have left a
 	// write behind it, and neither may this one yet.
-	last := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{300}}}
+	last := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{300}}}
 	if _, err := service.SaveEdits(last); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestSaveEditsSurvivesAWriteItCannotMake(t *testing.T) {
 	}
 
 	service := &EditService{}
-	edits := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
+	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
 	if _, err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestLoadEditsFallsBackToDefaults(t *testing.T) {
 // picker row), so assert every language describes the same set of skills as the
 // values - and the same set as each other.
 func TestSkillTablesAgree(t *testing.T) {
-	if len(skillInfo) == 0 {
+	if len(traitInfo) == 0 {
 		t.Fatal("skillinfo.json did not load")
 	}
 	if len(nameTables) != 3 {
@@ -218,12 +218,12 @@ func TestSkillTablesAgree(t *testing.T) {
 		if len(names) == 0 {
 			t.Fatalf("the %s name table is empty", lang)
 		}
-		if len(names) != len(skillInfo) {
+		if len(names) != len(traitInfo) {
 			t.Fatalf("%s: key count differs from the skill table: names %d, skills %d",
-				lang, len(names), len(skillInfo))
+				lang, len(names), len(traitInfo))
 		}
 		for key := range names {
-			if _, ok := skillInfo[key]; !ok {
+			if _, ok := traitInfo[key]; !ok {
 				t.Fatalf("%s: skill %s has a name but no values", lang, key)
 			}
 		}
@@ -237,7 +237,7 @@ func TestSkillTablesAgree(t *testing.T) {
 			}
 		}
 	}
-	for key, info := range skillInfo {
+	for key, info := range traitInfo {
 		// One row per level, each carrying the ten LevelValue slots: the level an
 		// edit names has to have a row of its own, or a slot's placeholder (and the
 		// value an emptied box writes back) would come from a different level.
@@ -285,7 +285,7 @@ func TestNameMapFallsBack(t *testing.T) {
 // level 14 would put a placeholder - and a written-back value - of 10/3/20 on a row
 // the game says is empty.
 func TestKnownSkillDefault(t *testing.T) {
-	info, ok := skillInfo["06719232"]
+	info, ok := traitInfo["06719232"]
 	if !ok {
 		t.Fatal("06719232 (黑龙的咒印) missing from skillinfo.json")
 	}
@@ -307,10 +307,10 @@ func TestKnownSkillDefault(t *testing.T) {
 // A skill's default level has to be one it actually has values on, and the level
 // field is only ever clamped to a level that exists.
 func TestLevelRangesAreUsable(t *testing.T) {
-	if len(skillInfo) == 0 {
+	if len(traitInfo) == 0 {
 		t.Fatal("skillinfo.json did not load")
 	}
-	for hash, info := range skillInfo {
+	for hash, info := range traitInfo {
 		if info.Min < 1 || info.Default < 1 {
 			t.Fatalf("%s has a level below 1: %+v", hash, info)
 		}
@@ -351,7 +351,7 @@ func TestLevelRangesAreUsable(t *testing.T) {
 		{"70395731", 1, 15, 30, "30 levels: default to the usual 15, free from 1 to 30"},
 		{"CAC6AFF2", 1, 1, 1, "1 level: default to it, not to 15"},
 	} {
-		got, ok := skillInfo[want.hash]
+		got, ok := traitInfo[want.hash]
 		if !ok {
 			t.Fatalf("%s missing from the skill table", want.hash)
 		}
@@ -365,7 +365,7 @@ func TestLevelRangesAreUsable(t *testing.T) {
 // The rows that are not really skills must be absent from every table.
 func TestExcludedRowsAreGone(t *testing.T) {
 	for _, hash := range []string{"9AD8B5E6", "0FBA47E8", "A4D6B880", "CDEB73F6"} {
-		if _, ok := skillInfo[hash]; ok {
+		if _, ok := traitInfo[hash]; ok {
 			t.Fatalf("%s should not be offered", hash)
 		}
 		for lang, names := range nameTables {
@@ -377,7 +377,7 @@ func TestExcludedRowsAreGone(t *testing.T) {
 }
 
 func TestSignalHotApplyWithoutTheGame(t *testing.T) {
-	name := fmt.Sprintf("GBFR.SkillEdit.HotApply.Test.Absent.%d", os.Getpid())
+	name := fmt.Sprintf("GBFR.SigilEdit.HotApply.Test.Absent.%d", os.Getpid())
 	if signalHotApply(name) {
 		t.Fatal("signalled an event that should not exist")
 	}
@@ -404,7 +404,7 @@ func TestSaveEditsSignalsTheRunningMod(t *testing.T) {
 	_ = windows.ResetEvent(event)
 
 	service := &EditService{}
-	edits := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
+	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
 	if _, err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}

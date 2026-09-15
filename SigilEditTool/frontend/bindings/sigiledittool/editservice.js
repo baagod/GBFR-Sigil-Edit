@@ -34,7 +34,7 @@ export function ExplainMap(lang) {
 /**
  * LoadEdits reads the current edit list from Config.json, falling back to the
  * built-in defaults when there is nothing to read.
- * @returns {$CancellablePromise<$models.SkillEdit[]>}
+ * @returns {$CancellablePromise<$models.SigilTrait[]>}
  */
 export function LoadEdits() {
     return $Call.ByID(3740291038).then(/** @type {($result: any) => any} */(($result) => {
@@ -62,13 +62,13 @@ export function NameMap(lang) {
  * apply.
  * 
  * The write is deliberately not done here. Every call hands over the whole state
- * and resets the one-second timer; whatever the timer sees when it finally fires
+ * and resets the debounce timer; whatever the timer sees when it finally fires
  * is the last state on screen. The frontend stays dumb - it calls this on every
  * change and never waits for an answer.
  * 
  * Only "this list cannot be accepted at all" comes back as an error; a write
  * that fails when the timer fires has no caller left to return to and is logged.
- * @param {$models.SkillEdit[]} edits
+ * @param {$models.SigilTrait[]} edits
  * @returns {$CancellablePromise<string>}
  */
 export function SaveEdits(edits) {
@@ -76,20 +76,20 @@ export function SaveEdits(edits) {
 }
 
 /**
- * SkillMap returns the whole hash -> skill table, so the frontend can resolve a
+ * TraitMap returns the whole hash -> trait table, so the frontend can resolve a
  * new edit's starting values and its level bound locally instead of one call per
  * row.
- * @returns {$CancellablePromise<{ [_ in string]?: $models.SkillInfo }>}
+ * @returns {$CancellablePromise<{ [_ in string]?: $models.TraitInfo }>}
  */
-export function SkillMap() {
-    return $Call.ByID(1925768292).then(/** @type {($result: any) => any} */(($result) => {
+export function TraitMap() {
+    return $Call.ByID(303317903).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType4($result);
     }));
 }
 
 // Private type creation functions
 const $$createType0 = $Create.Map($Create.Any, $Create.Any);
-const $$createType1 = $models.SkillEdit.createFrom;
+const $$createType1 = $models.SigilTrait.createFrom;
 const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = $models.SkillInfo.createFrom;
+const $$createType3 = $models.TraitInfo.createFrom;
 const $$createType4 = $Create.Map($Create.Any, $$createType3);

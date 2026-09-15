@@ -5,7 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace GBFR.SkillEdit;
+namespace GBFR.SigilEdit;
 
 /// <summary>
 /// Locates the game's in-memory copies of the skill_status table, and overwrites them.
@@ -167,7 +167,7 @@ internal static class TableLocator
             {
                 foreach (var region in workerRegions)
                     WalkRegion(region, buffer, ref throttled, anchors, found);
-            }) { IsBackground = true, Name = "GBFR.SkillEdit scan" };
+            }) { IsBackground = true, Name = "GBFR.SigilEdit scan" };
             thread.Start();
             threads.Add(thread);
         }

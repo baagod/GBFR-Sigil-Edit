@@ -2,7 +2,7 @@ using gbfrelink.utility.manager.Interfaces;
 using Reloaded.Mod.Interfaces;
 using Reloaded.Mod.Interfaces.Internal;
 
-namespace GBFR.SkillEdit;
+namespace GBFR.SigilEdit;
 
 /// <summary>
 /// Patches rows of skill_status.tbl at startup, driven by a user-editable
@@ -45,10 +45,10 @@ public class Mod : IMod
     private const int LevelOffset = 48;
 
     private const string ConfigFileName = "Config.json";
-    private const string ModId = "GBFR.SkillEdit";
-    private const string LogFileName = "GBFR.SkillEdit.log";
+    private const string ModId = "GBFR.SigilEdit";
+    private const string LogFileName = "GBFR.SigilEdit.log";
 
-    // The edit list lives in %APPDATA%\GBFR.SkillEdit, which the tool writes and
+    // The edit list lives in %APPDATA%\GBFR.SigilEdit, which the tool writes and
     // this reads. Chosen over %TEMP%, which a disk cleanup empties - the edit list
     // is the user's data - and over the mod's own folder under Mods\, which would
     // mean two places holding state. ApplicationData cannot fail to resolve, so
@@ -78,7 +78,7 @@ public class Mod : IMod
 
         UseModDirectoryForLog();
 
-        Log("=== GBFR.SkillEdit start (config-driven) ===");
+        Log("=== GBFR.SigilEdit start (config-driven) ===");
 
         try
         {
@@ -258,15 +258,15 @@ public class Mod : IMod
             if (BitConverter.ToUInt32(data, row + LevelOffset) != level)
                 continue;
 
-            var before = string.Join(" / ", Enumerable.Range(0, SkillEdit.LevelValueCount)
+            var before = string.Join(" / ", Enumerable.Range(0, SigilTrait.LevelValueCount)
                 .Select(i => BitConverter.ToSingle(data, row + i * 4)));
-            var after = string.Join(" / ", Enumerable.Range(0, SkillEdit.LevelValueCount)
+            var after = string.Join(" / ", Enumerable.Range(0, SigilTrait.LevelValueCount)
                 .Select(i => i < values.Length ? values[i] : 0f));
 
             Log($"  {key:X8} L{level} @0x{row:X}: was {before}");
             Log($"  {key:X8} L{level} @0x{row:X}: now {after}");
 
-            for (var i = 0; i < SkillEdit.LevelValueCount; i++)
+            for (var i = 0; i < SigilTrait.LevelValueCount; i++)
             {
                 var value = i < values.Length ? values[i] : 0f;
                 BitConverter.GetBytes(value).CopyTo(data, row + i * 4);
