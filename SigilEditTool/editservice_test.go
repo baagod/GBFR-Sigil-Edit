@@ -50,7 +50,7 @@ func TestSaveEditsWritesConfigWhereTheModReadsIt(t *testing.T) {
 
 	service := &EditService{}
 	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
-	if _, err := service.SaveEdits(edits); err != nil {
+	if err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
 	service.flushNow()
@@ -82,7 +82,7 @@ func TestSaveEditsWaitsForTheEditingToStop(t *testing.T) {
 	cfgPath := appDataConfig(t, "Config.json")
 
 	first := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
-	if _, err := service.SaveEdits(first); err != nil {
+	if err := service.SaveEdits(first); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
 	time.Sleep(debounceDelay / 4)
@@ -93,7 +93,7 @@ func TestSaveEditsWaitsForTheEditingToStop(t *testing.T) {
 	// A second keystroke restarts the window: the first one must not have left a
 	// write behind it, and neither may this one yet.
 	last := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{300}}}
-	if _, err := service.SaveEdits(last); err != nil {
+	if err := service.SaveEdits(last); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
 	time.Sleep(debounceDelay / 4)
@@ -149,7 +149,7 @@ func TestSaveEditsSurvivesAWriteItCannotMake(t *testing.T) {
 
 	service := &EditService{}
 	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
-	if _, err := service.SaveEdits(edits); err != nil {
+	if err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
 	// Accepting the list does not depend on the disk, so the write is what fails -
@@ -405,7 +405,7 @@ func TestSaveEditsSignalsTheRunningMod(t *testing.T) {
 
 	service := &EditService{}
 	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
-	if _, err := service.SaveEdits(edits); err != nil {
+	if err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
 	service.flushNow()

@@ -234,13 +234,14 @@ func (s *EditService) LoadEdits() []SigilTrait {
 // The write is deliberately not done here. Every call hands over the whole state
 // and resets the debounce timer; whatever the timer sees when it finally fires
 // is the last state on screen. The frontend stays dumb - it calls this on every
-// change and never waits for an answer.
+// change and never waits for an answer - so there is no status to hand back.
 //
 // Only "this list cannot be accepted at all" comes back as an error; a write
-// that fails when the timer fires has no caller left to return to and is logged.
-func (s *EditService) SaveEdits(edits []SigilTrait) (string, error) {
+// that fails when the timer fires has no caller left to return to, and is pushed
+// to the frontend instead (see publish).
+func (s *EditService) SaveEdits(edits []SigilTrait) error {
 	if configPath() == "" {
-		return "", fmt.Errorf("could not resolve the %%APPDATA%% config folder")
+		return fmt.Errorf("could not resolve the %%APPDATA%% config folder")
 	}
 
 	for i := range edits {
@@ -255,10 +256,7 @@ func (s *EditService) SaveEdits(edits []SigilTrait) (string, error) {
 	} else {
 		s.timer.Reset(debounceDelay)
 	}
-
-	// Short on purpose: the frontend reports success silently and only the
-	// failure gets a dialog.
-	return fmt.Sprintf("%d 条改动待写入", len(edits)), nil
+	return nil
 }
 
 // writeEdits puts the list where the mod reads it: %APPDATA%\GBFR.SigilEdit\

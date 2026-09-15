@@ -34,3 +34,15 @@ extracted/
 *.db
 sqlite3.exe
 msg_*.json
+
+# The service bindings are generated (`wails3 generate bindings`) and nothing in
+# src imports them: the frontend talks to the backend by name, through
+# Call.ByName and Events.On. Generated code that nothing reads does not belong in
+# a diff, and ignoring it is what keeps a wails upgrade from carrying a
+# "regenerate bindings" commit.
+#
+# What stays tracked is the two files under
+# frontend/bindings/github.com/wailsapp/wails/v3/internal/: the vite wails plugin
+# imports eventcreate at build time and fails the build without it, so those two
+# have to be in the tree for `npm run build` to work with no wails CLI installed.
+SigilEditTool/frontend/bindings/sigiledittool/
