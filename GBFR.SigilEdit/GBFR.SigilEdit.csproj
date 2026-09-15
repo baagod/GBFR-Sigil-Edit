@@ -6,7 +6,6 @@
     <AssemblyName>GBFR.SigilEdit</AssemblyName>
     <RootNamespace>GBFR.SigilEdit</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>

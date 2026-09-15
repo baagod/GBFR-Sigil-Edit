@@ -6,8 +6,7 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build --mode production",
-        "typecheck": "tsc --noEmit",
-        "preview": "vite preview"
+        "typecheck": "tsc --noEmit"
     },
     "dependencies": {
         "@base-ui/react": "^1.8.0",

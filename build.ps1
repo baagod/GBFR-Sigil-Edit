@@ -137,7 +137,6 @@ if ($Package) {
 
     $releaseDir = Join-Path $root 'dist'
     $modOut     = Join-Path $releaseDir 'GBFR.SigilEdit'
-    $staging    = Join-Path $releaseDir 'staging'
     $zip        = Join-Path $releaseDir "GBFR.SigilEdit-$version.zip"
 
     # The mod folder exactly as Reloaded-II sees it. The tool rides along with the
@@ -152,18 +151,15 @@ if ($Package) {
     Copy-Item -LiteralPath $modCfg -Destination $modOut -Force
     Copy-Item -LiteralPath $exe -Destination $modOut -Force
 
-    # Staged rather than zipped in place: the archive has to hold the mod folder
-    # and the three documents, and nothing else that is lying around in dist\.
-    Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Path $staging -Force | Out-Null
-    Copy-Item -LiteralPath $modOut -Destination $staging -Recurse -Force
-    Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $staging -Force
-    Copy-Item -LiteralPath (Join-Path $root 'README.zh-CN.md') -Destination $staging -Force
-    Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $staging -Force
-
+    # Zipped straight from the pieces rather than through a staging copy: the four
+    # paths are the whole archive, and nothing else in dist\ is dragged in.
+    $documents = @(
+        (Join-Path $root 'README.md'),
+        (Join-Path $root 'README.zh-CN.md'),
+        (Join-Path $root 'LICENSE')
+    )
     Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
-    Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zip
-    Remove-Item -LiteralPath $staging -Recurse -Force
+    Compress-Archive -Path (@($modOut) + $documents) -DestinationPath $zip
 
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     Write-Host ''
