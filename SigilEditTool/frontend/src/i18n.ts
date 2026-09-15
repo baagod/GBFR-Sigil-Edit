@@ -9,9 +9,10 @@
 
   The wording differs per language on purpose: the thing being edited is a trait a
   sigil carries, which the game's own data calls a "skill" (table `skill_status`),
-  so Japanese keeps スキル and English says sigil traits; Chinese labels the list
-  因子选择. The picker's own placeholder is just "..." in every language - the
-  label beside it already says what it is for.
+  so Japanese calls the picker シジル and the asset names stay as the game spells
+  them. The picker's placeholder says what picking does, so the band above the
+  list needs no label of its own; the count of enabled rows sits beside it as bare
+  numbers, with its reading kept in countLabel for the hover and a screen reader.
 */
 
 export const LANGS = ["zh", "en", "ja"] as const;
@@ -44,11 +45,11 @@ type Dict = {
 
 export const MESSAGES: Record<Lang, Dict> = {
   zh: {
-    title: (enabled, total) => `因子选择（${enabled}/${total}）：`,
+    title: (enabled, total) => `因子（${enabled}/${total}）：`,
     empty: "没有改动条目。",
     add: "添加",
-    pickTrait: "...",
-    searchTrait: "搜索因子",
+    pickTrait: "选择...",
+    searchTrait: "搜索",
     noMatch: "没有匹配的因子",
     ok: "确定",
     enable: (name) => `启用 ${name}`,
@@ -58,12 +59,12 @@ export const MESSAGES: Record<Lang, Dict> = {
     writeFailed: "写入失败",
   },
   en: {
-    title: (enabled, total) => `Sigil traits (${enabled}/${total}):`,
+    title: (enabled, total) => `Sigils (${enabled}/${total}):`,
     empty: "No edits yet.",
     add: "Add",
-    pickTrait: "...",
-    searchTrait: "Search traits",
-    noMatch: "No matching trait",
+    pickTrait: "Select...",
+    searchTrait: "Search",
+    noMatch: "No matching sigil",
     ok: "OK",
     enable: (name) => `Enable ${name}`,
     remove: (name) => `Remove ${name}`,
@@ -72,12 +73,12 @@ export const MESSAGES: Record<Lang, Dict> = {
     writeFailed: "Could not write",
   },
   ja: {
-    title: (enabled, total) => `スキル（${enabled}/${total}）：`,
+    title: (enabled, total) => `シジル（${enabled}/${total}）：`,
     empty: "変更はまだありません。",
     add: "追加",
-    pickTrait: "...",
-    searchTrait: "スキル名で検索",
-    noMatch: "一致するスキルがありません",
+    pickTrait: "選択...",
+    searchTrait: "検索",
+    noMatch: "一致するシジルがありません",
     ok: "OK",
     enable: (name) => `${name} を有効にする`,
     remove: (name) => `${name} を削除`,

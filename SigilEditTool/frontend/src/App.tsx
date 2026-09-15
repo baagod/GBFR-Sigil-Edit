@@ -15,6 +15,12 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { TraitPicker, type PickerItem } from "./TraitPicker";
 import { LANGS, LANG_LABEL, MESSAGES, initialLang, rememberLang, type Lang } from "./i18n";
 
@@ -535,9 +541,10 @@ export default function App() {
       */}
       <div className="flex shrink-0 items-center gap-2 border-b pb-4">
         {/*
-          Natural width: the old fixed 112px was there to line this label up with
-          the install row's label, and with that row gone it only left a hole
-          between the count and the picker.
+          The count leads the band - how many rows are on, out of how many there
+          are - and the picker next to it is what adds to that list. Natural width:
+          the label is as long as its own numbers make it, and the picker takes
+          whatever is left.
         */}
         <h1 className="shrink-0 text-sm font-semibold whitespace-nowrap">
           {t.title(enabledCount, edits.length)}
@@ -554,10 +561,25 @@ export default function App() {
           />
         </div>
 
-        {/* Adds what the picker shows, so it sits next to the picker rather than
-            out at the end of the row. No fixed width: the label is two characters
-            in every language, and a reserved 108px was mostly empty button. */}
-        <Button onClick={add} disabled={!newKey}>
+        {/*
+          Adds what the picker shows, so it sits next to the picker rather than
+          out at the end of the row.
+
+          With nothing picked there is nothing to add, and the button says so by
+          going quiet - the outline variant - rather than by being a half
+          transparent filled button, which reads as a washed out call to action.
+          That is the pattern the shadcn docs use for a button that cannot be
+          pressed yet (their disabled examples are outline and secondary).
+
+          Fixed 64px: the label is two characters in every language, so the button
+          stays the same size wherever it is read.
+        */}
+        <Button
+          onClick={add}
+          disabled={!newKey}
+          variant={newKey ? "default" : "outline"}
+          className="w-16"
+        >
           {t.add}
         </Button>
 
@@ -566,9 +588,10 @@ export default function App() {
           corners and drops the inner borders, so the three read as one control.
           The label is each language's own short form, so it never needs
           translating, and the chosen one keeps the filled (primary) fill.
-          Held off the Add button: adding and switching language are unrelated.
+          Set apart from the controls beside it: those belong to the list, this one
+          to the interface, and the two have nothing to do with each other.
         */}
-        <ButtonGroup className="ml-2">
+        <ButtonGroup className="ml-4">
           {LANGS.map((code) => (
             <Button
               key={code}
@@ -587,79 +610,127 @@ export default function App() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {shown.map(({ edit, index }) => {
-          const name = names[edit.Key] ?? "";
-          return (
-            <div
-              key={rowId(edit, index)}
-              onClick={(e) => {
-                /*
-                  The row is a shortcut for its own checkbox. Anything the user
-                  actually aimed at - a value box, the level field, the picker, the
-                  delete button, the checkbox itself - is a shadcn component and
-                  carries data-slot, so it keeps its own click.
-                */
-                if ((e.target as HTMLElement).closest("[data-slot]")) return;
-                toggle(index);
-              }}
+        {/*
+          One provider for the list, at a short delay: the browser's own title took
+          about a second, and moving down the rows shows each one straight away
+          once the first is up.
+        */}
+        <TooltipProvider delay={300}>
+          {shown.map(({ edit, index }) => {
+            const name = names[edit.Key] ?? "";
+            const notation = slotNotation(edit.Key);
+            return (
               /*
-                On the row rather than on the name: the labels describe the row as
-                a whole, so any part of it is a reasonable place to ask. Nothing
-                in the row carries a title of its own, so the hover always lands
-                here.
+                The tooltip is the row's: the description covers the whole row -
+                every slot, the level, the hash - so any part of the row is a
+                reasonable place to ask, which is what the browser's own title did.
+
+                It opens above the row but follows the pointer along it, so it comes
+                up where the cursor is rather than at a fixed spot on a 700px row -
+                the same reading the browser's own title gave, with the arrow
+                landing on the thing being pointed at.
               */
-              title={slotNotation(edit.Key) || undefined}
-              className="flex cursor-pointer items-center gap-2 border-b py-1.5 last:border-b-0"
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <Checkbox
-                  checked={edit.Enabled}
-                  aria-label={t.enable(name || edit.Key)}
-                  onCheckedChange={() => toggle(index)}
-                />
-
-                <span
+              <Tooltip
+                key={rowId(edit, index)}
+                disabled={!notation}
+                trackCursorAxis="x"
+              >
+                <TooltipTrigger
                   /*
-                    A fixed width, not a flexible one: the name and the level have
-                    to stay together, and the value boxes are what should absorb a
-                    wider window. 222px clears the longest name in any of the three
-                    languages ("スーパーアルテイメットJust回避"); anything longer
-                    truncates, with the tooltip carrying the whole one.
+                    A div, not the button a trigger renders by default: the row
+                    holds value boxes, a level field and the delete button, and
+                    interactive content cannot live inside a button.
                   */
-                  className={`w-[222px] shrink-0 truncate text-sm ${
-                    edit.Enabled ? "" : "text-muted-foreground"
-                  }`}
+                  render={
+                    <div
+                      onClick={(e) => {
+                        /*
+                          The row is a shortcut for its own checkbox. Anything the
+                          user actually aimed at - a value box, the level field,
+                          the picker, the delete button, the checkbox itself - is a
+                          shadcn component and carries data-slot, so it keeps its
+                          own click. The trigger's own slot is not a control: it is
+                          the row, so a click on the row still lands here.
+                        */
+                        if (
+                          (e.target as HTMLElement).closest(
+                            '[data-slot]:not([data-slot="tooltip-trigger"])',
+                          )
+                        ) {
+                          return;
+                        }
+                        toggle(index);
+                      }}
+                      className="flex cursor-pointer items-center gap-2 border-b py-1.5 last:border-b-0"
+                    />
+                  }
                 >
-                  {name || <span className="font-mono text-muted-foreground">{edit.Key}</span>}
-                </span>
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <Checkbox
+                      checked={edit.Enabled}
+                      aria-label={t.enable(name || edit.Key)}
+                      onCheckedChange={() => toggle(index)}
+                    />
 
-                <LevelInput
-                  level={edit.Level}
-                  min={traits[edit.Key.toUpperCase()]?.Min ?? 1}
-                  max={traits[edit.Key.toUpperCase()]?.Max ?? 15}
-                  label={t.level}
-                  onChange={(level) => changeLevel(index, level)}
-                />
+                    <span
+                      /*
+                        A fixed width, not a flexible one: the name and the level
+                        have to stay together, and the value boxes are what should
+                        absorb a wider window. 222px clears the longest name in any
+                        of the three languages ("スーパーアルテイメットJust回避");
+                        anything longer truncates, with the tooltip carrying the
+                        whole one.
+                      */
+                      className={`w-[222px] shrink-0 truncate text-sm ${
+                        edit.Enabled ? "" : "text-muted-foreground"
+                      }`}
+                    >
+                      {name || <span className="font-mono text-muted-foreground">{edit.Key}</span>}
+                    </span>
 
-                <ValueSlots
-                  values={edit.Values}
-                  typed={edit.Typed}
-                  defaults={traits[edit.Key.toUpperCase()]?.Levels?.[edit.Level - 1]}
-                  onChange={(values, typed) => update(index, { Values: values, Typed: typed })}
-                />
+                    <LevelInput
+                      level={edit.Level}
+                      min={traits[edit.Key.toUpperCase()]?.Min ?? 1}
+                      max={traits[edit.Key.toUpperCase()]?.Max ?? 15}
+                      label={t.level}
+                      onChange={(level) => changeLevel(index, level)}
+                    />
 
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t.remove(name || edit.Key)}
-                  onClick={() => remove(index)}
+                    <ValueSlots
+                      values={edit.Values}
+                      typed={edit.Typed}
+                      defaults={traits[edit.Key.toUpperCase()]?.Levels?.[edit.Level - 1]}
+                      onChange={(values, typed) => update(index, { Values: values, Typed: typed })}
+                    />
+
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={t.remove(name || edit.Key)}
+                      onClick={() => remove(index)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </TooltipTrigger>
+                {/*
+                  Above the row and centred on it: every row reads the same way,
+                  and the list under the pointer is never covered. Wider than the
+                  stock bubble, and keeping the line breaks the game's own text has
+                  - some explanations are three lines of parameters, and a one-line
+                  bubble would cut them off.
+                */}
+                <TooltipContent
+                  side="top"
+                  align="center"
+                  className="max-w-md items-start whitespace-pre-line"
                 >
-                  <Trash2 />
-                </Button>
-              </div>
-            </div>
-          );
-        })}
+                  {notation}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </TooltipProvider>
 
         {shown.length === 0 && (
           <p className="py-6 text-center text-sm text-muted-foreground">
