@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,9 +155,21 @@ func TestSaveEditsSurvivesAWriteItCannotMake(t *testing.T) {
 	if err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
+
+	// The failure has to be visible somewhere. There is no window to push it to
+	// here, so the log is the half of the story this test can hold on to.
+	var logged bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&logged)
+	defer log.SetOutput(previous)
+
 	// Accepting the list does not depend on the disk, so the write is what fails -
 	// and flushNow is where the debounce's timer would have landed.
 	service.flushNow()
+
+	if !strings.Contains(logged.String(), "creating the config folder") {
+		t.Fatalf("a write that could not be made went unrecorded: %q", logged.String())
+	}
 }
 
 // The list the tool edits is the one the mod reads, so it has to come back out of
@@ -172,7 +187,10 @@ func TestLoadEditsReadsTheAppDataConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loaded := (&EditService{}).LoadEdits()
+	loaded, err := (&EditService{}).LoadEdits()
+	if err != nil {
+		t.Fatalf("LoadEdits: %v", err)
+	}
 	if len(loaded) != 1 || loaded[0].Key != "B064A634" || loaded[0].Values[0] != 300 {
 		t.Fatalf("Config.json was not read back: %+v", loaded)
 	}
@@ -186,7 +204,10 @@ func TestLoadEditsReadsTheAppDataConfig(t *testing.T) {
 func TestLoadEditsFallsBackToDefaults(t *testing.T) {
 	hermeticHome(t)
 
-	loaded := (&EditService{}).LoadEdits()
+	loaded, err := (&EditService{}).LoadEdits()
+	if err != nil {
+		t.Fatalf("LoadEdits: %v", err)
+	}
 	if len(loaded) != len(defaultEdits()) {
 		t.Fatalf("expected the default list, got %+v", loaded)
 	}
@@ -343,22 +364,25 @@ func TestLevelRangesAreUsable(t *testing.T) {
 	// these are the numbers the game shows. 黑龙的咒印 keeps its numbers on level 15
 	// alone, which is why its field is pinned there; 穷寇心 ramps from level 1.
 	for _, want := range []struct {
+		name          string
 		hash          string
 		min, def, max int
 		why           string
 	}{
-		{"06719232", 15, 15, 15, "numbers on level 15 only: the field is pinned there"},
-		{"70395731", 1, 15, 30, "30 levels: default to the usual 15, free from 1 to 30"},
-		{"CAC6AFF2", 1, 1, 1, "1 level: default to it, not to 15"},
+		{"pinned to its only level", "06719232", 15, 15, 15, "numbers on level 15 only: the field is pinned there"},
+		{"free across 30 levels", "70395731", 1, 15, 30, "30 levels: default to the usual 15, free from 1 to 30"},
+		{"single-level skill", "CAC6AFF2", 1, 1, 1, "1 level: default to it, not to 15"},
 	} {
-		got, ok := traitInfo[want.hash]
-		if !ok {
-			t.Fatalf("%s missing from the skill table", want.hash)
-		}
-		if got.Min != want.min || got.Default != want.def || got.Max != want.max {
-			t.Fatalf("%s: got Lv%d..%d (default %d), want Lv%d..%d (default %d) (%s)",
-				want.hash, got.Min, got.Max, got.Default, want.min, want.max, want.def, want.why)
-		}
+		t.Run(want.name, func(t *testing.T) {
+			got, ok := traitInfo[want.hash]
+			if !ok {
+				t.Fatalf("%s missing from the skill table", want.hash)
+			}
+			if got.Min != want.min || got.Default != want.def || got.Max != want.max {
+				t.Fatalf("%s: got Lv%d..%d (default %d), want Lv%d..%d (default %d) (%s)",
+					want.hash, got.Min, got.Max, got.Default, want.min, want.max, want.def, want.why)
+			}
+		})
 	}
 }
 

@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -213,20 +215,38 @@ func configPath() string {
 	return filepath.Join(dir, "Config.json")
 }
 
-// LoadEdits reads the current edit list from Config.json, falling back to the
-// built-in defaults when there is nothing to read.
-func (s *EditService) LoadEdits() []SigilTrait {
-	edits := defaultEdits()
-	if raw, err := os.ReadFile(configPath()); err == nil {
-		var cfg Config
-		if json.Unmarshal(raw, &cfg) == nil && len(cfg.Edits) > 0 {
-			edits = cfg.Edits
+// LoadEdits reads the current edit list from Config.json.
+//
+// "Nothing to read" is only the first run. A file that exists but cannot be read
+// or parsed is an ERROR, not an empty list: the two look the same on screen - the
+// built-in defaults - but the second is the user's own list going missing, and
+// showing defaults over it is how a stray keystroke writes them back over the
+// real file.
+func (s *EditService) LoadEdits() ([]SigilTrait, error) {
+	path := configPath()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return defaultEdits(), nil
 		}
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	var cfg Config
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+
+	edits := cfg.Edits
+	if len(edits) == 0 {
+		// Deliberate, and not the same as unreadable: an emptied list means "start
+		// over", so the defaults are the answer rather than nothing.
+		edits = defaultEdits()
 	}
 	for i := range edits {
 		edits[i].Values = padValues(edits[i].Values)
 	}
-	return edits
+	return edits, nil
 }
 
 // SaveEdits takes the newest edit list and restarts the debounce, so the write
@@ -244,7 +264,7 @@ func (s *EditService) LoadEdits() []SigilTrait {
 // to the frontend instead (see publish).
 func (s *EditService) SaveEdits(edits []SigilTrait) error {
 	if configPath() == "" {
-		return fmt.Errorf("could not resolve the %%APPDATA%% config folder")
+		return errors.New("could not resolve the %APPDATA% config folder")
 	}
 
 	for i := range edits {
@@ -271,7 +291,7 @@ func (s *EditService) SaveEdits(edits []SigilTrait) error {
 func writeEdits(edits []SigilTrait) error {
 	cfgPath := configPath()
 	if cfgPath == "" {
-		return fmt.Errorf("could not resolve the %%APPDATA%% config folder")
+		return errors.New("could not resolve the %APPDATA% config folder")
 	}
 
 	cfgBytes, err := json.MarshalIndent(Config{Edits: edits}, "", "  ")
