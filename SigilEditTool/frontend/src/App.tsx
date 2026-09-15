@@ -349,9 +349,20 @@ export default function App() {
   const [traits, setTraits] = useState<Record<string, TraitInfo>>({});
   const [explains, setExplains] = useState<Record<string, string>>({});
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
+  const [errorOpen, setErrorOpen] = useState(false);
   const [newKey, setNewKey] = useState("");
 
   const t = MESSAGES[lang];
+
+  /*
+    Showing a failure both remembers it and opens the dialog. Closing only closes:
+    the message stays in state so the exit animation still has something to draw,
+    where clearing it on close blanked the dialog for the whole fade-out.
+  */
+  function showError(next: { title: string; detail: string }) {
+    setError(next);
+    setErrorOpen(true);
+  }
 
   /*
     Trait names come from the game's own text for the chosen language, so they are
@@ -368,7 +379,7 @@ export default function App() {
         setNames((map ?? {}) as Record<string, string>);
         setExplains((texts ?? {}) as Record<string, string>);
       })
-      .catch((err) => setError({ title: t.readFailed, detail: String(err) }));
+      .catch((err) => showError({ title: t.readFailed, detail: String(err) }));
   }, [lang]);
 
   async function loadAll() {
@@ -377,14 +388,22 @@ export default function App() {
       Call.ByName(`${SERVICE}.TraitMap`) as Promise<Record<string, TraitInfo>>,
     ]);
     const loaded = enforceExclusivity(
-      (list ?? []).map((e) => {
+      // A Key that is not even a string is not an edit: it is a hand-broken
+      // Config.json, and one of those must not take the whole list down with it.
+      (list ?? []).filter((e) => typeof e.Key === "string").map((e) => {
+        // Every table the tool serves is keyed by the uppercase hash, and a Key
+        // written into Config.json by hand can be lower case. Normalising here is
+        // what lets every lookup below use the Key as it stands, instead of the
+        // half-dozen call sites that used to uppercase it for themselves.
+        const key = e.Key.toUpperCase();
         const values = pad(e.Values ?? []);
         // A number that is not the level's own was put there by someone - by hand
         // in Config.json, or on a level this edit has since left - so it counts as
         // typed and stops following the level.
-        const vanilla = traitMap?.[e.Key.toUpperCase()]?.Levels?.[e.Level - 1];
+        const vanilla = traitMap?.[key]?.Levels?.[e.Level - 1];
         return {
           ...e,
+          Key: key,
           Values: values,
           Typed: values.map((value, i) => value !== (vanilla?.[i] ?? value)),
         };
@@ -395,7 +414,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    loadAll().catch((err) => setError({ title: t.readFailed, detail: String(err) }));
+    loadAll().catch((err) => showError({ title: t.readFailed, detail: String(err) }));
   }, []);
 
   /*
@@ -408,7 +427,7 @@ export default function App() {
   useEffect(
     () =>
       Events.On(SAVE_FAILED, (event) => {
-        setError({ title: t.writeFailed, detail: String(event.data) });
+        showError({ title: t.writeFailed, detail: String(event.data) });
       }),
     [lang],
   );
@@ -463,7 +482,7 @@ export default function App() {
   */
   function changeLevel(rowIndex: number, level: number) {
     const edit = edits[rowIndex];
-    const now = traits[edit.Key.toUpperCase()]?.Levels?.[level - 1];
+    const now = traits[edit.Key]?.Levels?.[level - 1];
     update(rowIndex, { Level: level, Values: valuesForLevel(edit.Values, edit.Typed, now) });
   }
 
@@ -487,7 +506,7 @@ export default function App() {
       ...edits,
       {
         Enabled: true,
-        Key: newKey,
+        Key: key,
         Level: level,
         Values: pad(traits[key]?.Levels?.[level - 1] ?? []),
         // Nothing is typed yet: every slot starts out as the level's own numbers,
@@ -512,7 +531,7 @@ export default function App() {
   function commit(next: SigilTrait[]) {
     setEdits(next);
     Call.ByName(`${SERVICE}.SaveEdits`, next).catch((err) =>
-      setError({ title: MESSAGES[lang].writeFailed, detail: String(err) }),
+      showError({ title: MESSAGES[lang].writeFailed, detail: String(err) }),
     );
   }
 
@@ -525,7 +544,7 @@ export default function App() {
     screen, what is not obvious is which of them means what.
   */
   function slotNotation(key: string): string {
-    const text = explains[key.toUpperCase()];
+    const text = explains[key];
     if (!text) return "";
     return text.replace(/\{(\d+)\}/g, (_, d) => `{${Number(d) + 1}}`);
   }
@@ -618,6 +637,9 @@ export default function App() {
         <TooltipProvider delay={300}>
           {shown.map(({ edit, index }) => {
             const name = names[edit.Key] ?? "";
+            // Read once: the level bounds and the slot placeholders all come from
+            // this one trait, and asking for it three times said nothing extra.
+            const info = traits[edit.Key];
             const notation = slotNotation(edit.Key);
             return (
               /*
@@ -690,8 +712,8 @@ export default function App() {
 
                     <LevelInput
                       level={edit.Level}
-                      min={traits[edit.Key.toUpperCase()]?.Min ?? 1}
-                      max={traits[edit.Key.toUpperCase()]?.Max ?? 15}
+                      min={info?.Min ?? 1}
+                      max={info?.Max ?? 15}
                       label={t.level}
                       onChange={(level) => changeLevel(index, level)}
                     />
@@ -699,7 +721,7 @@ export default function App() {
                     <ValueSlots
                       values={edit.Values}
                       typed={edit.Typed}
-                      defaults={traits[edit.Key.toUpperCase()]?.Levels?.[edit.Level - 1]}
+                      defaults={info?.Levels?.[edit.Level - 1]}
                       onChange={(values, typed) => update(index, { Values: values, Typed: typed })}
                     />
 
@@ -746,13 +768,12 @@ export default function App() {
         the reason is usually something the user has to fix (Config.json locked by
         something else, a folder that cannot be written). Both kinds of failure
         land here: the immediate one, and the debounced one pushed from the
-        backend. Closing it clears the error.
+        backend. Closing only closes: the message stays until the next failure
+        replaces it, so the fade-out still has something to draw.
       */}
       <AlertDialog
-        open={error !== null}
-        onOpenChange={(open) => {
-          if (!open) setError(null);
-        }}
+        open={errorOpen}
+        onOpenChange={setErrorOpen}
       >
         {/* No size="sm": that switches the footer to a two-column grid, and this
             dialog has a single button that should sit centred. */}
@@ -766,7 +787,7 @@ export default function App() {
           {/* Stock footer and stock button: below the sm breakpoint the footer is
               a column, so the button stretches on its own. No width of our own. */}
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setError(null)}>{t.ok}</AlertDialogAction>
+            <AlertDialogAction onClick={() => setErrorOpen(false)}>{t.ok}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
