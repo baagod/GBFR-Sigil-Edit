@@ -129,10 +129,9 @@ internal sealed class HotApply
     {
         while (!_stopped)
         {
-            // A timeout rather than an infinite wait only so a reload of the mod
-            // is noticed even if the flag was set between waits. Nothing is
-            // polled here: there is no file to stat and no work to do when the
-            // event has not been set.
+            // The event is what wakes this loop. The one-second timeout is only a
+            // backstop for the shutdown: if Dispose's Set() threw, the flag still
+            // gets re-checked instead of this thread parking here forever.
             if (!_event!.WaitOne(1000))
                 continue;
             if (_stopped)
@@ -180,14 +179,16 @@ internal sealed class HotApply
         // finishes before the user switches back to the game. Any miss, any
         // failure, and the full scan runs instead - the fast path is only ever
         // taken on unanimous agreement.
-        var candidates = (_cachedAddresses.Count > 0 &&
-                          _cachedAddresses.All(address => TableLocator.ContentsMatch(address, _currentTable))
-                              ? _cachedAddresses
-                              : null)
-                         ?? ScanAllCopies(_currentTable, newTable);
+        var candidates = WithoutOwnCopies(newTable, () =>
+            (_cachedAddresses.Count > 0 &&
+             _cachedAddresses.All(address => TableLocator.ContentsMatch(address, _currentTable))
+                 ? _cachedAddresses
+                 : null)
+            ?? ScanAllCopies(_currentTable, newTable));
 
         var updated = 0;
         var alreadyCurrent = 0;
+        var failed = 0;
         foreach (var address in candidates)
         {
             if (TableLocator.ContentsMatch(address, newTable))
@@ -203,6 +204,7 @@ internal sealed class HotApply
             else
             {
                 _log($"  FAILED writing 0x{address:X}");
+                failed++;
             }
         }
 
@@ -212,15 +214,57 @@ internal sealed class HotApply
             return;
         }
 
-        if (updated > 0 || alreadyCurrent == candidates.Count)
+        if (failed == 0 && (updated > 0 || alreadyCurrent == candidates.Count))
         {
             _currentTable = newTable;
             _cachedAddresses = candidates;
             _log($"hot apply: SUCCESS - {updated} in-memory copy/copies updated ({alreadyCurrent} already current) in {sw.ElapsedMilliseconds} ms, live without a restart");
+            return;
         }
-        else
+
+        // Nothing is cached and the table stays the previous one: a copy that did
+        // not take the write still holds those bytes, and keeping them as "what
+        // the game has" is what lets the next apply find that copy again instead
+        // of losing track of it for good.
+        _log(failed > 0 && (updated > 0 || alreadyCurrent > 0)
+            ? $"hot apply: PARTIAL - {updated} in-memory copy/copies updated, {failed} could NOT be written ({alreadyCurrent} already current) in {sw.ElapsedMilliseconds} ms; the game may still be reading a copy that holds the old values"
+            : "hot apply: FAIL - no in-memory copy could be written; the edit list is re-registered, but the loaded table still holds the old values");
+    }
+
+    /// <summary>
+    /// Runs a locate with this mod's own copies of the table pinned, and drops
+    /// their addresses from what it returns: the one the game was last believed
+    /// to hold, plus - while an apply is running - the buffer that apply just
+    /// built. A locate finds those buffers like any other copy, because they hold
+    /// the table and sit in writable private memory, but a write to one of them
+    /// proves nothing about the game, and a candidate set that holds nothing but
+    /// them must not be able to pass for a finished apply. Pinning is what keeps
+    /// the addresses it is dropped by valid for the length of the walk.
+    /// </summary>
+    private List<long> WithoutOwnCopies(byte[]? built, Func<List<long>> locate)
+    {
+        var pins = new List<System.Runtime.InteropServices.GCHandle>(2);
+        foreach (var table in new[] { _currentTable, built })
         {
-            _log("hot apply: FAIL - no in-memory copy could be written; the edit list is re-registered, but the loaded table still holds the old values");
+            if (table is not null)
+                pins.Add(System.Runtime.InteropServices.GCHandle.Alloc(
+                    table, System.Runtime.InteropServices.GCHandleType.Pinned));
+        }
+
+        try
+        {
+            var found = locate();
+            foreach (var pin in pins)
+            {
+                var own = pin.AddrOfPinnedObject().ToInt64();
+                found.RemoveAll(address => address == own);
+            }
+            return found;
+        }
+        finally
+        {
+            foreach (var pin in pins)
+                pin.Free();
         }
     }
 
@@ -266,7 +310,7 @@ internal sealed class HotApply
             var scan = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                found = TableLocator.FindCopies(_currentTable);
+                found = WithoutOwnCopies(null, () => TableLocator.FindCopies(_currentTable));
             }
             catch (Exception ex)
             {
