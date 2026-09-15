@@ -4,9 +4,9 @@
 
 《碧蓝幻想：Relink》的 **因子参数编辑器**。
 
-**下载**：[Nexus 页面](https://www.nexusmods.com/granbluefantasyrelink/mods/858) · [GitHub Release](https://github.com/baagod/GBFR-Sigil-Edit/releases)
-
 常见的改表 mod 会自带一份改好的 `.tbl`，两个这样的 mod 改同一张表就会互相覆盖；本 mod 不带 `.tbl`，而是从游戏封包中读出表，在游戏启动时从内存中改写 `skill_status.tbl` 的行，因此它可以和其他 **改表** mod 并存。
+
+**下载**：[Nexus 页面](https://www.nexusmods.com/granbluefantasyrelink/mods/858) 、[GitHub Release](https://github.com/baagod/GBFR-Sigil-Edit/releases)
 
 ## 前置条件
 
