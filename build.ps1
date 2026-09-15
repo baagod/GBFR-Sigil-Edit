@@ -46,6 +46,7 @@ $root     = $PSScriptRoot
 $csproj   = Join-Path $root 'GBFR.SigilEdit\GBFR.SigilEdit.csproj'
 $modDll   = Join-Path $root 'GBFR.SigilEdit\bin\Release\GBFR.SigilEdit.dll'
 $modCfg   = Join-Path $root 'GBFR.SigilEdit\ModConfig.json'
+$modIcon  = Join-Path $root 'icon\sigiledit-256.png'
 $toolDir  = Join-Path $root 'SigilEditTool'
 $frontend = Join-Path $toolDir 'frontend'
 $exe      = Join-Path $toolDir 'SigilEdit.exe'
@@ -113,6 +114,10 @@ if (-not (Test-Path -LiteralPath $distHtml)) {
 Write-Host '==> [3/3] Building SigilEdit.exe (go build)'
 Push-Location $toolDir
 try {
+    # main.go embeds this file as the window icon, so it has to be in place before
+    # the Go build for the same reason the frontend bundle does.
+    Copy-Item -LiteralPath $modIcon -Destination (Join-Path $toolDir 'appicon.png') -Force
+
     # -buildvcs=false for the same reason the csproj turns SourceLink and the
     # informational version off: Go otherwise stamps the commit sha and a
     # "modified" flag into the binary, so the same sources built before and after
@@ -149,12 +154,14 @@ if ($Package) {
     # and it is what deploy.ps1 copies.
     #
     # dist\ rather than bin\Release: the mod's own build output holds other files
-    # too, and only these three belong in the Mods folder.
+    # too, and only these four belong in the Mods folder. The icon is the file
+    # ModConfig.json names in ModIcon, so it has to keep that name in the folder.
     Remove-Item -LiteralPath $modOut -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path $modOut -Force | Out-Null
     Copy-Item -LiteralPath $modDll -Destination $modOut -Force
     Copy-Item -LiteralPath $modCfg -Destination $modOut -Force
     Copy-Item -LiteralPath $exe -Destination $modOut -Force
+    Copy-Item -LiteralPath $modIcon -Destination (Join-Path $modOut 'icon.png') -Force
 
     # Zipped straight from the pieces rather than through a staging copy: the four
     # paths are the whole archive, and nothing else in dist\ is dragged in.

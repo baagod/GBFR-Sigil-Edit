@@ -1,0 +1,5 @@
+﻿// SigilEdit.exe 的 Windows 图标资源。
+// 重新生成（需要 mingw 的 windres；产物已提交，正常构建不需要跑这一步）：
+//   cd icon
+//   windres --codepage=65001 sigiledit.rc -O coff -o ..\SigilEditTool\sigiledit_windows_amd64.syso
+IDI_ICON1 ICON "sigiledit.ico"

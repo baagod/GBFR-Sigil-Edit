@@ -48,11 +48,20 @@ var embeddedExplainEN []byte
 //go:embed assets/skillexplain.ja.json
 var embeddedExplainJA []byte
 
+// The window/taskbar icon. Embedding it here rather than leaning on the exe's own
+// icon resource is deliberate: Wails on Windows asks for icon resource ID 3 and
+// silently disables the icon when it is not there - and this exe's resource is
+// named, not numbered, so ID 3 is empty and the title bar came up blank.
+//
+//go:embed appicon.png
+var appIcon []byte
+
 func main() {
 	edits := &EditService{}
 
 	app := application.New(application.Options{
 		Name: "GBFRSigilEdits",
+		Icon: appIcon,
 		Services: []application.Service{
 			application.NewService(edits),
 		},
