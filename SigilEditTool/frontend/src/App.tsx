@@ -696,12 +696,12 @@ export default function App() {
                       /*
                         A fixed width, not a flexible one: the name and the level
                         have to stay together, and the value boxes are what should
-                        absorb a wider window. 222px clears the longest name in any
-                        of the three languages ("スーパーアルテイメットJust回避");
-                        anything longer truncates, with the tooltip carrying the
-                        whole one.
+                        absorb a wider window. 217px covers the longest name in any
+                        of the three languages ("スーパーアルティメットJust回避"),
+                        with only a few pixels to spare; anything longer
+                        truncates, with the tooltip carrying the whole one.
                       */
-                      className={`w-[222px] shrink-0 truncate text-sm ${
+                      className={`w-[217px] shrink-0 truncate text-sm ${
                         edit.Enabled ? "" : "text-muted-foreground"
                       }`}
                     >
