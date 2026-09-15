@@ -33,7 +33,8 @@ const arg = (n, d) => {
 // language codes, so the two are mapped here.
 const GAME_LANG = { zh: "cs", en: "en", ja: "jp" };
 
-const ROOT = arg("root", ".");
+// This repository is the root, and the extracted game copy sits one level up.
+const ROOT = ".";
 
 // The extracted game copy and the toolkit live one level up, next to this
 // repository: they are shared with the other mods in the workspace and are far
@@ -374,7 +375,7 @@ const stages = { db: stageDb, names: stageNames };
 const stage = process.argv[2];
 if (!stages[stage]) {
   console.error("usage: node tools/build-assets.js db");
-  console.error("       node tools/build-assets.js names --lang zh|en|ja [--root <dir>]");
+  console.error("       node tools/build-assets.js names --lang zh|en|ja");
   process.exit(2);
 }
 stages[stage]();

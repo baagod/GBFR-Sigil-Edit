@@ -1,26 +1,19 @@
 # Build output
 **/bin/
 **/obj/
-**/publish/
 dist/
 node_modules/
 # Any go build output in the tool folder. SigilEdit.exe is what build.ps1 asks
 # for; a bare `go build .` names the binary after the module (sigiledittool.exe),
 # and that stray copy is not a second tool.
 SigilEditTool/*.exe
-*.exe~
 *.zip
 
 # Editors / tooling
 .idea/
-.vs/
-.vscode/
 .codegraph/
 .tmp-*/
-*.user
-*.suo
 *.pdb
-*.ilk
 
 # Development-only inputs.
 #
