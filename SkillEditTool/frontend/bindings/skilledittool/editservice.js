@@ -4,58 +4,92 @@
 
 /**
  * EditService is the Wails-exposed backend.
+ * 
+ * It also holds the list the debounce has not written yet. Every SaveEdits call
+ * replaces that list and restarts the timer, so what lands on disk is always the
+ * last state on screen, never a mixture of keystrokes.
  * @module
  */
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
 /**
- * Install writes the ordered edit list plus the mod binary into the Reloaded-II
- * mods folder. The list order is the precedence order.
- * @param {$models.SkillEdit[] | null} edits
- * @returns {$CancellablePromise<string>}
+ * ExplainMap returns the whole hash -> explanation table for a language, with the
+ * same fallback as NameMap.
+ * @param {string} lang
+ * @returns {$CancellablePromise<{ [_ in string]?: string }>}
  */
-export function Install(edits) {
-    return $Call.ByID(1551222132, edits);
+export function ExplainMap(lang) {
+    return $Call.ByID(3726861822, lang).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
 }
 
 /**
- * LoadEdits reads the current edit list from the installed mod's Config.json,
- * falling back to defaults when it is missing or unreadable.
- * @returns {$CancellablePromise<$models.SkillEdit[] | null>}
+ * LoadEdits reads the current edit list from Config.json, falling back to the
+ * built-in defaults when there is nothing to read.
+ * @returns {$CancellablePromise<$models.SkillEdit[]>}
  */
 export function LoadEdits() {
-    return $Call.ByID(3740291038);
+    return $Call.ByID(3740291038).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType2($result);
+    }));
 }
 
 /**
- * ModsDir returns the Reloaded-II mods folder, or "" when it cannot be found.
+ * NameMap returns the whole key -> name table for a language, so the frontend can
+ * resolve names locally instead of one call per row. An unknown language gets the
+ * fallback rather than an empty picker.
+ * @param {string} lang
+ * @returns {$CancellablePromise<{ [_ in string]?: string }>}
+ */
+export function NameMap(lang) {
+    return $Call.ByID(2661837316, lang).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
+ * SaveEdits takes the newest edit list and restarts the debounce, so the write
+ * happens when the editing stops rather than while it is going on: a burst of
+ * keystrokes ends in one Config.json write and, when the mod is up, one live
+ * apply.
+ * 
+ * The write is deliberately not done here. Every call hands over the whole state
+ * and resets the one-second timer; whatever the timer sees when it finally fires
+ * is the last state on screen. The frontend stays dumb - it calls this on every
+ * change and never waits for an answer.
+ * 
+ * Only "this list cannot be accepted at all" comes back as an error; a write
+ * that fails when the timer fires has no caller left to return to and is logged.
+ * @param {$models.SkillEdit[]} edits
  * @returns {$CancellablePromise<string>}
  */
-export function ModsDir() {
-    return $Call.ByID(2742366571);
+export function SaveEdits(edits) {
+    return $Call.ByID(1396277305, edits);
 }
 
 /**
- * NameMap returns the whole key -> name table so the frontend can resolve
- * names locally instead of one call per row.
- * @returns {$CancellablePromise<{ [_ in string]?: string } | null>}
+ * SkillMap returns the whole hash -> skill table, so the frontend can resolve a
+ * new edit's starting values and its level bound locally instead of one call per
+ * row.
+ * @returns {$CancellablePromise<{ [_ in string]?: $models.SkillInfo }>}
  */
-export function NameMap() {
-    return $Call.ByID(2661837316);
+export function SkillMap() {
+    return $Call.ByID(1925768292).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
+    }));
 }
 
-/**
- * NameOf returns the display name for a skill key, or "" when unknown.
- * @param {string} key
- * @returns {$CancellablePromise<string>}
- */
-export function NameOf(key) {
-    return $Call.ByID(696980779, key);
-}
+// Private type creation functions
+const $$createType0 = $Create.Map($Create.Any, $Create.Any);
+const $$createType1 = $models.SkillEdit.createFrom;
+const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = $models.SkillInfo.createFrom;
+const $$createType4 = $Create.Map($Create.Any, $$createType3);

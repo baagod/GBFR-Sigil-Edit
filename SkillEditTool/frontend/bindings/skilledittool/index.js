@@ -7,9 +7,7 @@ export {
     EditService
 };
 
-import * as $models from "./models.js";
-
-/**
- * SkillEdit mirrors the mod's Config.cs SkillEdit: one skill_status row override.
- * @typedef {$models.SkillEdit} SkillEdit
- */
+export {
+    SkillEdit,
+    SkillInfo
+} from "./models.js";
