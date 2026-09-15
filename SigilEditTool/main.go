@@ -1,3 +1,10 @@
+/*
+Command SigilEdit is the desktop tool that edits GBFR.SigilEdit's Config.json.
+The mod half patches skill_status in memory and re-applies it when this tool
+signals a named event, so the list written here is the list the game ends up
+with. The game's own trait names, values and explanations are embedded, so the
+tool never needs the game to be up.
+*/
 package main
 
 import (
