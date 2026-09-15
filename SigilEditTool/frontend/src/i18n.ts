@@ -46,7 +46,7 @@ type Dict = {
 export const MESSAGES: Record<Lang, Dict> = {
   zh: {
     title: (enabled, total) => `因子（${enabled}/${total}）：`,
-    empty: "没有改动条目。",
+    empty: "无改动条目",
     add: "添加",
     pickTrait: "选择...",
     searchTrait: "搜索",
@@ -60,7 +60,7 @@ export const MESSAGES: Record<Lang, Dict> = {
   },
   en: {
     title: (enabled, total) => `Sigils (${enabled}/${total}):`,
-    empty: "No edits yet.",
+    empty: "No edits yet",
     add: "Add",
     pickTrait: "Select...",
     searchTrait: "Search",
@@ -74,7 +74,7 @@ export const MESSAGES: Record<Lang, Dict> = {
   },
   ja: {
     title: (enabled, total) => `シジル（${enabled}/${total}）：`,
-    empty: "変更はまだありません。",
+    empty: "変更はまだありません",
     add: "追加",
     pickTrait: "選択...",
     searchTrait: "検索",
