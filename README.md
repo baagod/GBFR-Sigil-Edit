@@ -4,6 +4,8 @@
 
 A **sigil parameter editor** for *Granblue Fantasy: Relink*.
 
+**Download**: [Nexus](https://www.nexusmods.com/granbluefantasyrelink/mods/858) · [GitHub Release](https://github.com/baagod/GBFR-Sigil-Edit/releases)
+
 A typical table mod brings its own edited `.tbl`; two such mods editing the same table overwrite each other. This mod carries no `.tbl`: it reads the table out of the game's archive and rewrites the rows of `skill_status.tbl` in memory at game startup, so it can live alongside other **table** mods.
 
 ## Requirements
