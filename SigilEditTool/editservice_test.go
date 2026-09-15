@@ -9,10 +9,22 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"golang.org/x/sys/windows"
 )
+
+/*
+No test may signal the event a real game is listening on. The write path signals
+whatever name the package holds, so the whole run points it at this process's own
+name: a game up on this machine never sees the tests, and the tests no longer have
+to borrow the name to avoid it.
+*/
+func TestMain(m *testing.M) {
+	hotApplyEventName = fmt.Sprintf("GBFR.SigilEdit.HotApply.Test.Run.%d", os.Getpid())
+	os.Exit(m.Run())
+}
 
 // appDataConfig is the path the mod reads: Environment.SpecialFolder.ApplicationData
 // is %APPDATA%, which is also what os.UserConfigDir answers on Windows. Spelled
@@ -77,58 +89,55 @@ The debounce is trailing-edge, which is a statement about when nothing is writte
 as much as about when something is: while the editing goes on, the file the mod
 reads must still be the old one - and every call has to restart the quiet second,
 so the write that does happen carries the last state and not the first.
+
+The bubble turns that from a statement about the clock into one about the code:
+the half-second passes instantly, and a run that stopped restarting the timer
+fails here rather than passing on a machine that was merely slow.
 */
 func TestSaveEditsWaitsForTheEditingToStop(t *testing.T) {
 	hermeticHome(t)
 
-	service := &EditService{}
-	cfgPath := appDataConfig(t, "Config.json")
+	synctest.Test(t, func(t *testing.T) {
+		service := &EditService{}
+		cfgPath := appDataConfig(t, "Config.json")
 
-	first := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
-	if err := service.SaveEdits(first); err != nil {
-		t.Fatalf("SaveEdits: %v", err)
-	}
-	time.Sleep(debounceDelay / 4)
-	if _, err := os.Stat(cfgPath); err == nil {
-		t.Fatal("Config.json was written while the debounce window was still open")
-	}
-
-	// A second keystroke restarts the window: the first one must not have left a
-	// write behind it, and neither may this one yet.
-	last := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{300}}}
-	if err := service.SaveEdits(last); err != nil {
-		t.Fatalf("SaveEdits: %v", err)
-	}
-	time.Sleep(debounceDelay / 4)
-	if _, err := os.Stat(cfgPath); err == nil {
-		t.Fatal("a second edit did not restart the debounce window")
-	}
-
-	// Quiet from here on: the last state is what lands, once.
-	raw := waitForConfig(t, cfgPath)
-	var cfg Config
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		t.Fatalf("Config.json is not valid JSON: %v", err)
-	}
-	if len(cfg.Edits) != 1 || cfg.Edits[0].Values[0] != 300 {
-		t.Fatalf("the write is not the last state on screen: %+v", cfg.Edits)
-	}
-}
-
-// waitForConfig polls until the debounce has fired, so the test never states the
-// exact moment the timer runs - only that it does, inside a generous deadline.
-func waitForConfig(t *testing.T, path string) []byte {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if raw, err := os.ReadFile(path); err == nil {
-			return raw
+		first := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
+		if err := service.SaveEdits(first); err != nil {
+			t.Fatalf("SaveEdits: %v", err)
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("Config.json was never written to %s", path)
+		time.Sleep(debounceDelay / 4)
+		if _, err := os.Stat(cfgPath); err == nil {
+			t.Fatal("Config.json was written while the debounce window was still open")
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
+
+		// A second keystroke restarts the window: the first one must not have left a
+		// write behind it, and neither may this one yet.
+		last := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{300}}}
+		if err := service.SaveEdits(last); err != nil {
+			t.Fatalf("SaveEdits: %v", err)
+		}
+		time.Sleep(debounceDelay / 4)
+		if _, err := os.Stat(cfgPath); err == nil {
+			t.Fatal("a second edit did not restart the debounce window")
+		}
+
+		// Quiet from here on: the last state is what lands, once. No polling: the
+		// bubble has already run the timer's callback to completion.
+		time.Sleep(debounceDelay * 2)
+		synctest.Wait()
+
+		raw, err := os.ReadFile(cfgPath)
+		if err != nil {
+			t.Fatalf("the debounce never wrote Config.json: %v", err)
+		}
+		var cfg Config
+		if err := json.Unmarshal(raw, &cfg); err != nil {
+			t.Fatalf("Config.json is not valid JSON: %v", err)
+		}
+		if len(cfg.Edits) != 1 || cfg.Edits[0].Values[0] != 300 {
+			t.Fatalf("the write is not the last state on screen: %+v", cfg.Edits)
+		}
+	})
 }
 
 /*
@@ -408,19 +417,13 @@ func TestSignalHotApplyWithoutTheGame(t *testing.T) {
 }
 
 // SaveEdits has to wake the running mod after writing its config, so the values
-// land in a live game without a restart. The test simulates the mod by holding
-// an event open under the name the write signals, borrowed for the duration:
-// the mod's own name would be the running game's event on this machine, and
-// signalling that is the one thing a test must never do.
+// land in a live game without a restart. The test simulates the mod by holding an
+// event open under the name the write signals; TestMain has already pointed that
+// name away from any event a game up on this machine would be waiting on.
 func TestSaveEditsSignalsTheRunningMod(t *testing.T) {
 	hermeticHome(t)
 
-	testName := fmt.Sprintf("GBFR.SigilEdit.HotApply.Test.Signal.%d", os.Getpid())
-	original := hotApplyEventName
-	hotApplyEventName = testName
-	defer func() { hotApplyEventName = original }()
-
-	ptr, err := windows.UTF16PtrFromString(testName)
+	ptr, err := windows.UTF16PtrFromString(hotApplyEventName)
 	if err != nil {
 		t.Fatal(err)
 	}
