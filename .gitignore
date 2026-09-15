@@ -46,3 +46,7 @@ msg_*.json
 # imports eventcreate at build time and fails the build without it, so those two
 # have to be in the tree for `npm run build` to work with no wails CLI installed.
 SigilEditTool/frontend/bindings/sigiledittool/
+
+# Session tooling: the agent harness drops a run-continuation marker here.
+# Not part of the project, and it is recreated whenever it is deleted.
+.omo/
