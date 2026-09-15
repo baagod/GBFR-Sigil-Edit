@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"golang.org/x/sys/windows"
 )
 
 // LevelValueCount is how many LevelValue slots skill_status carries, and therefore
@@ -41,6 +43,30 @@ const modDllName = "GBFR.SkillEdit.dll"
 // install can clear it: the mod starts the file over each launch, so a leftover
 // one is only ever yesterday's.
 const logFileName = "GBFR.SkillEdit.log"
+
+// hotApplyEventName is the win32 event the running mod waits on. Install sets
+// it after writing Config.json, and the mod - which lives inside the game -
+// then re-applies the edit list to the game's in-memory table, without a
+// restart. The string is shared with HotApply.EventName in the mod's C#
+// source; nothing links the two, so a rename has to touch both files.
+const hotApplyEventName = "GBFR.SkillEdit.HotApply"
+
+// signalHotApply wakes the mod, when one is running to wake. Everything else -
+// the game closed, the mod disabled, its event not created yet - is the normal
+// install path and not an error, because the mod reads Config.json again on
+// its next launch anyway.
+func signalHotApply(name string) bool {
+	namePtr, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		return false
+	}
+	event, err := windows.OpenEvent(windows.EVENT_MODIFY_STATE, false, namePtr)
+	if err != nil {
+		return false
+	}
+	defer windows.CloseHandle(event)
+	return windows.SetEvent(event) == nil
+}
 
 // EditService is the Wails-exposed backend.
 type EditService struct {
@@ -368,6 +394,12 @@ func (s *EditService) Install(edits []SkillEdit) (string, error) {
 	}
 
 	// The mod itself: the DLL and the manifest that tells Reloaded how to load it.
+	//
+	// A running game keeps the DLL open, and the very point of the hot apply is
+	// clicking here while a game is up - so a copy that already holds exactly
+	// these bytes is skipped rather than rewritten. A rebuilt DLL still goes
+	// through, and a locked one fails loudly: those edits cannot land in a
+	// running game until it is restarted with the new mod anyway.
 	modFiles := map[string][]byte{
 		"ModConfig.json": embeddedCfg,
 		modDllName:       embeddedDll,
@@ -375,6 +407,9 @@ func (s *EditService) Install(edits []SkillEdit) (string, error) {
 	for name, data := range modFiles {
 		if len(data) == 0 {
 			return "", fmt.Errorf("embedded asset %s is empty", name)
+		}
+		if deployed, err := os.ReadFile(filepath.Join(target, name)); err == nil && bytes.Equal(deployed, data) {
+			continue
 		}
 		if err := os.WriteFile(filepath.Join(target, name), data, 0o644); err != nil {
 			return "", fmt.Errorf("writing %s: %w", name, err)
@@ -397,5 +432,8 @@ func (s *EditService) Install(edits []SkillEdit) (string, error) {
 
 	// Short on purpose: the frontend shows this on a single fixed-height line and
 	// appends the enabled count. Where the files went is in its hover tooltip.
+	if signalHotApply(hotApplyEventName) {
+		return fmt.Sprintf("已部署 %d 条改动（已通知游戏实时应用）", len(edits)), nil
+	}
 	return fmt.Sprintf("已部署 %d 条改动", len(edits)), nil
 }

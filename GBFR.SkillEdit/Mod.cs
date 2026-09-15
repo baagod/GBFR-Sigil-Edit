@@ -8,6 +8,10 @@ namespace GBFR.SkillEdit;
 /// Patches rows of skill_status.tbl at startup, driven by a user-editable
 /// Config.json, and feeds the table back through IDataManager.
 ///
+/// On top of that it can apply the same rows to the game WHILE IT RUNS: the
+/// tool signals a named event from its Install button, and HotApply overwrites
+/// the table the game already holds in memory - no restart, no hooking.
+///
 /// No static .tbl ships with the mod: the table is read from the game archive,
 /// edited in memory, and written back.
 ///
@@ -62,6 +66,12 @@ public class Mod : IMod
     private IModLoader _loader = null!;
     private Config _config = new();
 
+    // Kept for the hot apply: the edit list can be re-applied to the RUNNING
+    // game, and that needs the same manager and the same table construction
+    // the startup write used.
+    private IDataManager? _dm;
+    private HotApply? _hotApply;
+
     public void Start(IModLoaderV1 loaderApi)
     {
         _loader = (IModLoader)loaderApi;
@@ -79,60 +89,118 @@ public class Mod : IMod
                 Log("FAIL: IDataManager controller not found (is gbfrelink.utility.manager enabled?)");
                 return;
             }
+            _dm = dm;
 
-            var file = dm.GetArchiveFile(TablePath);
-            if (file is null || file.Length == 0)
-            {
-                Log($"FAIL: GetArchiveFile('{TablePath}') returned nothing");
+            var file = BuildEditedTable(_config, out var applied);
+            if (file is null)
                 return;
-            }
-            Log($"read {file.Length} bytes");
-
-            // The offsets this mod patches are only the right ones for a table of
-            // this shape. A pre-2.0 table has 36-byte rows, and any future column
-            // change moves them again: patching then would write into the wrong
-            // row, or past the end of one, without saying so.
-            if (!HasPatchableLayout(file, out var declaredRows))
-            {
-                Log($"FAIL: {TablePath} is not the {FileHeaderSize}-byte header + " +
-                    $"{RowSize}-byte row table this mod patches: {file.Length} bytes, header says " +
-                    $"{declaredRows} row(s). Nothing applied.");
-                return;
-            }
-
-            var applied = 0;
-            foreach (var edit in _config.Edits)
-            {
-                if (!edit.Enabled)
-                {
-                    Log($"  skip (disabled): {edit.Key}");
-                    continue;
-                }
-
-                if (!uint.TryParse(edit.Key, System.Globalization.NumberStyles.HexNumber, null, out var key))
-                {
-                    Log($"  skip (key is not an 8-digit hex hash yet): {edit.Key}");
-                    continue;
-                }
-
-                if (PatchRow(file, key, (uint)edit.Level, edit.Values))
-                    applied++;
-            }
 
             if (applied == 0)
             {
                 Log($"no edits applied (config held {_config.Edits.Count} edit(s)); not writing the table back");
-                return;
+            }
+            else
+            {
+                dm.AddOrUpdateExternalFile(TablePath, file);
+                dm.UpdateIndex();
+                Log($"SUCCESS: {applied} edit(s) applied and table written back");
             }
 
-            dm.AddOrUpdateExternalFile(TablePath, file);
-            dm.UpdateIndex();
-            Log($"SUCCESS: {applied} edit(s) applied and table written back");
+            // The game is about to hold exactly the bytes in `file` - its loaded
+            // copy of the table, which is what a hot apply locates and overwrites.
+            // Wired regardless of the applied count: with every edit disabled the
+            // game holds the vanilla table, `file` holds the same bytes, so a
+            // later edit can still be live-applied the same way.
+            _hotApply = new HotApply(Log, file, () => BuildEditedTable(LoadConfig(), out _), RegisterWithManager);
+            _hotApply.Start();
         }
         catch (Exception ex)
         {
             Log("EXCEPTION: " + ex);
         }
+    }
+
+    /// <summary>
+    /// Produces the table bytes for <paramref name="config"/>: reads the unaltered
+    /// table out of the game's archive, checks the layout this mod patches against,
+    /// and applies the enabled edits onto the copy.
+    ///
+    /// Returns null, after logging why, when the table cannot be produced. The
+    /// startup write and the hot apply need exactly the same bytes, so both go
+    /// through here - one place for the layout check and the row format, and one
+    /// place whose log lines say what went wrong.
+    /// </summary>
+    private byte[]? BuildEditedTable(Config config, out int applied)
+    {
+        applied = 0;
+
+        if (_dm is null)
+        {
+            Log("FAIL: IDataManager controller not found (is gbfrelink.utility.manager enabled?)");
+            return null;
+        }
+
+        var file = _dm.GetArchiveFile(TablePath);
+        if (file is null || file.Length == 0)
+        {
+            Log($"FAIL: GetArchiveFile('{TablePath}') returned nothing");
+            return null;
+        }
+        Log($"read {file.Length} bytes");
+
+        // The offsets this mod patches are only the right ones for a table of
+        // this shape. A pre-2.0 table has 36-byte rows, and any future column
+        // change moves them again: patching then would write into the wrong
+        // row, or past the end of one, without saying so.
+        if (!HasPatchableLayout(file, out var declaredRows))
+        {
+            Log($"FAIL: {TablePath} is not the {FileHeaderSize}-byte header + " +
+                $"{RowSize}-byte row table this mod patches: {file.Length} bytes, header says " +
+                $"{declaredRows} row(s). Nothing applied.");
+            return null;
+        }
+
+        foreach (var edit in config.Edits)
+        {
+            if (!edit.Enabled)
+            {
+                Log($"  skip (disabled): {edit.Key}");
+                continue;
+            }
+
+            if (!uint.TryParse(edit.Key, System.Globalization.NumberStyles.HexNumber, null, out var key))
+            {
+                Log($"  skip (key is not an 8-digit hex hash yet): {edit.Key}");
+                continue;
+            }
+
+            if (PatchRow(file, key, (uint)edit.Level, edit.Values))
+                applied++;
+        }
+
+        return file;
+    }
+
+    /// <summary>
+    /// Feeds <paramref name="table"/> back through the manager as the served
+    /// external file, exactly the calls the startup write makes.
+    ///
+    /// A hot apply needs this and not just the memory write: the game parses the
+    /// table again when it loads saves and screens, and every later parse reads
+    /// the served file - without the re-registration those parses would rebuild
+    /// rows with the old values and undo the live edit on the spot.
+    /// </summary>
+    private void RegisterWithManager(byte[] table)
+    {
+        if (_dm is null)
+        {
+            Log("hot apply: re-register skipped (no data manager this session)");
+            return;
+        }
+
+        _dm.AddOrUpdateExternalFile(TablePath, table);
+        _dm.UpdateIndex();
+        Log("hot apply: table re-registered, future game parses serve the new values");
     }
 
     private Config LoadConfig()
@@ -258,7 +326,13 @@ public class Mod : IMod
 
     public void Suspend() { }
     public void Resume() { }
-    public void Unload() { }
+    public void Unload()
+    {
+        // Stops the waiter and the locate thread. The threads are background, so
+        // a process exit takes them anyway; this covers a mod reload while the
+        // game keeps running.
+        _hotApply?.Dispose();
+    }
     public bool CanUnload() => true;
     public bool CanSuspend() => true;
     public Action Disposing => () => { };

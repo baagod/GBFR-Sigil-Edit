@@ -2,9 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/sys/windows"
 )
 
 // fakeReloaded points os.UserHomeDir at a throwaway folder and gives it the two
@@ -402,5 +405,46 @@ func TestExcludedRowsAreGone(t *testing.T) {
 				t.Fatalf("%s should not be named in %s", hash, lang)
 			}
 		}
+	}
+}
+
+func TestSignalHotApplyWithoutTheGame(t *testing.T) {
+	name := fmt.Sprintf("GBFR.SkillEdit.HotApply.Test.Absent.%d", os.Getpid())
+	if signalHotApply(name) {
+		t.Fatal("signalled an event that should not exist")
+	}
+}
+
+// Install has to wake the running mod after writing its config, so the values
+// land in a live game without a restart. The test simulates the mod by holding
+// the event open under the mod's own name: if a real game happens to be up on
+// this machine, CreateEvent hands back that same kernel object, and the signal
+// lands on it either way.
+func TestInstallSignalsTheRunningMod(t *testing.T) {
+	fakeReloaded(t)
+
+	ptr, err := windows.UTF16PtrFromString(hotApplyEventName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := windows.CreateEvent(nil, 0, 0, ptr)
+	if err != nil {
+		t.Fatalf("creating the mod's event: %v", err)
+	}
+	defer windows.CloseHandle(event)
+	// CreateEvent may have opened an already-signalled object; start clean.
+	_ = windows.ResetEvent(event)
+
+	edits := []SkillEdit{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
+	if _, err := (&EditService{}).Install(edits); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	state, err := windows.WaitForSingleObject(event, 0)
+	if err != nil {
+		t.Fatalf("waiting on the mod's event: %v", err)
+	}
+	if state != windows.WAIT_OBJECT_0 {
+		t.Fatal("Install did not signal the mod's event, so a running game would not hot-apply")
 	}
 }
