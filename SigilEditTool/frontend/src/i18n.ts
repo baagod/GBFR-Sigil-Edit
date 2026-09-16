@@ -1,8 +1,8 @@
 /*
   The tool's own copy, in each language it ships.
 
-  Kept as a plain object rather than an i18n library: there are twenty strings and
-  three languages, so a dependency would be more machinery than the problem.
+  Kept as a plain object rather than an i18n library: a handful of strings in three
+  languages, so a dependency would be more machinery than the problem.
 
   Trait names are NOT here - those come from the game's own text tables, one per
   language, and are fetched from the Go side.
@@ -11,8 +11,7 @@
   sigil carries, which the game's own data calls a "skill" (table `skill_status`),
   so Japanese calls it シジル and the asset names stay as the game spells them. The
   search box's placeholder says what typing in it does, so the band above the list
-  needs no label of its own; the count of enabled rows sits beside it as bare
-  numbers.
+  needs no label of its own.
 */
 
 export const LANGS = ["zh", "en", "ja"] as const;

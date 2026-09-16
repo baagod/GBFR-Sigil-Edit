@@ -147,7 +147,7 @@ function useDebounced<T>(value: T, delay = 150): T {
 const HALF_TYPED = /^-?\d*\.?\d*$/;
 
 /** ...and what counts as a number once the box is done with: -3, 30, 0.6, .5 */
-const NUMBER = /^-?(\d+(\.\d*)?|\.\d+)$/;
+const NUMBER = /^-?(\d+\.\d+|\.\d+|\d+)$/;
 
 /** The typed flags with one slot set or cleared. */
 const withSlot = (typed: boolean[], i: number, set: boolean) => {
@@ -550,9 +550,9 @@ export default function App() {
       .sort(
         (a, b) =>
           Number(b.enabled) - Number(a.enabled) ||
-          a.label.localeCompare(b.label, "zh-Hans-CN"),
+          a.label.localeCompare(b.label, lang === "zh" ? "zh-Hans-CN" : lang),
       );
-  }, [edits, names, traits, search]);
+  }, [edits, names, traits, search, lang]);
 
   /** The edit a level's checkbox starts, from the game's own row for that level. */
   function newRecord(key: string, level: number): SigilTrait {
@@ -584,7 +584,7 @@ export default function App() {
   }
 
   /** A trait's own checkbox: every level of it at once. */
-  function toggleTrait(key: string, enable: boolean) {
+  function toggleTrait(key: string, nextChecked: boolean) {
     beginTick();
     /*
       A trait nobody has edited has nothing to switch on, so ticking its box did nothing
@@ -596,10 +596,10 @@ export default function App() {
     */
     if (!edits.some((e) => e.Key === key)) {
       const level = traits[key]?.Default;
-      if (enable && level) commit([...edits, newRecord(key, level)]);
+      if (nextChecked && level) commit([...edits, newRecord(key, level)]);
       return;
     }
-    commit(edits.map((e) => (e.Key === key ? { ...e, Enabled: enable } : e)));
+    commit(edits.map((e) => (e.Key === key ? { ...e, Enabled: nextChecked } : e)));
   }
 
   /**
@@ -668,15 +668,18 @@ export default function App() {
   }
 
   function updateLevel(key: string, level: number, patch: Partial<SigilTrait>) {
-    beginTick();
     /*
       Typing into a level that has no edit yet starts one, the way ticking its box does:
       every box on the row is typeable whether or not the level is on (the numbers shown
       are the game's own until then), and an edit that was typed but never applied would
       be the surprise. The rest of the record is the game's row for that level.
+
+      Only that first keystroke holds the scroll: creating the record can reorder the row
+      the caret is in. Every keystroke after it changes numbers in a row that stays put.
     */
     const at = edits.findIndex((e) => e.Key === key && e.Level === level);
     if (at < 0) {
+      beginTick();
       commit([...edits, { ...newRecord(key, level), ...patch }]);
       return;
     }
