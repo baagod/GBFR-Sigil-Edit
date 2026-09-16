@@ -327,14 +327,21 @@ function stageNames() {
     cannot reach it. Today the two agree - 199 traits each - and this is what says so out
     loud. A trait with no explanation must not be in the numbers either, or the tool
     offers a row whose tooltip it has nothing to fill with.
+
+    Only when that asset is there to compare with: on a fresh setup this stage runs first
+    (the Chinese names are what decide which traits are offered), so there is nothing to
+    check against yet - and failing here would break the order the header asks for.
   */
-  const info = JSON.parse(fs.readFileSync(path.join(ASSETS, "skillinfo.json"), "utf8"));
-  const orphans = Object.keys(info).filter((hash) => !(hash in result));
-  if (orphans.length) {
-    throw new Error(
-      `skillinfo.json carries ${orphans.length} trait(s) the names drop, so the two assets ` +
-        `have drifted: ${orphans.join(", ")} - regenerate skillinfo.json`,
-    );
+  const infoPath = path.join(ASSETS, "skillinfo.json");
+  if (fs.existsSync(infoPath)) {
+    const info = JSON.parse(fs.readFileSync(infoPath, "utf8"));
+    const orphans = Object.keys(info).filter((hash) => !(hash in result));
+    if (orphans.length) {
+      throw new Error(
+        `skillinfo.json carries ${orphans.length} trait(s) the names drop, so the two ` +
+          `assets have drifted: ${orphans.join(", ")} - regenerate skillinfo.json`,
+      );
+    }
   }
 
   for (const k of ["06719232", "29B07BEB"]) {
