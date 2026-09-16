@@ -126,17 +126,18 @@ func main() {
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: toolWindowTitle,
 		/*
-			Wails sizes the outer window, and Windows spends 8px per side on the
-			resize frame, so 816 here is 800 of *client* area for the frontend to
-			lay out in. Measured with GetWindowRect vs GetClientRect at 96 DPI.
-
-			Width is pinned so the ten value boxes in a row keep a usable size; the
-			height is still worth resizing.
+			Both dimensions are written as a client size plus what Windows adds around
+			it, so the numbers to change are the ones the frontend lays out in: 8px per
+			side of resize frame for the width (16), and the title bar plus borders for
+			the height (39). Measured with GetWindowRect vs GetClientRect at 96 DPI.
+			888 by 581 is also the shape the list was laid out in - about nine rows and
+			the band - which is why the height's minimum is the same number: the window
+			can grow, and neither dimension can shrink below what the rows need.
 		*/
-		Width:    816,
-		MinWidth: 816,
-		MaxWidth: 816,
-		Height:   620,
+		Width:     888 + 16,
+		MinWidth:  888 + 16,
+		Height:    581 + 39,
+		MinHeight: 581 + 39,
 		// Matches the shadcn dark --background token, so the window does not flash
 		// a different colour before the frontend paints.
 		BackgroundColour: application.NewRGB(10, 10, 10),

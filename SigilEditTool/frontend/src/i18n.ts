@@ -9,10 +9,10 @@
 
   The wording differs per language on purpose: the thing being edited is a trait a
   sigil carries, which the game's own data calls a "skill" (table `skill_status`),
-  so Japanese calls the picker シジル and the asset names stay as the game spells
-  them. The picker's placeholder says what picking does, so the band above the
-  list needs no label of its own; the count of enabled rows sits beside it as bare
-  numbers, with its reading kept in countLabel for the hover and a screen reader.
+  so Japanese calls it シジル and the asset names stay as the game spells them. The
+  search box's placeholder says what typing in it does, so the band above the list
+  needs no label of its own; the count of enabled rows sits beside it as bare
+  numbers.
 */
 
 export const LANGS = ["zh", "en", "ja"] as const;
@@ -29,60 +29,40 @@ export const LANG_LABEL: Record<Lang, string> = {
 };
 
 type Dict = {
-  title: (enabled: number, total: number) => string;
-  empty: string;
-  add: string;
-  pickTrait: string;
   searchTrait: string;
+  clearSearch: string;
   noMatch: string;
   ok: string;
   enable: (name: string) => string;
-  remove: (name: string) => string;
-  level: string;
   readFailed: string;
   writeFailed: string;
 };
 
 export const MESSAGES: Record<Lang, Dict> = {
   zh: {
-    title: (enabled, total) => `因子（${enabled}/${total}）：`,
-    empty: "无改动条目",
-    add: "添加",
-    pickTrait: "选择...",
-    searchTrait: "搜索",
+    searchTrait: "搜索因子 | Hex",
+    clearSearch: "清除",
     noMatch: "没有匹配的因子",
     ok: "确定",
     enable: (name) => `启用 ${name}`,
-    remove: (name) => `删除 ${name}`,
-    level: "等级",
     readFailed: "读取失败",
     writeFailed: "写入失败",
   },
   en: {
-    title: (enabled, total) => `Sigils (${enabled}/${total}):`,
-    empty: "No edits yet",
-    add: "Add",
-    pickTrait: "Select...",
-    searchTrait: "Search",
+    searchTrait: "Search sigil | Hex",
+    clearSearch: "Clear",
     noMatch: "No matching sigil",
     ok: "OK",
     enable: (name) => `Enable ${name}`,
-    remove: (name) => `Remove ${name}`,
-    level: "Level",
     readFailed: "Could not read",
     writeFailed: "Could not write",
   },
   ja: {
-    title: (enabled, total) => `シジル（${enabled}/${total}）：`,
-    empty: "変更はまだありません",
-    add: "追加",
-    pickTrait: "選択...",
-    searchTrait: "検索",
+    searchTrait: "シジル | Hex で検索",
+    clearSearch: "クリア",
     noMatch: "一致するシジルがありません",
     ok: "OK",
     enable: (name) => `${name} を有効にする`,
-    remove: (name) => `${name} を削除`,
-    level: "レベル",
     readFailed: "読み込みに失敗しました",
     writeFailed: "書き込みに失敗しました",
   },

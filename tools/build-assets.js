@@ -206,7 +206,7 @@ function stageDb() {
   }
 
   writeAsset("skillinfo.json", out, "skills");
-  for (const k of ["06719232", "29B07BEB", "70395731", "CAC6AFF2"]) {
+  for (const k of ["06719232", "29B07BEB", "70395731", "CFB48782"]) {
     const info = out[k];
     const atDefault = info?.Levels?.[info.Default - 1] ?? [];
     console.log(
@@ -302,8 +302,26 @@ function stageNames() {
     if (text) explain[hash] = text;
   }
 
+  /*
+    A trait the tables give no explanation for is not offered at all.
+
+    The tooltip IS that text, and a row that cannot say what it does is worse than a
+    row that is not there: one trait is in exactly that state - SKILL_023_00, 霸体＋
+    - because its skill_status row names TXT_SKILL_EXPLAIN_023_00 and no language's
+    text tables hold that key (searched, not guessed). Removing it here is what
+    keeps the two assets in step: every trait the tool offers has an explanation, so
+    the list has no row the tooltip cannot describe.
+  */
+  const dropped = Object.keys(result)
+    .filter((hash) => !(hash in explain))
+    .map((hash) => [hash, result[hash]]);
+  for (const [hash] of dropped) delete result[hash];
+
   writeAsset(`skillnames.${lang}.json`, result, "names");
   writeAsset(`skillexplain.${lang}.json`, explain, "explanations");
+  for (const [hash, name] of dropped) {
+    console.log(`  not offered (no explanation text): ${hash} ${name}`);
+  }
   for (const k of ["06719232", "29B07BEB"]) {
     console.log(`  ${k} => ${result[k] ?? "(none)"}`);
   }

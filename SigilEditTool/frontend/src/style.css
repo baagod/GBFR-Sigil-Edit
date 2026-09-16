@@ -89,4 +89,68 @@
   html {
     @apply font-sans;
   }
+  /*
+    The shell is pinned to the window and the list is the only thing that scrolls.
+
+    Left to itself the document scrolls too: a tooltip that ends up below the fold
+    while the wheel is still moving grows the scrollable area for a moment, so the
+    window's own scrollbar appears at the right edge - and, because it takes its
+    width out of the viewport, the whole shell shifts left until it goes away.
+    Seen while scrolling up fast with the pointer over the list.
+  */
+  html,
+  body {
+    overflow: hidden;
+  }
+  /*
+    The app only ships dark (index.html carries the class), but the engine drew its
+    own chrome for a light page: the list's scrollbar came out as a white track down
+    the right edge of a near-black window. color-scheme is the switch for that - the
+    scrollbar, the caret and form-control defaults - so it is set once here.
+  */
+  html {
+    color-scheme: dark;
+  }
+}
+
+/*
+  The checkbox is the component `shadcn add` put in components/ui, and it stays as it
+  came: the two things these rows need on top of it are rules here, scoped by the
+  `.trait-rows` class on the list that holds them.
+
+  A class, not a data-slot: the row's own click handler reads any data-slot above the
+  click as a control and lets it keep the click, so a data-slot on the list stopped
+  traits from being opened at all.
+
+  The component draws only a check - base-ui is headless and exposes just the
+  `data-indeterminate` attribute - so a partly-on trait's dash is drawn here rather
+  than by editing the component.
+*/
+@layer utilities {
+  /* Ticking a box also moves its row, and the stock transition-colors animated the
+     fill for 150ms after the row had already jumped: the box looked like it filled in
+     place, which is the flash. */
+  .trait-rows [data-slot="checkbox"] {
+    transition: none;
+  }
+
+  /* The box is the row's first child and a ring grows outward, so the container's edge
+     clipped it. The row leaves 2px for it (the checkbox's own ml-0.5) and the ring is
+     2px of solid colour, which is what fits in that room. */
+  .trait-rows [data-slot="checkbox"]:focus-visible {
+    box-shadow: 0 0 0 2px var(--ring);
+  }
+
+  /* Mixed: the box takes the fill the checked state has. The dash itself is drawn by
+     the row - a lucide icon of the check's own family and size - because base-ui sets
+     only data-indeterminate while the component's indicator always draws a check. */
+  .trait-rows [data-slot="checkbox"][data-indeterminate] {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  .trait-rows [data-slot="checkbox"][data-indeterminate] [data-slot="checkbox-indicator"] > svg {
+    display: none;
+  }
 }
