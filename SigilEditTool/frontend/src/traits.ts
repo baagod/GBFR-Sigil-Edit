@@ -129,15 +129,23 @@ export function slotEdit(
   typed: boolean[],
   vanillaOf: (i: number) => number,
 ): SlotEdit {
-  if (!HALF_TYPED.test(text)) return { kind: "drop" };
-  if (text === "") {
+  /*
+    A digit typed into a box that already shows 0 means that digit: the 0 was the box's, not
+    something the user asked to keep. So the whole-number part's leading zeroes go before the
+    text is judged - "04" is 4, "007" is 7, "00" is 0 - while a zero the decimal point needs
+    stays, because 0.5 is not .5.
+  */
+  const tidied = text.replace(/^(-?)0+(?=\d)/, "$1");
+
+  if (!HALF_TYPED.test(tidied)) return { kind: "drop" };
+  if (tidied === "") {
     // Emptied: the game's own number goes back, its placeholder shows again, and the
     // slot follows the level from here on.
     const next = [...values];
     next[i] = vanillaOf(i);
     return { kind: "commit", values: next, typed: withSlot(typed, i, false) };
   }
-  if (!NUMBER.test(text)) return { kind: "half", text };
+  if (!NUMBER.test(tidied)) return { kind: "half", text: tidied };
 
   /*
     A number: committed now, but the box keeps showing what was typed until it is left
@@ -148,8 +156,8 @@ export function slotEdit(
     50. On blur the box renders the number again, which is what makes 06 read back as 6.
   */
   const next = [...values];
-  next[i] = Number(text);
-  return { kind: "commit", values: next, typed: withSlot(typed, i, true), keeps: text };
+  next[i] = Number(tidied);
+  return { kind: "commit", values: next, typed: withSlot(typed, i, true), keeps: tidied };
 }
 
 /**

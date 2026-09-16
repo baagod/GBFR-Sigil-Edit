@@ -120,14 +120,30 @@ describe("the two patterns", () => {
     expect(HALF_TYPED.test("1e5")).toBe(false);
   });
 
-  it("refuses a second leading zero", () => {
-    for (const text of ["00", "01", "007", "00.5", "-00"]) {
+  it("replaces leading zeroes instead of refusing the keystroke", () => {
+    // 0 then 4 means 4: the 0 was the box's, so the digit replaces it. The zero a decimal
+    // point needs stays - 0.5 is not .5 - and a lone 0 is still 0.
+    expect(slotEdit("04", 0, [0], [false], () => 0)).toMatchObject({
+      kind: "commit",
+      values: [4],
+      keeps: "4",
+    });
+    expect(slotEdit("007", 0, [0], [false], () => 0)).toMatchObject({ values: [7], keeps: "7" });
+    expect(slotEdit("00", 0, [0], [false], () => 0)).toMatchObject({ values: [0], keeps: "0" });
+    expect(slotEdit("-04", 0, [0], [false], () => 0)).toMatchObject({ values: [-4], keeps: "-4" });
+    expect(slotEdit("00.5", 0, [0], [false], () => 0)).toMatchObject({
+      values: [0.5],
+      keeps: "0.5",
+    });
+    expect(slotEdit("0.004", 0, [0], [false], () => 0)).toMatchObject({ values: [0.004] });
+    expect(slotEdit("0", 0, [0], [false], () => 0)).toMatchObject({ values: [0], keeps: "0" });
+    expect(slotEdit("0.", 0, [0], [false], () => 0)).toMatchObject({ kind: "half", text: "0." });
+
+    // The patterns themselves still refuse a leading zero pair: normalising happens before
+    // them, so anything that reaches them with "01" is not a number.
+    for (const text of ["01", "007", "00.5"]) {
       expect(HALF_TYPED.test(text), text).toBe(false);
       expect(NUMBER.test(text), text).toBe(false);
-    }
-    // ...while a single zero, and zeroes that are not leading, are fine
-    for (const text of ["0", "0.5", "0.004", "10", "100", "-0", "-0.5"]) {
-      expect(NUMBER.test(text), text).toBe(true);
     }
   });
 

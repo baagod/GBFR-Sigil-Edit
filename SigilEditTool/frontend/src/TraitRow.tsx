@@ -369,9 +369,11 @@ export function TraitRow({
     );
   }
 
-  // The parent row stands for the trait and has no level of its own: it reads the band
-  // covering the level a new edit would use (Default), falling back to the first row.
-  const notation = ctx.notationOf(row.key, row.info?.Default ?? row.levels[0] ?? 1);
+  // The parent row stands for the trait and has no level of its own, so it reads the trait's
+  // highest band: what the trait does at full power. It said the default level's wording for
+  // a while, which read as "this trait is worth that little" on a trait whose low levels are
+  // a fraction of its top - a resistance says "受到的伤害-{1}%" at 15 and "…免疫" at 30.
+  const notation = ctx.notationOf(row.key, row.info?.Max ?? row.levels[0] ?? 1);
 
   return (
     <>
