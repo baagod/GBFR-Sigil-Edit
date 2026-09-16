@@ -106,6 +106,43 @@ func TestSaveEditsWritesConfigWhereTheModReadsIt(t *testing.T) {
 }
 
 /*
+  Config.json holds what is on and nothing else: a switched-off record in the list is
+  dropped on the way out, the same way it is dropped on the way in. The tool never builds
+  one - unticking a level removes it - so this is the rule's second gate rather than a
+  path a keystroke takes, and what it protects is the file other tools read.
+*/
+func TestSaveEditsWritesOnlySwitchedOnRecords(t *testing.T) {
+	hermeticHome(t)
+
+	service := &EditService{}
+	edits := []SigilTrait{
+		{Enabled: false, Key: "B064A634", Level: 14, Values: []float64{300}},
+		{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}},
+	}
+	if err := service.SaveEdits(edits); err != nil {
+		t.Fatalf("SaveEdits: %v", err)
+	}
+	service.flushNow()
+
+	raw, err := os.ReadFile(appDataConfig(t, "Config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg Config
+	if err := jsonv2.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("Config.json is not valid JSON: %v", err)
+	}
+	if len(cfg.Edits) != 1 || cfg.Edits[0].Key != "06719232" {
+		t.Fatalf("a switched-off record reached the file: %+v", cfg.Edits)
+	}
+	// The list the caller handed over is not the tool's to edit in place: it is the
+	// frontend's own state, and the next keystroke sends it again.
+	if len(edits) != 2 {
+		t.Fatalf("writing changed the caller's list: %+v", edits)
+	}
+}
+
+/*
 The debounce is trailing-edge, which is a statement about when nothing is written
 as much as about when something is: while the editing goes on, the file the mod
 reads must still be the old one - and every call has to restart the quiet second,
@@ -275,9 +312,10 @@ func TestLoadEditsRejectsAFileItCannotParse(t *testing.T) {
 	}
 }
 
-// An empty list is what a first run leaves behind, so it is a starting point rather than
-// a list to keep: the two starting edits are what the user gets back from it.
-func TestLoadEditsTreatsAnEmptyListAsStartOver(t *testing.T) {
+// An empty list is a state, not a starting point: it is what switching every edit off
+// leaves behind, so it stays empty instead of coming back as the built-in defaults the
+// user just turned off.
+func TestLoadEditsKeepsAnEmptyList(t *testing.T) {
 	hermeticHome(t)
 
 	current := appDataConfig(t, "Config.json")
@@ -292,23 +330,56 @@ func TestLoadEditsTreatsAnEmptyListAsStartOver(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEdits: %v", err)
 	}
-	want := defaultEdits()
-	if len(loaded) != len(want) {
-		t.Fatalf("an empty list did not fall back to the starting edits: %+v", loaded)
+	if len(loaded) != 0 {
+		t.Fatalf("an empty list came back as %+v", loaded)
 	}
-	for i := range want {
-		if loaded[i].Key != want[i].Key || loaded[i].Level != want[i].Level ||
-			loaded[i].Enabled != want[i].Enabled {
-			t.Fatalf("edit %d is %+v, want %+v", i, loaded[i], want[i])
-		}
+}
+
+// A record that is switched off is not an edit: the file is written with only what is
+// on, so one left behind - by hand, or by a build that kept them - is dropped on the
+// way in, and dropping it is not allowed to bring the defaults back.
+func TestLoadEditsDropsSwitchedOffRecords(t *testing.T) {
+	hermeticHome(t)
+
+	current := appDataConfig(t, "Config.json")
+	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte(`{"edits":[` +
+		`{"enabled":false,"key":"B064A634","level":14,"values":[300]},` +
+		`{"enabled":true,"key":"06719232","level":15,"values":[30,1,20]}]}`)
+	if err := os.WriteFile(current, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := (&EditService{}).LoadEdits()
+	if err != nil {
+		t.Fatalf("LoadEdits: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].Key != "06719232" {
+		t.Fatalf("a switched-off record was kept: %+v", loaded)
+	}
+
+	allOff := appDataConfig(t, "Config.json")
+	off := []byte(`{"edits":[{"enabled":false,"key":"B064A634","level":14,"values":[300]}]}`)
+	if err := os.WriteFile(allOff, off, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = (&EditService{}).LoadEdits()
+	if err != nil {
+		t.Fatalf("LoadEdits: %v", err)
+	}
+	if len(loaded) != 0 {
+		t.Fatalf("a file of switched-off records fell back to %+v", loaded)
 	}
 }
 
 /*
   There is one format and one reader: a file from a build whose keys were capitalised is not
-  read, and not rewritten either. It reads as an empty list, which is the documented shape of
-  "start over" - the defaults come back, and the next save writes the current format. This
-  test states that on purpose, so the behaviour is a decision rather than an accident.
+  read, and not rewritten either. It reads as an empty list - which is what the user asked for
+  at the format change: "it reads an Edits, and if it cannot, it is an empty config" - and the
+  next save writes the current format. This test states that on purpose, so the behaviour is a
+  decision rather than an accident.
 */
 func TestLoadEditsDoesNotReadAFileFromTheOldKeySpelling(t *testing.T) {
 	hermeticHome(t)
@@ -326,8 +397,7 @@ func TestLoadEditsDoesNotReadAFileFromTheOldKeySpelling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEdits: %v", err)
 	}
-	want := defaultEdits()
-	if len(loaded) != len(want) || loaded[0].Key != want[0].Key {
+	if len(loaded) != 0 {
 		t.Fatalf("an old-spelling file should read as an empty list: %+v", loaded)
 	}
 

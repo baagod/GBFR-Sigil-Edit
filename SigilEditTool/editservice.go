@@ -223,11 +223,10 @@ func configPath() string {
 
 // LoadEdits reads the current edit list from Config.json.
 //
-// "Nothing to read" is only the first run. A file that exists but cannot be read
-// or parsed is an ERROR, not an empty list: the two look the same on screen - the
-// built-in defaults - but the second is the user's own list going missing, and
-// showing defaults over it is how a stray keystroke writes them back over the
-// real file.
+// "Nothing to read" is only the first run, where there is no file at all. A file
+// that exists but cannot be read or parsed is an ERROR, not an empty list: an empty
+// list is a real state - everything switched off - and a broken file shown as one is
+// how a stray keystroke writes that emptiness back over the user's own edits.
 func (s *EditService) LoadEdits() ([]SigilTrait, error) {
 	path := configPath()
 	raw, err := os.ReadFile(path)
@@ -250,16 +249,32 @@ func (s *EditService) LoadEdits() ([]SigilTrait, error) {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 
-	edits := cfg.Edits
-	if len(edits) == 0 {
-		// Deliberate, and not the same as unreadable: an emptied list means "start
-		// over", so the defaults are the answer rather than nothing.
-		edits = defaultEdits()
-	}
+	/*
+	  Only what is on - see enabledOnly. A file with nothing left in it stays empty: the
+	  starting edits are for a file that is not there at all, so emptying the list (or
+	  reading a file from an older format, whose members match no member here) is not
+	  undone by two edits the user never asked for.
+	*/
+	edits := enabledOnly(cfg.Edits)
 	for i := range edits {
 		edits[i].Values = padValues(edits[i].Values)
 	}
 	return edits, nil
+}
+
+// enabledOnly keeps the records that are edits: an edit that is switched off is not
+// one. The tool writes only what is on - unticking a level drops it - so this is the
+// rule in one place instead of a convention every writer has to remember. A record
+// left switched off in the file (by hand, or by an older build, which kept them) is
+// dropped on the way in and on the way out.
+func enabledOnly(edits []SigilTrait) []SigilTrait {
+	kept := make([]SigilTrait, 0, len(edits))
+	for _, edit := range edits {
+		if edit.Enabled {
+			kept = append(kept, edit)
+		}
+	}
+	return kept
 }
 
 // SaveEdits takes the newest edit list and restarts the debounce, so the write
@@ -307,7 +322,7 @@ func writeEdits(edits []SigilTrait) error {
 		return errors.New("could not resolve the %APPDATA% config folder")
 	}
 
-	cfgBytes, err := jsonv2.Marshal(Config{Edits: edits}, jsontext.WithIndent("  "))
+	cfgBytes, err := jsonv2.Marshal(Config{Edits: enabledOnly(edits)}, jsontext.WithIndent("  "))
 	if err != nil {
 		return fmt.Errorf("serialising the edit list: %w", err)
 	}

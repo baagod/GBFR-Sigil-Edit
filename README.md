@@ -21,7 +21,7 @@ A typical table mod brings its own edited `.tbl`; two such mods editing the same
 
 ## Using it
 
-- **Adding a sigil**: find it in the search box by name or hash, then tick its row - or a single level of it - to switch that trait on. The entry carries the trait's original values, so only the number you want needs changing.
+- **Adding a sigil**: find it in the search box by name or hash, then tick its row - or a single level of it - to switch that trait on. The entry carries the trait's original values, so only the number you want needs changing. **Only ticked levels are written to the config, and a level has to be ticked before its numbers can be typed into; unticking deletes it from the config** and puts the game's own values back.
 - **Editing parameters**: every row has ten slots; **hovering anywhere on the row** shows that sigil's description. The placeholders are numbered to line up with the slots, and an empty slot greys the game's own value out as a placeholder and writes that value back.
 - **Taking effect**: the **sigil description** changes live, but the **actual effect** applies when the next battle starts.
 

@@ -286,8 +286,9 @@ export default function App() {
 
   /*
     One level's checkbox. With no edit at that address yet, ticking it is what
-    creates one; unticking only switches the edit off - the numbers stay, and they
-    are still there when it is ticked again.
+    creates one, from the game's own row for that level; unticking drops it again.
+    What is off is not saved, so there is nothing to keep: the numbers go back to the
+    game's own, and a level that is off has no row in Config.json at all.
   */
   function toggleLevel(key: string, level: number) {
     beginTick();
@@ -296,7 +297,7 @@ export default function App() {
       commit([...edits, newRecord(key, level)]);
       return;
     }
-    commit(edits.map((e, i) => (i === at ? { ...e, enabled: !e.enabled } : e)));
+    commit(edits.filter((_, i) => i !== at));
   }
 
   /** A trait's own checkbox: every level of it at once. */
@@ -307,15 +308,15 @@ export default function App() {
       at all - which is how 暴君 and 暴击伤害 read as rows that cannot be selected. It now
       selects the trait the way the game uses it: a record at the level the tables call
       the default, which is the level a sigil carries (15 for these). The rest of the
-      levels stay underneath for anyone who wants them, and unticking still just switches
-      off what is there.
+      levels stay underneath for anyone who wants them, and unticking drops them all,
+      the way a level's own box does.
     */
     if (!edits.some((e) => e.key === key)) {
       const level = traits[key]?.Default;
       if (nextChecked && level) commit([...edits, newRecord(key, level)]);
       return;
     }
-    commit(edits.map((e) => (e.key === key ? { ...e, enabled: nextChecked } : e)));
+    if (!nextChecked) commit(edits.filter((e) => e.key !== key));
   }
 
   /**
@@ -383,23 +384,16 @@ export default function App() {
     setTipRow((cur) => (cur === id ? null : cur));
   }
 
+  /*
+    A value box on a level that is on. A level that is off has no edit - and its boxes
+    are not typeable (TraitRow disables them) - so this only ever patches a record that
+    exists: a tick is what starts one, and a tick is also what saves it, because
+    Config.json holds what is on and nothing else.
+  */
   function updateLevel(key: string, level: number, patch: Partial<SigilTrait>) {
-    /*
-      Typing into a level that has no edit yet starts one, the way ticking its box does:
-      every box on the row is typeable whether or not the level is on (the numbers shown
-      are the game's own until then), and an edit that was typed but never applied would
-      be the surprise. The rest of the record is the game's row for that level.
-
-      Only that first keystroke holds the scroll: creating the record can reorder the row
-      the caret is in. Every keystroke after it changes numbers in a row that stays put.
-    */
-    const at = edits.findIndex((e) => e.key === key && e.level === level);
-    if (at < 0) {
-      beginTick();
-      commit([...edits, { ...newRecord(key, level), ...patch }]);
-      return;
-    }
-    commit(edits.map((e, i) => (i === at ? { ...e, ...patch } : e)));
+    commit(
+      edits.map((e) => (e.key === key && e.level === level ? { ...e, ...patch } : e)),
+    );
   }
 
   function toggleOpen(key: string) {

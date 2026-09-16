@@ -77,6 +77,7 @@ function ValueSlots({
   defaults,
   label,
   level,
+  disabled,
   onChange,
 }: {
   values: number[];
@@ -84,6 +85,7 @@ function ValueSlots({
   defaults?: number[];
   label: string;
   level: number;
+  disabled: boolean;
   onChange: (values: number[], typed: boolean[]) => void;
 }) {
   // The text the box is showing while it is being edited, if it differs from what the
@@ -133,8 +135,9 @@ function ValueSlots({
     // need goes to the values, and they share it evenly.
     //
     // No cursor-text on the wrapper: each box carries its own, so the I-beam marks
-    // exactly the boxes that accept typing, and every box types: a level with no edit
-    // yet shows the game's numbers as placeholders and the first keystroke starts it.
+    // exactly the boxes that accept typing - the boxes of a level that is on. A level
+    // that is off shows the game's numbers as placeholders and its boxes are disabled:
+    // an edit that is off is not saved, so there is nothing a keystroke could write to.
     //
     // The right padding is a fixed 11px, not the disclosure's column: the arrow only exists
     // on a parent row, and a parent row carries no values, so nothing here can overlap it.
@@ -151,6 +154,7 @@ function ValueSlots({
           <Input
             type="text"
             inputMode="decimal"
+            disabled={disabled}
             aria-label={`${label} Lv${level} value ${i + 1}`}
             placeholder={String(vanillaOf(i))}
             // Digits also show when the stored number differs from the game's - a
@@ -212,13 +216,13 @@ function ValueSlots({
               its levels' rows are then the same height (the multi-level row is h-11
               for the same reason).
 
-              Every box on the row types, whether or not the level is on: a level with
-              no edit yet shows the game's numbers as placeholders, and the first
-              keystroke or step starts the edit (see updateLevel). So there is no
-              disabled state to paint around - only the placeholder, which is what an
-              untouched slot in an edited level shows too.
+              A box on a level that is off is disabled, and the stock disabled paint is
+              turned off with it: these boxes have no chrome to begin with, so a fill
+              under each of the ten would read as ten controls rather than as the line of
+              numbers the game has for that level. What is disabled here is typing, not
+              reading - the level's own numbers stay on screen as placeholders.
             */
-            className="h-11! min-w-0 flex-1 border-0 bg-transparent px-0 text-center text-xs md:text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent"
+            className="h-11! min-w-0 flex-1 border-0 bg-transparent px-0 text-center text-xs md:text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 disabled:bg-transparent disabled:opacity-100 dark:bg-transparent dark:disabled:bg-transparent"
           />
         </Fragment>
       ))}
@@ -319,6 +323,9 @@ function LevelRow({
           defaults={row.info?.Levels?.[level - 1]}
           label={row.label}
           level={level}
+          // A record exists exactly while the level is on, so its absence is the
+          // checkbox being empty - and an empty checkbox is a level with nothing to type.
+          disabled={!record}
           onChange={(values, typed) =>
             ctx.updateLevel(row.key, level, { values: values, typed: typed })
           }
