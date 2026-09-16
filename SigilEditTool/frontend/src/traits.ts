@@ -81,8 +81,15 @@ export function dedupe(records: SigilTrait[]): {
   No leading zeroes either: 0 is 0, and 00 or 01 are not numbers anyone means. Letting
   them in put text in the box that the committed number could not render back - 00 read
   as 0, so the second 0 looked ignored, and 01 read as 1 while the box showed 01.
+
+  The lengths are the bound on the whole input domain, not decoration: at most 9 digits
+  before the point and 6 after it means the largest thing that can be typed is
+  999999999.999999. Nothing the game carries comes close (its values run from 0.004 to a
+  few tens of thousands), and a number that can never exceed that can never become
+  Infinity either - a pasted 400-digit number would otherwise be committed as Infinity,
+  and JSON refuses to write those, which left every later save failing.
 */
-export const HALF_TYPED = /^-?(0|[1-9]\d*)?(\.\d*)?$/;
+export const HALF_TYPED = /^-?(0|[1-9]\d{0,8})?(\.\d{0,6})?$/;
 
 /*
   ...and what counts as a number once the box is done with: -3, 30, 0.6, .5
@@ -92,7 +99,7 @@ export const HALF_TYPED = /^-?(0|[1-9]\d*)?(\.\d*)?$/;
   typed text and left the next 5 to be typed after a 0 that was already saved - so
   typing 0.5 produced 5.
 */
-export const NUMBER = /^-?((0|[1-9]\d*)(\.\d+)?|\.\d+)$/;
+export const NUMBER = /^-?((0|[1-9]\d{0,8})(\.\d{1,6})?|\.\d{1,6})$/;
 
 /** The typed flags with one slot set or cleared. */
 export const withSlot = (typed: boolean[], i: number, set: boolean) => {

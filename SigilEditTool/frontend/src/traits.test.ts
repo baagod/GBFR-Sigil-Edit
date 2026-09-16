@@ -123,6 +123,21 @@ describe("the two patterns", () => {
       expect(NUMBER.test(text), text).toBe(true);
     }
   });
+
+  it("refuses more digits than the game can carry, so no box can hold Infinity", () => {
+    // 9 digits before the point and 6 after it is the whole input domain; the largest
+    // value is 999999999.999999. Anything longer is dropped rather than committed: a
+    // 309-digit paste would commit Infinity, JSON refuses to write that, and every save
+    // after it failed with the dialog on screen.
+    expect(NUMBER.test("999999999")).toBe(true);
+    expect(NUMBER.test("999999999.999999")).toBe(true);
+    expect(HALF_TYPED.test("1000000000")).toBe(false);
+    expect(HALF_TYPED.test("0.1234567")).toBe(false);
+    for (const text of ["9".repeat(20), "9".repeat(309), "9".repeat(400)]) {
+      expect(HALF_TYPED.test(text), `${text.length} digits`).toBe(false);
+      expect(slotEdit(text, 0, [0], [false], () => 0)).toEqual({ kind: "drop" });
+    }
+  });
 });
 
 describe("stepping a slot", () => {
@@ -145,10 +160,24 @@ describe("one edit per address", () => {
     expect(records.map((r) => addressOf(r.Key, r.Level))).toEqual(["A1#1", "B2#3"]);
   });
 
-  it("keeps the last of any when none of them is enabled", () => {
-    const { records } = dedupe([record("A1", 1, false), record("A1", 1, false)]);
+  /*
+    Which one survives, by the order they are written in: the mod writes every enabled
+    edit in turn and the last write to an address is what the game keeps, so the record
+    to keep is the last enabled one - or, when the address holds none, the last of any.
+    Each case says which Values must be left standing, not just how many records remain.
+  */
+  it.each([
+    ["two enabled, the later one wins", [true, true], [2, 3], 3],
+    ["an enabled one before a switched-off one", [true, false], [2, 3], 2],
+    ["an enabled one after a switched-off one", [false, true], [2, 3], 3],
+    ["two switched off, the later one wins", [false, false], [2, 3], 3],
+  ])("keeps %s", (_case, enabled, values, kept) => {
+    const { records, changed } = dedupe(
+      enabled.map((on, i) => ({ ...record("A1", 1, on), Values: pad([values[i]]) })),
+    );
+    expect(changed).toBe(true);
     expect(records).toHaveLength(1);
-    expect(records[0].Enabled).toBe(false);
+    expect(records[0].Values[0]).toBe(kept);
   });
 
   it("says nothing changed when every address is unique", () => {

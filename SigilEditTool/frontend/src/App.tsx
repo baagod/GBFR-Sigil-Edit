@@ -555,11 +555,11 @@ export default function App() {
         }}
       >
         {/*
-          One provider for the list, at a short delay: the browser's own title took
-          about a second, and moving down the rows shows each one straight away
-          once the first is up.
+          One provider for the list: which tooltip is open is decided here (see tipRow),
+          so base-ui's own open/close timing never comes into it - what the provider is
+          still for is the rest of the tooltip's setup, which every row shares.
         */}
-        <TooltipProvider delay={300}>
+        <TooltipProvider>
           {rows.map((row) => (
             /*
               The row under the pointer decides which tooltip is up, so every row is told
@@ -582,8 +582,6 @@ export default function App() {
           </p>
         )}
       </div>
-
-
 
       {/*
         A failed write is worth interrupting for - the edit is not on disk, and

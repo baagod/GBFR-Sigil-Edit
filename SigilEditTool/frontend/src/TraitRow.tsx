@@ -27,13 +27,14 @@ import {
   stepValue,
   withSlot,
   type SigilTrait,
+  type TraitInfo,
 } from "./traits";
 
 /** One trait's row and its levels, as App's memo hands them over. */
 export type Row = {
   key: string;
   label: string;
-  info?: { Levels: number[][]; Default: number; Max: number; Min: number };
+  info?: TraitInfo;
   records: SigilTrait[];
   byLevel: Map<number, SigilTrait>;
   enabled: boolean;
@@ -58,42 +59,31 @@ export type RowContext = {
 };
 
 /**
- * Ten compact value inputs.
+ * Ten compact value inputs, named for the level they belong to so a screen reader can
+ * tell a thousand of them apart.
  *
- * Each slot's placeholder is the game's own number for that slot, so an empty box
- * reads as "this one is untouched, it will be written as the game's value".
+ * Each slot's placeholder is the game's own number for that slot, so an empty box reads
+ * as "this one is untouched, it will be written as the game's value", and whether a box
+ * is empty is decided by whether the user has typed in it - never by comparing the number
+ * to the default. A typed 20 in a slot whose default is 20 is still the user's 20.
  *
- * Whether a box is empty is decided by whether the user has typed in it - never by
- * comparing the number to the default. A typed 20 in a slot whose default is 20 is
- * still the user's 20: it stays on screen, and typing 200 into it never wipes what
- * was already typed.
- *
- * Nothing is ever "no input": emptying a box puts that slot back to the game's
- * number, and the table gets a concrete value for every slot either way.
- *
- * A number is what the box shows, not what is typed into it. What is typed has to
- * pass through states that are not numbers yet - "-" on the way to -5, "0." on the
- * way to 0.6 - so the box keeps the typed text on screen while it has focus, and drops
- * it on blur. Dropping it is what puts back the value the box started from.
- *
- * The number itself is committed as it is typed, so the game sees it live, but the box
- * goes on showing the text until it is left: a prefix of a number is often a number
- * itself (0.0 is 0, 0.00 is 0), so rendering the box from the committed number ate the
- * rest of what was typed - 0.004 came out as 4. Leaving renders the number, which is
- * what makes "06" read back as 6.
- *
- * Which of those a keystroke is, is decided in traits.ts (slotEdit), so the rule can
- * be tested key by key instead of only through a browser.
+ * What a keystroke means, and what the box shows while it is being typed into, is decided
+ * in traits.ts (slotEdit) - including why a typed number keeps its own text on screen
+ * until the box is left. That is the rule to read before changing anything here.
  */
 function ValueSlots({
   values,
   typed,
   defaults,
+  label,
+  level,
   onChange,
 }: {
   values: number[];
   typed: boolean[];
   defaults?: number[];
+  label: string;
+  level: number;
   onChange: (values: number[], typed: boolean[]) => void;
 }) {
   // The text the box is showing while it is being edited, if it differs from what the
@@ -156,7 +146,7 @@ function ValueSlots({
           <Input
             type="text"
             inputMode="decimal"
-            aria-label={`LevelValue${i + 1}`}
+            aria-label={`${label} Lv${level} value ${i + 1}`}
             placeholder={String(vanillaOf(i))}
             // Digits also show when the stored number differs from the game's - a
             // slot edited in Config.json by hand should not look untouched.
@@ -252,19 +242,6 @@ function TooltipBubble({ notation }: { notation: string }) {
 }
 
 /**
- * The level a row edits, as text: the level is part of the address the row writes,
- * not a field of its own. A trait that spans several levels opens one row per level,
- * and one whose numbers live on a single level says so here.
- */
-function LevelLabel({ level }: { level: number }) {
-  return (
-    <span className="w-12 shrink-0 text-sm leading-7 text-muted-foreground tabular-nums select-none">
-      Lv {level}
-    </span>
-  );
-}
-
-/**
  * One level of a trait: its checkbox - ticking it is what starts an edit there - its
  * level, its ten slots, and the trait's own tooltip, because the description covers the
  * whole row and any part of the row is a reasonable place to ask.
@@ -344,12 +321,18 @@ function LevelRow({
           </span>
         )}
 
-        <LevelLabel level={level} />
+        {/* The level a row edits, as text: it is part of the address the row writes, not a
+            field of its own. A single-level trait says the same thing on the one row it has. */}
+        <span className="w-12 shrink-0 text-sm leading-7 text-muted-foreground tabular-nums select-none">
+          Lv {level}
+        </span>
 
         <ValueSlots
           values={record ? record.Values : pad(row.info?.Levels?.[level - 1] ?? [])}
           typed={record ? record.Typed : NO_TYPED}
           defaults={row.info?.Levels?.[level - 1]}
+          label={row.label}
+          level={level}
           onChange={(values, typed) =>
             ctx.updateLevel(row.key, level, { Values: values, Typed: typed })
           }
