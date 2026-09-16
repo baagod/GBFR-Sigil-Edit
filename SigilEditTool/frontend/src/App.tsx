@@ -37,7 +37,6 @@ import {
   levelsOf,
   matches,
   pad,
-  SLOTS,
   slotLabel,
   type ExplainBand,
   type SigilTrait,
@@ -165,24 +164,17 @@ export default function App() {
     // edit nobody can see is worse than one whose name is only a hash.
     const loaded = (list ?? [])
       .filter((e) => String(e.key ?? "").trim() !== "")
-      .map((e) => {
+      .map((e) => ({
         // Every table the tool serves is keyed by the uppercase hash, and a key
         // written into Config.json by hand can be lower case. Normalising here is
         // what lets every lookup below use the key as it stands, instead of the
         // half-dozen call sites that used to uppercase it for themselves.
-        const key = e.key.toUpperCase();
-        const values = pad(e.values ?? []);
-        // A number that is not the level's own was put there by someone - by hand
-        // in Config.json, or on a level this edit has since left - so it counts as
-        // typed and stops following the level.
-        const vanilla = traitMap?.[key]?.Levels?.[e.level - 1];
-        return {
-          ...e,
-          key: key,
-          values: values,
-          typed: values.map((value, i) => value !== (vanilla?.[i] ?? value)),
-        };
-      });
+        ...e,
+        key: e.key.toUpperCase(),
+        // Ten slots, a number or null: a file that is short, or has no values at all,
+        // pads with null - the game's own number, which writes nothing.
+        values: pad(e.values ?? []),
+      }));
     // A file can hold two edits for one address, and a record that is not an edit at all
     // (an older build wrote them: switched off, carrying the game's own numbers). Only
     // one of the first can ever be in effect, and the second is not an edit, so the
@@ -274,17 +266,15 @@ export default function App() {
       );
   }, [edits, names, traits, search, lang]);
 
-  /** The edit a level's checkbox starts, from the game's own row for that level. */
+  /** The edit a level's checkbox starts: the game's own row, with nothing typed. */
   function newRecord(key: string, level: number): SigilTrait {
     return {
       enabled: true,
       key: key,
       level: level,
-      // The level's own numbers, not zeros: leaving every slot alone has to write
-      // the game's row back untouched. Nothing is typed yet, so every slot still
-      // reads as the game's number and follows the level.
-      values: pad(traits[key]?.Levels?.[level - 1] ?? []),
-      typed: Array.from({ length: SLOTS }, () => false),
+      // No numbers at all: an untouched slot is null, which leaves the game's own value
+      // in place - so ticking a level and changing nothing writes nothing.
+      values: pad([]),
     };
   }
 
@@ -411,10 +401,12 @@ export default function App() {
       edits.map((e, i) => {
         if (i !== at) return e;
         const next = { ...e, ...patch };
-        // Emptying the last typed number takes the whole edit away: what made it an edit
-        // was that number, so the box goes back to empty and commit drops the record
+        // Emptying the last number takes the whole edit away: what made it an edit was that
+        // number, so the box goes back to the game's value and commit drops the record
         // (this is the one thing that switches an edit off by itself).
-        return next.typed.some(Boolean) ? next : { ...next, enabled: false };
+        return next.values.some((value) => value !== null)
+          ? next
+          : { ...next, enabled: false };
       }),
     );
   }

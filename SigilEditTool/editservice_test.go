@@ -85,7 +85,7 @@ func TestSaveEditsWritesConfigWhereTheModReadsIt(t *testing.T) {
 	hermeticHome(t)
 
 	service := &EditService{}
-	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
+	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: padValues([]*float64{value(30), value(1), value(20)})}}
 	if err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
@@ -100,8 +100,16 @@ func TestSaveEditsWritesConfigWhereTheModReadsIt(t *testing.T) {
 	if err := jsonv2.Unmarshal(raw, &cfg); err != nil {
 		t.Fatalf("Config.json is not valid JSON: %v", err)
 	}
-	if len(cfg.Edits) != 1 || cfg.Edits[0].Key != "06719232" || cfg.Edits[0].Values[0] != 30 {
+	if len(cfg.Edits) != 1 || cfg.Edits[0].Key != "06719232" || *cfg.Edits[0].Values[0] != 30 {
 		t.Fatalf("Config.json round-trip lost data: %+v", cfg.Edits)
+	}
+	// The slots nobody typed into are the word null in the file, which is what tells the
+	// mod to leave that part of the row alone. The record here sets three of the ten.
+	if cfg.Edits[0].Values[3] != nil {
+		t.Fatalf("an untouched slot came back as %v, want nil", *cfg.Edits[0].Values[3])
+	}
+	if !strings.Contains(string(raw), "null") {
+		t.Fatalf("untouched slots are not spelled null in the file: %s", raw)
 	}
 }
 
@@ -122,7 +130,7 @@ func TestSaveEditsWaitsForTheEditingToStop(t *testing.T) {
 		service := &EditService{}
 		cfgPath := appDataConfig(t, "Config.json")
 
-		first := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
+		first := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: padValues([]*float64{value(30)})}}
 		if err := service.SaveEdits(first); err != nil {
 			t.Fatalf("SaveEdits: %v", err)
 		}
@@ -133,7 +141,7 @@ func TestSaveEditsWaitsForTheEditingToStop(t *testing.T) {
 
 		// A second keystroke restarts the window: the first one must not have left a
 		// write behind it, and neither may this one yet.
-		last := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{300}}}
+		last := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: padValues([]*float64{value(300)})}}
 		if err := service.SaveEdits(last); err != nil {
 			t.Fatalf("SaveEdits: %v", err)
 		}
@@ -155,7 +163,7 @@ func TestSaveEditsWaitsForTheEditingToStop(t *testing.T) {
 		if err := jsonv2.Unmarshal(raw, &cfg); err != nil {
 			t.Fatalf("Config.json is not valid JSON: %v", err)
 		}
-		if len(cfg.Edits) != 1 || cfg.Edits[0].Values[0] != 300 {
+		if len(cfg.Edits) != 1 || *cfg.Edits[0].Values[0] != 300 {
 			t.Fatalf("the write is not the last state on screen: %+v", cfg.Edits)
 		}
 	})
@@ -181,7 +189,7 @@ func TestSaveEditsSurvivesAWriteItCannotMake(t *testing.T) {
 	}
 
 	service := &EditService{}
-	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
+	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: padValues([]*float64{value(30)})}}
 	if err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
@@ -221,7 +229,7 @@ func TestLoadEditsReadsTheAppDataConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEdits: %v", err)
 	}
-	if len(loaded) != 1 || loaded[0].Key != "B064A634" || loaded[0].Values[0] != 300 {
+	if len(loaded) != 1 || loaded[0].Key != "B064A634" || *loaded[0].Values[0] != 300 {
 		t.Fatalf("Config.json was not read back: %+v", loaded)
 	}
 	if len(loaded[0].Values) != LevelValueCount {
@@ -336,20 +344,24 @@ func TestLoadEditsDoesNotReadAFileFromTheOldKeySpelling(t *testing.T) {
 
 /*
   padValues is what holds the "exactly ten slots" invariant whatever the file contains: a
-  short list is padded with zeros, a long one is cut, because the table row it feeds has
-  ten LevelValue slots and the mod writes them in order.
+  short list is padded with nil, a long one is cut, because the table row it feeds has ten
+  LevelValue slots and the mod reads them in order. nil is the slot nobody typed into - the
+  game's own value - so padding with it writes nothing rather than writing a zero.
 */
 func TestPadValuesAlwaysGivesTenSlots(t *testing.T) {
-	short := padValues([]float64{1, 2, 3})
-	if len(short) != LevelValueCount || short[0] != 1 || short[3] != 0 {
+	short := padValues([]*float64{value(1), value(2), value(3)})
+	if len(short) != LevelValueCount || *short[0] != 1 || short[3] != nil {
 		t.Fatalf("a short list was not padded to %d: %v", LevelValueCount, short)
 	}
 
-	long := padValues([]float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+	long := padValues([]*float64{
+		value(1), value(2), value(3), value(4), value(5), value(6),
+		value(7), value(8), value(9), value(10), value(11), value(12),
+	})
 	if len(long) != LevelValueCount {
 		t.Fatalf("a long list was not cut to %d: %v", LevelValueCount, long)
 	}
-	if long[0] != 1 || long[LevelValueCount-1] != 10 {
+	if *long[0] != 1 || *long[LevelValueCount-1] != 10 {
 		t.Fatalf("a long list kept the wrong values: %v", long)
 	}
 }
@@ -560,7 +572,7 @@ func TestSaveEditsSignalsTheRunningMod(t *testing.T) {
 	event := openModEvent(t)
 
 	service := &EditService{}
-	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
+	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: padValues([]*float64{value(30), value(1), value(20)})}}
 	if err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}
@@ -582,7 +594,7 @@ func TestFlushWithNothingPendingDoesNothing(t *testing.T) {
 	event := openModEvent(t)
 
 	service := &EditService{}
-	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
+	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: padValues([]*float64{value(30)})}}
 	if err := service.SaveEdits(edits); err != nil {
 		t.Fatalf("SaveEdits: %v", err)
 	}

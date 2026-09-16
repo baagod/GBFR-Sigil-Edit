@@ -23,12 +23,20 @@ const LevelValueCount = 10
 // SigilTrait mirrors the mod's Config.cs SigilTrait: one skill_status row override.
 // Values maps positionally onto LevelValue1..10, which is what the skill's own
 // description uses as {0}, {1}, {2} ...
+//
+// A slot is either a number someone typed or nil, which means "the game's own value,
+// untouched": the mod writes only the numbers and leaves the rest of the row as it
+// found it, so a slot the tool knows nothing about cannot overwrite it with a stale
+// copy of the game's table.
 type SigilTrait struct {
-	Enabled bool      `json:"enabled"`
-	Key     string    `json:"key"`
-	Level   int       `json:"level"`
-	Values  []float64 `json:"values"`
+	Enabled bool       `json:"enabled"`
+	Key     string     `json:"key"`
+	Level   int        `json:"level"`
+	Values  []*float64 `json:"values"`
 }
+
+// value is one typed slot, for building a record or a test fixture by hand.
+func value(v float64) *float64 { return &v }
 
 // Config mirrors the mod's Config.cs. The mod deserialises exactly this shape.
 type Config struct {
@@ -180,9 +188,11 @@ func (s *EditService) ExplainMap(lang string) map[string][]ExplainBand {
 }
 
 // padValues makes a Values slice exactly LevelValueCount long, so the JSON shape
-// is stable no matter what a hand-edited file contains.
-func padValues(values []float64) []float64 {
-	out := make([]float64, LevelValueCount)
+// is stable no matter what a hand-edited file contains. Missing slots stay nil -
+// nil is "the game's own value", so padding with it says nothing rather than
+// something wrong.
+func padValues(values []*float64) []*float64 {
+	out := make([]*float64, LevelValueCount)
 	copy(out, values)
 	return out
 }
@@ -190,8 +200,8 @@ func padValues(values []float64) []float64 {
 // defaultEdits is what the tool starts from when no config exists yet.
 func defaultEdits() []SigilTrait {
 	return []SigilTrait{
-		{Enabled: true, Key: "06719232", Level: 15, Values: padValues([]float64{30, 1, 20})},
-		{Enabled: true, Key: "29B07BEB", Level: 15, Values: padValues([]float64{2})},
+		{Enabled: true, Key: "06719232", Level: 15, Values: padValues([]*float64{value(30), value(1), value(20)})},
+		{Enabled: true, Key: "29B07BEB", Level: 15, Values: padValues([]*float64{value(2)})},
 	}
 }
 

@@ -20,7 +20,6 @@ import {
 import type { Dict } from "./i18n";
 import {
   addressOf,
-  NO_TYPED,
   pad,
   SLOTS,
   slotEdit,
@@ -63,9 +62,10 @@ export type RowContext = {
  * tell a thousand of them apart.
  *
  * Each slot's placeholder is the game's own number for that slot, so an empty box reads
- * as "this one is untouched, it will be written as the game's value", and whether a box
- * is empty is decided by whether the user has typed in it - never by comparing the number
- * to the default. A typed 20 in a slot whose default is 20 is still the user's 20.
+ * as "this one is untouched, the game's value stays", and whether a box is empty is
+ * decided by the record itself: a slot is null until someone types into it, never by
+ * comparing the number to the default. A typed 20 in a slot whose default is 20 is still
+ * the user's 20.
  *
  * What a keystroke means, and what the box shows while it is being typed into, is decided
  * in traits.ts (slotEdit) - including why a typed number keeps its own text on screen
@@ -73,18 +73,16 @@ export type RowContext = {
  */
 function ValueSlots({
   values,
-  typed,
   defaults,
   label,
   level,
   onChange,
 }: {
-  values: number[];
-  typed: boolean[];
+  values: (number | null)[];
   defaults?: number[];
   label: string;
   level: number;
-  onChange: (values: number[], typed: boolean[]) => void;
+  onChange: (values: (number | null)[]) => void;
 }) {
   // The text the box is showing while it is being edited, if it differs from what the
   // committed number renders as: "-" and "0." are states on the way to a number, and a
@@ -104,8 +102,8 @@ function ValueSlots({
     listener reading the current values.
   */
   const host = useRef<HTMLDivElement>(null);
-  const latest = useRef({ values, typed, onChange });
-  latest.current = { values, typed, onChange };
+  const latest = useRef({ values, defaults, onChange });
+  latest.current = { values, defaults, onChange };
 
   useEffect(() => {
     const element = host.current;
@@ -118,11 +116,11 @@ function ValueSlots({
       const index = Array.prototype.indexOf.call(element.querySelectorAll("input"), target);
       if (index < 0) return;
       event.preventDefault();
-      const { values, typed, onChange } = latest.current;
-      const next = [...values];
-      next[index] = stepValue(values[index], event.deltaY < 0 ? 1 : -1);
+      const { values, defaults, onChange } = latest.current;
+      // An untouched slot steps from the game's own number, which is what the box shows.
+      const from = values[index] ?? defaults?.[index] ?? 0;
       setHalfTyped(({ [index]: _dropped, ...rest }) => rest);
-      onChange(next, withSlot(typed, index, true));
+      onChange(withSlot(values, index, stepValue(from, event.deltaY < 0 ? 1 : -1)));
     };
     element.addEventListener("wheel", onWheel, { passive: false });
     return () => element.removeEventListener("wheel", onWheel);
@@ -154,16 +152,14 @@ function ValueSlots({
             inputMode="decimal"
             aria-label={`${label} Lv${level} value ${i + 1}`}
             placeholder={String(vanillaOf(i))}
-            // Digits also show when the stored number differs from the game's - a
-            // slot edited in Config.json by hand should not look untouched.
-            value={
-              halfTyped[i] ??
-              (typed[i] || values[i] !== vanillaOf(i) ? String(values[i]) : "")
-            }
+            // Empty is "the game's number stays": a slot is null until it is typed into, so
+            // the box needs no comparison against the default to know that - and a number
+            // typed by hand into Config.json shows as the value it is.
+            value={halfTyped[i] ?? (values[i] === null ? "" : String(values[i]))}
             onChange={(e) => {
               // What a keystroke means - dropped, half typed, or a number to commit -
               // is decided in traits.ts, where a test can drive it key by key.
-              const edit = slotEdit(e.target.value, i, values, typed, vanillaOf);
+              const edit = slotEdit(e.target.value, i, values);
               if (edit.kind === "drop") return;
               if (edit.kind === "half") {
                 setHalfTyped((prev) => ({ ...prev, [i]: edit.text }));
@@ -176,7 +172,7 @@ function ValueSlots({
               setHalfTyped(({ [i]: _dropped, ...rest }) =>
                 edit.keeps ? { ...rest, [i]: edit.keeps } : rest,
               );
-              onChange(edit.values, edit.typed);
+              onChange(edit.values);
             }}
             onBlur={() => setHalfTyped(({ [i]: _dropped, ...rest }) => rest)}
             /*
@@ -197,10 +193,10 @@ function ValueSlots({
               // Otherwise the arrow moves the caret to the end of the box, and on a
               // list that scrolls it would scroll that too.
               e.preventDefault();
-              const next = [...values];
-              next[i] = stepValue(values[i], e.key === "ArrowUp" ? 1 : -1);
+              // An untouched slot steps from the game's own number, which is what it shows.
+              const from = values[i] ?? vanillaOf(i);
               setHalfTyped(({ [i]: _dropped, ...rest }) => rest);
-              onChange(next, withSlot(typed, i, true));
+              onChange(withSlot(values, i, stepValue(from, e.key === "ArrowUp" ? 1 : -1)));
             }}
             /*
               Bare text, not a field: no border, no fill, no focus ring. The row
@@ -315,14 +311,13 @@ function LevelRow({
         </span>
 
         <ValueSlots
-          values={record ? record.values : pad(row.info?.Levels?.[level - 1] ?? [])}
-          typed={record ? record.typed : NO_TYPED}
+          // A level with no edit has no numbers of its own: every slot is the game's, which
+          // is what the placeholders show.
+          values={record ? record.values : pad([])}
           defaults={row.info?.Levels?.[level - 1]}
           label={row.label}
           level={level}
-          onChange={(values, typed) =>
-            ctx.updateLevel(row.key, level, { values: values, typed: typed })
-          }
+          onChange={(values) => ctx.updateLevel(row.key, level, { values: values })}
         />
       </TooltipTrigger>
       {/*

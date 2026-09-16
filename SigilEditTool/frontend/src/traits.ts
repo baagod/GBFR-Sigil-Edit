@@ -11,15 +11,14 @@ export type SigilTrait = {
   enabled: boolean;
   key: string;
   level: number;
-  values: number[];
   /*
-    Which slots someone has actually put a number into, per slot. Only the tool
-    uses it, and only to tell apart "this slot shows the game's number" from "this
-    slot was typed, and happens to hold the same number" - which is what decides
-    whether a slot follows the level. Go ignores the field, so it never reaches
-    Config.json or the mod.
+    The ten LevelValue slots, positionally. A slot is a number someone typed, or null, which
+    means "the game's own value, untouched" - the mod writes only the numbers and leaves the
+    rest of the row as it found it. That is what makes null worth its own spelling: a slot
+    nobody touched cannot be overwritten with a stale copy of the game's table, and typing a
+    number that happens to equal the game's own is still a number, not an untouched slot.
   */
-  typed: boolean[];
+  values: (number | null)[];
 };
 
 /**
@@ -34,28 +33,23 @@ export type TraitInfo = { Levels: number[][]; Default: number; Rows: number[] };
 
 export const SLOTS = 10;
 
-/** The typed flags of a level with no edit yet: nobody has typed in any slot. */
-export const NO_TYPED: boolean[] = Array.from({ length: SLOTS }, () => false);
-
 /** The table row an edit writes: one address per trait hash and level. */
 export const addressOf = (key: string, level: number) => `${key}#${level}`;
 
 /**
  * Whether a record is an edit at all, which is what decides if it is saved.
  *
- * Two things make one: it is switched on, or it carries a number someone typed - the
- * numbers on screen are the game's own until then, so an untouched record would write
- * the game's row back and say nothing. A record with neither is a row the user ticked
- * and unticked, or typed into and emptied again, and Config.json holds no such row.
+ * Two things make one: it is switched on, or it carries a number someone typed. A record
+ * with neither is a row the user ticked and unticked, and Config.json holds no such row.
  *
- * Typed, not "differs from the game's number": typing 20 into a slot whose game value is
- * 20 is still the user's 20 (see the note on SigilTrait.typed).
+ * A number, not "differs from the game's number": typing 20 into a slot whose game value is
+ * 20 is still the user's 20, and null is the one thing that means "untouched".
  */
 export const isEdit = (record: SigilTrait) =>
-  record.enabled || record.typed.some(Boolean);
+  record.enabled || record.values.some((value) => value !== null);
 
-export const pad = (values: number[]) =>
-  Array.from({ length: SLOTS }, (_, i) => values[i] ?? 0);
+export const pad = (values: (number | null)[]) =>
+  Array.from({ length: SLOTS }, (_, i) => values[i] ?? null);
 
 /*
   At most one edit per address, which is the invariant the whole list rests on.
@@ -116,10 +110,10 @@ export const HALF_TYPED = /^-?(0|[1-9]\d{0,8})?(\.\d{0,6})?$/;
 */
 export const NUMBER = /^-?((0|[1-9]\d{0,8})(\.\d{1,6})?|\.\d{1,6})$/;
 
-/** The typed flags with one slot set or cleared. */
-export const withSlot = (typed: boolean[], i: number, set: boolean) => {
-  const next = typed.slice();
-  next[i] = set;
+/** One slot's number changed: the ten values with that slot set. */
+export const withSlot = (values: (number | null)[], i: number, v: number | null) => {
+  const next = values.slice();
+  next[i] = v;
   return next;
 };
 
@@ -135,14 +129,12 @@ export const withSlot = (typed: boolean[], i: number, set: boolean) => {
 export type SlotEdit =
   | { kind: "drop" }
   | { kind: "half"; text: string }
-  | { kind: "commit"; values: number[]; typed: boolean[]; keeps?: string };
+  | { kind: "commit"; values: (number | null)[]; keeps?: string };
 
 export function slotEdit(
   text: string,
   i: number,
-  values: number[],
-  typed: boolean[],
-  vanillaOf: (i: number) => number,
+  values: (number | null)[],
 ): SlotEdit {
   /*
     A digit typed into a box that already shows 0 means that digit: the 0 was the box's, not
@@ -154,11 +146,10 @@ export function slotEdit(
 
   if (!HALF_TYPED.test(tidied)) return { kind: "drop" };
   if (tidied === "") {
-    // Emptied: the game's own number goes back, its placeholder shows again, and the
-    // slot follows the level from here on.
-    const next = [...values];
-    next[i] = vanillaOf(i);
-    return { kind: "commit", values: next, typed: withSlot(typed, i, false) };
+    // Emptied: the slot goes back to the game's own number, which the box shows as a
+    // placeholder from here on - null is that, and the game's number is read from the
+    // tables rather than written back into the file (see SigilTrait.values).
+    return { kind: "commit", values: withSlot(values, i, null) };
   }
   if (!NUMBER.test(tidied)) return { kind: "half", text: tidied };
 
@@ -170,9 +161,11 @@ export function slotEdit(
     the committed number dropped the rest of what was typed: 0.004 came out as 4, 5.05 as
     50. On blur the box renders the number again, which is what makes 06 read back as 6.
   */
-  const next = [...values];
-  next[i] = Number(tidied);
-  return { kind: "commit", values: next, typed: withSlot(typed, i, true), keeps: tidied };
+  return {
+    kind: "commit",
+    values: withSlot(values, i, Number(tidied)),
+    keeps: tidied,
+  };
 }
 
 /**

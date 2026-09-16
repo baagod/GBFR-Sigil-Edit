@@ -312,11 +312,12 @@ public class Mod : IMod
     }
 
     /// <summary>
-    /// Walks the table at its 52-byte stride, matches (Key, Level), and writes
-    /// <paramref name="values"/> over LevelValue1..N. Missing trailing values are
-    /// written as zero so the row ends up exactly as the tool described it.
+    /// Walks the table at its 52-byte stride, matches (Key, Level), and writes the
+    /// set <paramref name="values"/> over LevelValue1..N. A null slot is left as the
+    /// game has it: only the numbers the user set are written, so a slot nobody
+    /// touched cannot be overwritten with a stale copy of this table.
     /// </summary>
-    private static bool PatchRow(byte[] data, uint key, uint level, float[] values)
+    private static bool PatchRow(byte[] data, uint key, uint level, float?[] values)
     {
         for (var row = FileHeaderSize; row <= data.Length - RowSize; row += RowSize)
         {
@@ -325,25 +326,28 @@ public class Mod : IMod
             if (BitConverter.ToUInt32(data, row + LevelOffset) != level)
                 continue;
 
-            var before = string.Join(" / ", Enumerable.Range(0, SigilTrait.LevelValueCount)
-                .Select(i => BitConverter.ToSingle(data, row + i * 4)));
-            var after = string.Join(" / ", Enumerable.Range(0, SigilTrait.LevelValueCount)
-                .Select(i => i < values.Length ? values[i] : 0f));
+            var before = RowValues(data, row);
 
-            Log($"  {key:X8} L{level} @0x{row:X}: was {before}");
-            Log($"  {key:X8} L{level} @0x{row:X}: now {after}");
-
-            for (var i = 0; i < SigilTrait.LevelValueCount; i++)
+            for (var i = 0; i < SigilTrait.LevelValueCount && i < values.Length; i++)
             {
-                var value = i < values.Length ? values[i] : 0f;
+                if (values[i] is not { } value)
+                    continue;
                 BitConverter.GetBytes(value).CopyTo(data, row + i * 4);
             }
+
+            Log($"  {key:X8} L{level} @0x{row:X}: was {before}");
+            Log($"  {key:X8} L{level} @0x{row:X}: now {RowValues(data, row)}");
             return true;
         }
 
         Log($"  {key:X8} L{level}: row not found");
         return false;
     }
+
+    /// <summary>One row's ten LevelValue slots, for the log lines above.</summary>
+    private static string RowValues(byte[] data, int row) =>
+        string.Join(" / ", Enumerable.Range(0, SigilTrait.LevelValueCount)
+            .Select(i => BitConverter.ToSingle(data, row + i * 4)));
 
     /// <summary>
     /// Points the log at the mod's own folder, resolved once in Start().

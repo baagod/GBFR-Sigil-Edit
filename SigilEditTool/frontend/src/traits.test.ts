@@ -31,30 +31,29 @@ const record = (
   key: string,
   level: number,
   enabled: boolean,
-  values: number[] = [],
+  values: (number | null)[] = [],
 ): SigilTrait => ({
   enabled,
   key,
   level,
   values: pad(values),
-  typed: Array.from({ length: 10 }, () => false),
 });
 
 /*
   A stand-in for one value box: it shows what the user has typed (half typed text while
-  it is not a number yet, otherwise the committed number), and a keystroke is appended
-  to what is shown - which is what the browser does with the caret at the end.
+  it is not a number yet, otherwise the number), and a keystroke is appended to what is
+  shown - which is what the browser does with the caret at the end.
 
   `committed` starts it in the state a box is in after a value has been saved - the number
-  on screen rather than empty - which is where the bound becomes visible to the user.
+  on screen rather than an empty box showing the game's placeholder, which is where the
+  bound becomes visible to the user.
 */
 function type(value: number, keys: string, committed = false) {
-  let values = [value];
-  let typed = [committed];
+  let values: (number | null)[] = [committed ? value : null];
   let half: string | undefined;
+  const shown = () => half ?? (values[0] === null ? "" : String(values[0]));
   for (const ch of keys) {
-    const shown = half ?? (typed[0] ? String(values[0]) : "");
-    const edit = slotEdit(shown + ch, 0, values, typed, () => 0);
+    const edit = slotEdit(shown() + ch, 0, values);
     if (edit.kind === "drop") continue;
     if (edit.kind === "half") {
       half = edit.text;
@@ -62,9 +61,8 @@ function type(value: number, keys: string, committed = false) {
     }
     half = edit.keeps;
     values = edit.values;
-    typed = edit.typed;
   }
-  return { value: values[0], typed: typed[0], shown: half ?? String(values[0]) };
+  return { value: values[0], typed: values[0] !== null, shown: shown() };
 }
 
 describe("a keystroke in a value box", () => {
@@ -90,15 +88,17 @@ describe("a keystroke in a value box", () => {
     // A dropped keystroke leaves the box exactly as it was - including its half typed
     // text - so the next digit is typed after whatever was already there.
     for (const text of ["1-", "1..", "1e", "1a"]) {
-      expect(slotEdit(text, 0, [1], [true], () => 0), text).toEqual({ kind: "drop" });
+      expect(slotEdit(text, 0, [1]), text).toEqual({ kind: "drop" });
     }
     expect(type(0, "1-2").value).toBe(12);
     expect(type(0, "1..2").value).toBe(1.2);
   });
 
-  it("puts the game's number back when the box is emptied", () => {
-    const edit = slotEdit("", 0, [5], [true], () => 3);
-    expect(edit).toEqual({ kind: "commit", values: [3], typed: [false] });
+  it("empties a box back to the game's own number, which is what null is", () => {
+    // The game's number is read from the tables, so the file does not carry a copy of it:
+    // an empty box is null, and the mod leaves that part of the row alone.
+    const edit = slotEdit("", 0, [5]);
+    expect(edit).toEqual({ kind: "commit", values: [null] });
   });
 });
 
@@ -124,21 +124,21 @@ describe("the two patterns", () => {
   it("replaces leading zeroes instead of refusing the keystroke", () => {
     // 0 then 4 means 4: the 0 was the box's, so the digit replaces it. The zero a decimal
     // point needs stays - 0.5 is not .5 - and a lone 0 is still 0.
-    expect(slotEdit("04", 0, [0], [false], () => 0)).toMatchObject({
+    expect(slotEdit("04", 0, [0])).toMatchObject({
       kind: "commit",
       values: [4],
       keeps: "4",
     });
-    expect(slotEdit("007", 0, [0], [false], () => 0)).toMatchObject({ values: [7], keeps: "7" });
-    expect(slotEdit("00", 0, [0], [false], () => 0)).toMatchObject({ values: [0], keeps: "0" });
-    expect(slotEdit("-04", 0, [0], [false], () => 0)).toMatchObject({ values: [-4], keeps: "-4" });
-    expect(slotEdit("00.5", 0, [0], [false], () => 0)).toMatchObject({
+    expect(slotEdit("007", 0, [0])).toMatchObject({ values: [7], keeps: "7" });
+    expect(slotEdit("00", 0, [0])).toMatchObject({ values: [0], keeps: "0" });
+    expect(slotEdit("-04", 0, [0])).toMatchObject({ values: [-4], keeps: "-4" });
+    expect(slotEdit("00.5", 0, [0])).toMatchObject({
       values: [0.5],
       keeps: "0.5",
     });
-    expect(slotEdit("0.004", 0, [0], [false], () => 0)).toMatchObject({ values: [0.004] });
-    expect(slotEdit("0", 0, [0], [false], () => 0)).toMatchObject({ values: [0], keeps: "0" });
-    expect(slotEdit("0.", 0, [0], [false], () => 0)).toMatchObject({ kind: "half", text: "0." });
+    expect(slotEdit("0.004", 0, [0])).toMatchObject({ values: [0.004] });
+    expect(slotEdit("0", 0, [0])).toMatchObject({ values: [0], keeps: "0" });
+    expect(slotEdit("0.", 0, [0])).toMatchObject({ kind: "half", text: "0." });
 
     // The patterns themselves still refuse a leading zero pair: normalising happens before
     // them, so anything that reaches them with "01" is not a number.
@@ -159,7 +159,7 @@ describe("the two patterns", () => {
     expect(HALF_TYPED.test("0.1234567")).toBe(false);
     for (const text of ["9".repeat(20), "9".repeat(309), "9".repeat(400)]) {
       expect(HALF_TYPED.test(text), `${text.length} digits`).toBe(false);
-      expect(slotEdit(text, 0, [0], [false], () => 0)).toEqual({ kind: "drop" });
+      expect(slotEdit(text, 0, [0])).toEqual({ kind: "drop" });
     }
   });
 
@@ -233,24 +233,21 @@ describe("one edit per address", () => {
 });
 
 describe("what counts as an edit", () => {
-  const typedAt = (slot: number) =>
-    Array.from({ length: 10 }, (_, i) => i === slot);
-
   it("keeps a record that is switched on, even with nothing typed into it", () => {
-    // Ticking a level is what selects it, so the tick alone is already an edit - it writes
-    // the game's own row back, which is what "on at its own values" means.
+    // Ticking a level is what selects it, so the tick alone is already an edit: it writes
+    // nothing (every slot is null), which is what "on at the game's own values" means.
     expect(isEdit(record("A1", 15, true))).toBe(true);
   });
 
-  it("keeps a record that carries a typed number, even with its box empty", () => {
+  it("keeps a record that carries a number, even with its switch off", () => {
     // The numbers are the user's, so they are saved; ticking the box is then the only
     // thing left to do, and what is saved is not applied until it happens.
-    expect(isEdit({ ...record("A1", 15, false), typed: typedAt(0) })).toBe(true);
+    expect(isEdit({ ...record("A1", 15, false), values: pad([30]) })).toBe(true);
   });
 
-  it("drops a record that is neither switched on nor typed into", () => {
-    // A level ticked and unticked, or one whose typed numbers were emptied again: it
-    // would write the game's own row back and say nothing.
+  it("drops a record that is neither switched on nor carrying a number", () => {
+    // A level ticked and unticked, or one whose numbers were emptied again: there is
+    // nothing to write, so Config.json keeps no row for it.
     expect(isEdit(record("A1", 15, false))).toBe(false);
   });
 });

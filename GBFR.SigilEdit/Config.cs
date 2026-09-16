@@ -7,9 +7,12 @@ namespace GBFR.SigilEdit;
 /// One skill-status override: which row, and the LevelValue slots to write.
 ///
 /// <see cref="Values"/> maps positionally onto the table's LevelValue1..10, which
-/// is what a skill's own description uses as {0}, {1}, {2} ... Slots a given skill
-/// does not use are simply left at zero. Descriptions are all the information
-/// available about a slot's meaning, so it is not modelled here.
+/// is what a skill's own description uses as {0}, {1}, {2} ... A slot is either a
+/// number the user set or null, and null means "leave that slot as the game has
+/// it": only the numbers are written, so a slot the tool knows nothing about
+/// cannot overwrite the row with a stale copy of the game's table. Descriptions
+/// are all the information available about a slot's meaning, so it is not
+/// modelled here.
 ///
 /// Every property names its own JSON member, because the reader is strict: these four
 /// spellings ARE the file format, and a property left without an attribute would depend on
@@ -31,9 +34,9 @@ public class SigilTrait
     [JsonPropertyName("level")]
     public int Level { get; set; } = 15;
 
-    /// <summary>LevelValue1..10, written in order.</summary>
+    /// <summary>LevelValue1..10 in order; null leaves that slot alone.</summary>
     [JsonPropertyName("values")]
-    public float[] Values { get; set; } = new float[LevelValueCount];
+    public float?[] Values { get; set; } = new float?[LevelValueCount];
 }
 
 /// <summary>
