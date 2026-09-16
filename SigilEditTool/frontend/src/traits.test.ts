@@ -112,6 +112,17 @@ describe("the two patterns", () => {
     expect(NUMBER.test("1e999")).toBe(false);
     expect(HALF_TYPED.test("1e5")).toBe(false);
   });
+
+  it("refuses a second leading zero", () => {
+    for (const text of ["00", "01", "007", "00.5", "-00"]) {
+      expect(HALF_TYPED.test(text), text).toBe(false);
+      expect(NUMBER.test(text), text).toBe(false);
+    }
+    // ...while a single zero, and zeroes that are not leading, are fine
+    for (const text of ["0", "0.5", "0.004", "10", "100", "-0", "-0.5"]) {
+      expect(NUMBER.test(text), text).toBe(true);
+    }
+  });
 });
 
 describe("stepping a slot", () => {

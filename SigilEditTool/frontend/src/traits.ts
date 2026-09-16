@@ -77,8 +77,12 @@ export function dedupe(records: SigilTrait[]): {
   minus, a second point, a letter or exponent notation never reach the box. Keeping
   exponent notation out matters: a number input used to accept 1e999, and JSON turns
   that into null, which the tool then saved as a 0.
+
+  No leading zeroes either: 0 is 0, and 00 or 01 are not numbers anyone means. Letting
+  them in put text in the box that the committed number could not render back - 00 read
+  as 0, so the second 0 looked ignored, and 01 read as 1 while the box showed 01.
 */
-export const HALF_TYPED = /^-?\d*\.?\d*$/;
+export const HALF_TYPED = /^-?(0|[1-9]\d*)?(\.\d*)?$/;
 
 /*
   ...and what counts as a number once the box is done with: -3, 30, 0.6, .5
@@ -88,7 +92,7 @@ export const HALF_TYPED = /^-?\d*\.?\d*$/;
   typed text and left the next 5 to be typed after a 0 that was already saved - so
   typing 0.5 produced 5.
 */
-export const NUMBER = /^-?(\d+\.\d+|\.\d+|\d+)$/;
+export const NUMBER = /^-?((0|[1-9]\d*)(\.\d+)?|\.\d+)$/;
 
 /** The typed flags with one slot set or cleared. */
 export const withSlot = (typed: boolean[], i: number, set: boolean) => {
