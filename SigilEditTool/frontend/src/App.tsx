@@ -630,11 +630,9 @@ export default function App() {
       accepts - a leave first would only close it again, and our open prop has not
       changed for a row that stayed put.
     */
-    if (row) {
-      row.dispatchEvent(
-        new window.MouseEvent("mousemove", { bubbles: true, clientX: at.x, clientY: at.y }),
-      );
-    }
+    row?.dispatchEvent(
+      new window.MouseEvent("mousemove", { bubbles: true, clientX: at.x, clientY: at.y }),
+    );
     setTipRow(id);
   }
 

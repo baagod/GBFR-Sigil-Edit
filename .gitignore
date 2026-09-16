@@ -7,6 +7,9 @@ node_modules/
 # for; a bare `go build .` names the binary after the module (sigiledittool.exe),
 # and that stray copy is not a second tool.
 SigilEditTool/*.exe
+# The ~ copy a build can leave next to the binary (Go/Wails writes one when it
+# replaces a running exe). Glob above does not cover it, and it is 13MB of nothing.
+SigilEditTool/*.exe~
 *.zip
 
 # Editors / tooling
