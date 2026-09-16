@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
 	"errors"
@@ -260,6 +261,20 @@ func (s *EditService) LoadEdits() ([]SigilTrait, error) {
 	}
 	for i := range edits {
 		edits[i].Values = padValues(edits[i].Values)
+	}
+
+	/*
+	  A file still written with the old capitalised keys is rewritten here, so the keys
+	  land in their new spelling without waiting for the user to change something. Only
+	  the file: writeEdits is the write on its own, with no wake-up for the mod, which has
+	  nothing new to apply either way.
+	*/
+	if bytes.Contains(raw, []byte(`"Edits"`)) {
+		if err := writeEdits(edits); err != nil {
+			// The list was read successfully, so this is not a failure to load: the next
+			// save writes the same shape anyway, and its own error path reports it.
+			log.Printf("GBFR.SigilEdit: rewriting %s with the new keys: %v", path, err)
+		}
 	}
 	return edits, nil
 }

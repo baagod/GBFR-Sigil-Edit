@@ -304,6 +304,44 @@ func TestLoadEditsTreatsAnEmptyListAsStartOver(t *testing.T) {
 	}
 }
 
+/*
+  A file written before the keys were lowercased is read - and rewritten - on load, so the
+  new spelling lands without the user having to change something first. Reading it is the
+  part that matters: a case-sensitive read of the old keys finds no members at all, and an
+  empty list is indistinguishable from "nothing is switched on".
+*/
+func TestLoadEditsRewritesAFileWrittenWithTheOldKeys(t *testing.T) {
+	hermeticHome(t)
+
+	current := appDataConfig(t, "Config.json")
+	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := []byte(`{"Edits":[{"Enabled":true,"Key":"B064A634","Level":14,"Values":[300]}]}`)
+	if err := os.WriteFile(current, old, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := (&EditService{}).LoadEdits()
+	if err != nil {
+		t.Fatalf("LoadEdits: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].Key != "B064A634" || !loaded[0].Enabled {
+		t.Fatalf("the old keys were not read: %+v", loaded)
+	}
+
+	rewritten, err := os.ReadFile(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(rewritten, []byte(`"Edits"`)) {
+		t.Fatalf("the file still carries the old keys: %s", rewritten)
+	}
+	if !bytes.Contains(rewritten, []byte(`"edits"`)) {
+		t.Fatalf("the file was not rewritten with the new keys: %s", rewritten)
+	}
+}
+
 // The name tables and the skill table come from separately generated assets: the
 // names are per-language text from the game, the values and levels are one table.
 // If their key sets drift, adding a skill silently produces zeros (or a blank
