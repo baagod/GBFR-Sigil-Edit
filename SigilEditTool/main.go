@@ -9,6 +9,7 @@ package main
 
 import (
 	"embed"
+	"errors"
 	"log"
 	"os"
 	"syscall"
@@ -87,7 +88,7 @@ var (
 func ensureSingleInstance() {
 	name, _ := syscall.UTF16PtrFromString(mutexName)
 	handle, _, cerr := procCreateMutexW.Call(0, 0, uintptr(unsafe.Pointer(name)))
-	if handle != 0 && cerr == syscall.ERROR_ALREADY_EXISTS {
+	if handle != 0 && errors.Is(cerr, syscall.ERROR_ALREADY_EXISTS) {
 		if hwnd := findToolWindow(); hwnd != 0 {
 			procShowWindow.Call(hwnd, swRestore)
 			procSetForegroundWindow.Call(hwnd)
