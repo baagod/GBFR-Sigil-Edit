@@ -212,7 +212,7 @@ func TestLoadEditsReadsTheAppDataConfig(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := []byte(`{"Edits":[{"Enabled":true,"Key":"B064A634","Level":14,"Values":[300,10,300,10]}]}`)
+	body := []byte(`{"edits":[{"enabled":true,"key":"B064A634","level":14,"values":[300,10,300,10]}]}`)
 	if err := os.WriteFile(current, body, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func TestLoadEditsTreatsAnEmptyListAsStartOver(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(current, []byte(`{"Edits":[]}`), 0o644); err != nil {
+	if err := os.WriteFile(current, []byte(`{"edits":[]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -305,12 +305,12 @@ func TestLoadEditsTreatsAnEmptyListAsStartOver(t *testing.T) {
 }
 
 /*
-  A file written before the keys were lowercased is read - and rewritten - on load, so the
-  new spelling lands without the user having to change something first. Reading it is the
-  part that matters: a case-sensitive read of the old keys finds no members at all, and an
-  empty list is indistinguishable from "nothing is switched on".
+  There is one format and one reader: a file from a build whose keys were capitalised is not
+  read, and not rewritten either. It reads as an empty list, which is the documented shape of
+  "start over" - the defaults come back, and the next save writes the current format. This
+  test states that on purpose, so the behaviour is a decision rather than an accident.
 */
-func TestLoadEditsRewritesAFileWrittenWithTheOldKeys(t *testing.T) {
+func TestLoadEditsDoesNotReadAFileFromTheOldKeySpelling(t *testing.T) {
 	hermeticHome(t)
 
 	current := appDataConfig(t, "Config.json")
@@ -326,19 +326,17 @@ func TestLoadEditsRewritesAFileWrittenWithTheOldKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEdits: %v", err)
 	}
-	if len(loaded) != 1 || loaded[0].Key != "B064A634" || !loaded[0].Enabled {
-		t.Fatalf("the old keys were not read: %+v", loaded)
+	want := defaultEdits()
+	if len(loaded) != len(want) || loaded[0].Key != want[0].Key {
+		t.Fatalf("an old-spelling file should read as an empty list: %+v", loaded)
 	}
 
-	rewritten, err := os.ReadFile(current)
+	untouched, err := os.ReadFile(current)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(rewritten, []byte(`"Edits"`)) {
-		t.Fatalf("the file still carries the old keys: %s", rewritten)
-	}
-	if !bytes.Contains(rewritten, []byte(`"edits"`)) {
-		t.Fatalf("the file was not rewritten with the new keys: %s", rewritten)
+	if string(untouched) != string(old) {
+		t.Fatalf("the file was rewritten; loading does not write: %s", untouched)
 	}
 }
 

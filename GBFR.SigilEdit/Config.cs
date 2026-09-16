@@ -40,15 +40,18 @@ public class SigilTrait
 public class Config
 {
     /// <summary>
-    /// The tool's edit list. The name spells the key the tool writes; the options below
-    /// also accept the capitalised spelling older files carry.
+    /// The tool's edit list, under the key the tool writes.
     /// </summary>
     [JsonPropertyName("edits")]
     public List<SigilTrait> Edits { get; set; } = [];
 
     private static readonly JsonSerializerOptions Options = new()
     {
-        PropertyNameCaseInsensitive = true,
+        // The file is written by the tool and read here, so the names are the contract:
+        // nothing is folded, nothing is guessed. A file from an older build (the keys were
+        // capitalised then) reads as an empty list, which is the documented "nothing to do
+        // this launch" - Mod.LoadConfig logs the count it got.
+        PropertyNameCaseInsensitive = false,
     };
 
     /// <summary>

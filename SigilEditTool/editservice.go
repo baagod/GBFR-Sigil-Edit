@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
 	"errors"
@@ -243,13 +242,13 @@ func (s *EditService) LoadEdits() ([]SigilTrait, error) {
 
 	var cfg Config
 	/*
-	  Case-insensitively, because this file carried "Edits"/"Enabled"/"Key"/… until the keys
-	  were lowercased. A case-sensitive read of such a file matches no member at all and
-	  answers with an empty list, which looks exactly like "nothing is switched on" - and the
-	  next keystroke would write that empty list back over the user's edits. The mod's own
-	  reader is case-insensitive for the same reason (Config.cs: PropertyNameCaseInsensitive).
+	  Strictly, the way the file is written: exact member names, no case folding, nothing
+	  accepted that the writer does not produce. A file from an older build - the keys were
+	  "Edits"/"Enabled"/… then - matches no member and reads as an empty list, which is the
+	  documented shape of "start over": the defaults come back and the next save writes the
+	  current format. One format, one reader, no compatibility path to keep working.
 	*/
-	if err := jsonv2.Unmarshal(raw, &cfg, jsonv2.MatchCaseInsensitiveNames(true)); err != nil {
+	if err := jsonv2.Unmarshal(raw, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 
@@ -261,20 +260,6 @@ func (s *EditService) LoadEdits() ([]SigilTrait, error) {
 	}
 	for i := range edits {
 		edits[i].Values = padValues(edits[i].Values)
-	}
-
-	/*
-	  A file still written with the old capitalised keys is rewritten here, so the keys
-	  land in their new spelling without waiting for the user to change something. Only
-	  the file: writeEdits is the write on its own, with no wake-up for the mod, which has
-	  nothing new to apply either way.
-	*/
-	if bytes.Contains(raw, []byte(`"Edits"`)) {
-		if err := writeEdits(edits); err != nil {
-			// The list was read successfully, so this is not a failure to load: the next
-			// save writes the same shape anyway, and its own error path reports it.
-			log.Printf("GBFR.SigilEdit: rewriting %s with the new keys: %v", path, err)
-		}
 	}
 	return edits, nil
 }
