@@ -34,8 +34,7 @@ type Config struct {
 	Edits []SigilTrait `json:"Edits"`
 }
 
-// modFolder is both the Reloaded-II folder name and the mod's ModId, matching
-// this project's convention (GBFR.PreEquippedSigils does the same). It is not a
+// modFolder is both the Reloaded-II folder name and the mod's ModId. It is not a
 // Go identifier so it keeps its original casing.
 const modFolder = "GBFR.SigilEdit"
 

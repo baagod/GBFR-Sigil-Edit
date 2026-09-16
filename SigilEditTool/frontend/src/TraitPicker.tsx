@@ -18,8 +18,8 @@ export type PickerItem = { value: string; label: string }
 /**
  * Searchable dropdown over the skill list.
  *
- * The stock shadcn combobox used as it ships, same as GBFR.PreEquippedSigils'
- * TraitPicker: no styling of our own beyond the layout the trigger needs.
+ * The stock shadcn combobox used as it ships: no styling of our own beyond the
+ * layout the trigger needs.
  */
 export function TraitPicker({
   items,
