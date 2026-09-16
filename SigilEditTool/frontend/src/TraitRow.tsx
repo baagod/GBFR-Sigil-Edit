@@ -378,7 +378,11 @@ export function TraitRow({
   // highest band: what the trait does at full power. It said the default level's wording for
   // a while, which read as "this trait is worth that little" on a trait whose low levels are
   // a fraction of its top - a resistance says "受到的伤害-{1}%" at 15 and "…免疫" at 30.
-  const notation = ctx.notationOf(row.key, row.info?.Rows.at(-1) ?? row.levels[0] ?? 1);
+  //
+  // The table's last level, not the last level the picker offers: the bands come from the
+  // game's own rows, so the top wording lives on the top row even where that row's values
+  // are all zeros (万能药 has 30 levels and offers two of them).
+  const notation = ctx.notationOf(row.key, row.info?.Levels.length ?? row.levels[0] ?? 1);
 
   return (
     <>

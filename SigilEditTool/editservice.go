@@ -127,9 +127,8 @@ func (s *EditService) NameMap(lang string) map[string]string {
 //
 // Default is the level a new edit should start on: the trait's own maximum when
 // that is a normal 20 or less, otherwise the usual 15, except for the few traits
-// whose values only exist higher up. Rows is every level that actually carries
-// values - the levels the picker offers, which is not the span between the first
-// and the last: 万能药 has rows 15 and 30 with nothing in between.
+// whose values only exist higher up. Rows is every level that carries values - the
+// levels the picker offers, which is not the span between the first and the last.
 type TraitInfo struct {
 	Levels  [][]float64 `json:"Levels"`
 	Default int         `json:"Default"`
@@ -148,8 +147,8 @@ func loadTraitInfo() map[string]TraitInfo {
 }
 
 // TraitMap returns the whole hash -> trait table, so the frontend can resolve a
-// new edit's starting values and its level bound locally instead of one call per
-// row.
+// new edit's starting values, and the levels it may pick, locally instead of one
+// call per row.
 func (s *EditService) TraitMap() map[string]TraitInfo {
 	return traitInfo
 }

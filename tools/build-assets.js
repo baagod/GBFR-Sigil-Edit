@@ -185,11 +185,13 @@ function stageDb() {
       Every level has a row - the table is contiguous - but the game keeps most of them
       empty: 万能药 has values on 15 and 30 only, and its other 28 rows are all zeros. An
       edit pointed at a zero row writes a value the game never reads there, so the list
-      offers these levels and not the span between them. A skill whose every row is zero
-      keeps its last level: it has to offer something.
+      offers these levels and not the span between them.
+
+      No fallback: a skill whose every row is zero carries no trait, so it offers no level
+      at all and the tool's own test refuses to ship it - better than offering a level the
+      game reads nothing from.
     */
     const rows = levels.flatMap((row, i) => (row.some((v) => v !== 0) ? [i + 1] : []));
-    if (rows.length === 0) rows.push(max);
 
     /*
       Which level a new edit should point at.

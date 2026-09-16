@@ -469,10 +469,6 @@ func TestKnownSkillDefault(t *testing.T) {
 
 // The picker offers a skill's real levels - the ones that carry values - and the
 // default is one of them.
-//
-// The table has a row for every level up to the highest, most of them empty:
-// 万能药 is Lv15 and Lv30 with 14 blank rows in between, so listing the span
-// 15..30 would offer 14 levels the game never uses.
 func TestLevelRangesAreUsable(t *testing.T) {
 	if len(traitInfo) == 0 {
 		t.Fatal("skillinfo.json did not load")
@@ -515,18 +511,17 @@ func TestLevelRangesAreUsable(t *testing.T) {
 		}
 	}
 
-	// The three defaults the rule treats differently. Levels are the table's own, so
-	// these are the numbers the game shows: 黑龙的咒印 keeps its numbers on level 15
-	// alone and 浩劫 on level 25 alone, so neither of them can take the usual 15 - the
-	// first because 15 is the level it has, the second because it has no level 15 at
-	// all; 穷寇心 ramps from level 1 and does take it.
+	// The three defaults the rule treats differently, and one skill for each. The numbers
+	// are the game's own: 穷寇心 has 30 levels and does take the usual 15; 浩劫 has none
+	// below 25, so 15 would name a level it does not have; 相扑斗力 has 5 levels, so its
+	// own maximum is what it gets - the case that would catch a hardcoded 15.
 	for _, want := range []struct {
 		name string
 		hash string
 		def  int
 		why  string
 	}{
-		{"pinned to its only level", "06719232", 15, "numbers on level 15 only, which is the usual 15 anyway"},
+		{"the trait's own max below 15", "89C66ACB", 5, "5 levels: the usual 15 does not exist, so its own max does"},
 		{"free across 30 levels", "70395731", 15, "30 levels: default to the usual 15"},
 		{"single-level skill", "40223C28", 25, "its only level is 25: default to it, not to 15"},
 	} {

@@ -240,7 +240,8 @@ describe("the levels a trait shows", () => {
 
   it("shows the game's real rows, not the span between them", () => {
     // 万能药 has values on 15 and 30 only; its other rows are all zeros, and an edit on one
-    // of those writes a value the game never reads.
+    // of those writes a value the game never reads. Its Levels are left empty here because
+    // levelsOf reads Rows alone - the fixture is not the asset.
     const cure: TraitInfo = {
       Rows: [15, 30],
       Default: 15,
