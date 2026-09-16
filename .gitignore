@@ -3,13 +3,12 @@
 **/obj/
 dist/
 node_modules/
-# Any go build output in the tool folder. SigilEdit.exe is what build.ps1 asks
-# for; a bare `go build .` names the binary after the module (sigiledittool.exe),
-# and that stray copy is not a second tool.
-SigilEditTool/*.exe
-# The ~ copy a build can leave next to the binary (Go/Wails writes one when it
-# replaces a running exe). Glob above does not cover it, and it is 13MB of nothing.
-SigilEditTool/*.exe~
+# Any built binary, wherever it lands. SigilEdit.exe is what build.ps1 asks for, and a
+# bare `go build .` names one after the module (sigiledittool.exe); neither is a second
+# tool. The ~ copy is what Go/Wails leaves behind when it replaces an exe that is still
+# running - 13MB of nothing that an innocent `git add -A` would otherwise commit.
+*.exe
+*.exe~
 *.zip
 
 # Editors / tooling
@@ -28,7 +27,6 @@ SigilEditTool/*.exe~
 GBFRDataTools/
 extracted/
 *.db
-sqlite3.exe
 msg_*.json
 
 # The service bindings are generated (`wails3 generate bindings`) and nothing in
