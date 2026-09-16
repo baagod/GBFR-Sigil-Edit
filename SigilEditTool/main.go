@@ -10,6 +10,9 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
+	"syscall"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -56,7 +59,53 @@ var embeddedExplainJA []byte
 //go:embed appicon.png
 var appIcon []byte
 
+// mutexName is the single-instance lock's name. A Local\ name, so the lock is
+// per logon session rather than per machine.
+const mutexName = "Local\\GBFRSigilEditTool"
+
+// toolWindowTitle is the tool window's title, and the name a second launch finds
+// that window by.
+const toolWindowTitle = "GBFR Sigil Edit"
+
+// swRestore is ShowWindow's SW_RESTORE: a minimised window comes back at its
+// previous size and position.
+const swRestore = 9
+
+var (
+	user32                  = syscall.NewLazyDLL("user32.dll")
+	procFindWindowW         = user32.NewProc("FindWindowW")
+	procShowWindow          = user32.NewProc("ShowWindow")
+	procSetForegroundWindow = user32.NewProc("SetForegroundWindow")
+	kernel32                = syscall.NewLazyDLL("kernel32.dll")
+	procCreateMutexW        = kernel32.NewProc("CreateMutexW")
+)
+
+// ensureSingleInstance takes the named mutex and brings the window of the
+// instance already holding it to the front, so the tool is never open twice over
+// one Config.json. A mutex that cannot be created at all falls through, and the
+// tool then starts without a lock the way it did before.
+func ensureSingleInstance() {
+	name, _ := syscall.UTF16PtrFromString(mutexName)
+	handle, _, cerr := procCreateMutexW.Call(0, 0, uintptr(unsafe.Pointer(name)))
+	if handle != 0 && cerr == syscall.ERROR_ALREADY_EXISTS {
+		if hwnd := findToolWindow(); hwnd != 0 {
+			procShowWindow.Call(hwnd, swRestore)
+			procSetForegroundWindow.Call(hwnd)
+		}
+		os.Exit(0)
+	}
+}
+
+// findToolWindow returns the tool's main window handle (0 = not found).
+func findToolWindow() uintptr {
+	title, _ := syscall.UTF16PtrFromString(toolWindowTitle)
+	hwnd, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(title)))
+	return hwnd
+}
+
 func main() {
+	ensureSingleInstance()
+
 	edits := &EditService{}
 
 	app := application.New(application.Options{
@@ -75,7 +124,7 @@ func main() {
 	app.OnShutdown(edits.flushNow)
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title: "GBFR Sigil Edit",
+		Title: toolWindowTitle,
 		/*
 			Wails sizes the outer window, and Windows spends 8px per side on the
 			resize frame, so 816 here is 800 of *client* area for the frontend to
