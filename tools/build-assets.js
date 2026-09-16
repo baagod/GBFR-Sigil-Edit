@@ -187,12 +187,8 @@ function stageDb() {
       edit pointed at a zero row writes a value the game never reads there, so the list
       offers these levels and not the span between them. A skill whose every row is zero
       keeps its last level: it has to offer something.
-
-      This is what the list shows, and what an edit's level is clamped to.
     */
-    const rows = levels
-      .map((values, i) => (values.some((v) => v !== 0) ? i + 1 : 0))
-      .filter((level) => level !== 0);
+    const rows = levels.flatMap((row, i) => (row.some((v) => v !== 0) ? [i + 1] : []));
     if (rows.length === 0) rows.push(max);
 
     /*

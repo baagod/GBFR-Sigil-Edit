@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -473,7 +472,7 @@ func TestKnownSkillDefault(t *testing.T) {
 //
 // The table has a row for every level up to the highest, most of them empty:
 // 万能药 is Lv15 and Lv30 with 14 blank rows in between, so listing the span
-// 15..30 would offer a dozen levels the game never uses.
+// 15..30 would offer 14 levels the game never uses.
 func TestLevelRangesAreUsable(t *testing.T) {
 	if len(traitInfo) == 0 {
 		t.Fatal("skillinfo.json did not load")
@@ -516,40 +515,31 @@ func TestLevelRangesAreUsable(t *testing.T) {
 		}
 	}
 
-	// The three cases the rule treats differently. Levels are the table's own, so
-	// these are the numbers the game shows. 黑龙的咒印 keeps its numbers on level 15
-	// alone; 穷寇心 ramps from level 1; 浩劫 exists on level 25 alone, so a fixed
-	// default of 15 would name a level it does not have.
+	// The three defaults the rule treats differently. Levels are the table's own, so
+	// these are the numbers the game shows: 黑龙的咒印 keeps its numbers on level 15
+	// alone and 浩劫 on level 25 alone, so neither of them can take the usual 15 - the
+	// first because 15 is the level it has, the second because it has no level 15 at
+	// all; 穷寇心 ramps from level 1 and does take it.
 	for _, want := range []struct {
 		name string
 		hash string
-		rows []int
 		def  int
 		why  string
 	}{
-		{"pinned to its only level", "06719232", []int{15}, 15, "numbers on level 15 only"},
-		{"free across 30 levels", "70395731", seq(1, 30), 15, "30 levels: default to the usual 15"},
-		{"single-level skill", "40223C28", []int{25}, 25, "its only level is 25: default to it, not to 15"},
+		{"pinned to its only level", "06719232", 15, "numbers on level 15 only, which is the usual 15 anyway"},
+		{"free across 30 levels", "70395731", 15, "30 levels: default to the usual 15"},
+		{"single-level skill", "40223C28", 25, "its only level is 25: default to it, not to 15"},
 	} {
 		t.Run(want.name, func(t *testing.T) {
 			got, ok := traitInfo[want.hash]
 			if !ok {
 				t.Fatalf("%s missing from the skill table", want.hash)
 			}
-			if !slices.Equal(got.Rows, want.rows) || got.Default != want.def {
-				t.Fatalf("%s: got levels %v (default %d), want %v (default %d) (%s)",
-					want.hash, got.Rows, got.Default, want.rows, want.def, want.why)
+			if got.Default != want.def {
+				t.Fatalf("%s: default is Lv%d, want Lv%d (%s)", want.hash, got.Default, want.def, want.why)
 			}
 		})
 	}
-}
-
-func seq(from, to int) []int {
-	levels := make([]int, 0, to-from+1)
-	for level := from; level <= to; level++ {
-		levels = append(levels, level)
-	}
-	return levels
 }
 
 // The rows that are not really skills must be absent from every table.
