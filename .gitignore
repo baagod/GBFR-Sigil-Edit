@@ -10,6 +10,9 @@ node_modules/
 *.exe
 *.exe~
 *.zip
+# build.ps1 copies the mod icon here for main.go's //go:embed, so a Go build needs that
+# copy first. The tracked source of it is icon/sigiledit-256.png.
+SigilEditTool/appicon.png
 
 # Editors / tooling
 .idea/
