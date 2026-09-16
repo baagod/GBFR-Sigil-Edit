@@ -52,6 +52,27 @@ func hermeticHome(t *testing.T) string {
 }
 
 /*
+  openModEvent stands in for the running mod: the write signals an event by name, so the
+  test holds that name open and watches it. TestMain has already pointed the name away from
+  any event a game up on this machine would be waiting on, and the object is started clean
+  because CreateEvent may have opened one that was already signalled.
+*/
+func openModEvent(t *testing.T) windows.Handle {
+	t.Helper()
+	ptr, err := windows.UTF16PtrFromString(hotApplyEventName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := windows.CreateEvent(nil, 0, 0, ptr)
+	if err != nil {
+		t.Fatalf("creating the test event: %v", err)
+	}
+	t.Cleanup(func() { windows.CloseHandle(event) })
+	_ = windows.ResetEvent(event)
+	return event
+}
+
+/*
 SaveEdits is the whole write path now: the mod ships inside
 Reloaded-II\Mods\GBFR.SigilEdit\ beside this tool, so editing only ever writes
 the config the mod reads. Writing anywhere else hands the running game a list
@@ -474,23 +495,11 @@ func TestSignalHotApplyWithoutTheGame(t *testing.T) {
 }
 
 // SaveEdits has to wake the running mod after writing its config, so the values
-// land in a live game without a restart. The test simulates the mod by holding an
-// event open under the name the write signals; TestMain has already pointed that
-// name away from any event a game up on this machine would be waiting on.
+// land in a live game without a restart. The test simulates the mod with the event
+// openModEvent holds for it.
 func TestSaveEditsSignalsTheRunningMod(t *testing.T) {
 	hermeticHome(t)
-
-	ptr, err := windows.UTF16PtrFromString(hotApplyEventName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	event, err := windows.CreateEvent(nil, 0, 0, ptr)
-	if err != nil {
-		t.Fatalf("creating the test event: %v", err)
-	}
-	defer windows.CloseHandle(event)
-	// CreateEvent may have opened an already-signalled object; start clean.
-	_ = windows.ResetEvent(event)
+	event := openModEvent(t)
 
 	service := &EditService{}
 	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30, 1, 20}}}
@@ -512,16 +521,7 @@ func TestSaveEditsSignalsTheRunningMod(t *testing.T) {
 // edits is one write and one wake-up, however many times the flush is called.
 func TestFlushWithNothingPendingDoesNothing(t *testing.T) {
 	hermeticHome(t)
-
-	ptr, err := windows.UTF16PtrFromString(hotApplyEventName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	event, err := windows.CreateEvent(nil, 0, 0, ptr)
-	if err != nil {
-		t.Fatalf("creating the test event: %v", err)
-	}
-	defer windows.CloseHandle(event)
+	event := openModEvent(t)
 
 	service := &EditService{}
 	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
