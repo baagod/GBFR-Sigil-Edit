@@ -10,21 +10,29 @@ namespace GBFR.SigilEdit;
 /// is what a skill's own description uses as {0}, {1}, {2} ... Slots a given skill
 /// does not use are simply left at zero. Descriptions are all the information
 /// available about a slot's meaning, so it is not modelled here.
+///
+/// Every property names its own JSON member, because the reader is strict: these four
+/// spellings ARE the file format, and a property left without an attribute would depend on
+/// case folding that is deliberately off (Config.Options).
 /// </summary>
 public class SigilTrait
 {
     /// <summary>How many LevelValue slots the table has.</summary>
     public const int LevelValueCount = 10;
 
+    [JsonPropertyName("enabled")]
     public bool Enabled { get; set; } = true;
 
     /// <summary>skill_status Key as an 8-digit hex hash, e.g. 06719232.</summary>
+    [JsonPropertyName("key")]
     public string Key { get; set; } = "";
 
     /// <summary>The row's Level field: the level the game shows, and where an edit lands.</summary>
+    [JsonPropertyName("level")]
     public int Level { get; set; } = 15;
 
     /// <summary>LevelValue1..10, written in order.</summary>
+    [JsonPropertyName("values")]
     public float[] Values { get; set; } = new float[LevelValueCount];
 }
 
