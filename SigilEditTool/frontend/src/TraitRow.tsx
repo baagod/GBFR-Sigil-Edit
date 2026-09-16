@@ -135,7 +135,11 @@ function ValueSlots({
     // No cursor-text on the wrapper: each box carries its own, so the I-beam marks
     // exactly the boxes that accept typing, and every box types: a level with no edit
     // yet shows the game's numbers as placeholders and the first keystroke starts it.
-    <div ref={host} className="flex min-w-0 flex-1 items-center">
+    //
+    // The right padding is the disclosure's column: a parent row ends in a 28px chevron
+    // with 8px of gap before it, and a row of values ends at that same 8px line, so the
+    // last slot and the chevron never read as one run of text. 36px is pr-9.
+    <div ref={host} className="flex min-w-0 flex-1 items-center pr-9">
       {Array.from({ length: SLOTS }, (_, i) => (
         <Fragment key={i}>
           {/* Every slot, the first one too: it separates the values from the level
