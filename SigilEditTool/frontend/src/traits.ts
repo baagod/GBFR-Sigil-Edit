@@ -149,17 +149,6 @@ export function slotEdit(
 export const stepValue = (value: number, direction: 1 | -1) =>
   Math.round((value + direction) * 100) / 100;
 
-/** One trait's row, as the list needs it: the records, and the levels to show. */
-export type TraitRowData = {
-  key: string;
-  label: string;
-  info?: TraitInfo;
-  records: SigilTrait[];
-  byLevel: Map<number, SigilTrait>;
-  enabled: boolean;
-  levels: number[];
-};
-
 /*
   The levels a trait shows, in the order it shows them: what is on first, then the
   levels carrying a switched-off edit, then the untouched ones - each group ascending.

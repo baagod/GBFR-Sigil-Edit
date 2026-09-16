@@ -560,24 +560,20 @@ export default function App() {
           once the first is up.
         */}
         <TooltipProvider delay={300}>
-          {rows.map((row) => {
-          /*
-            Which rows show a tooltip: the id of the row under the pointer, or null.
-            Only the hovered trait's rows get a non-null id, so a hover changes the props
-            of the rows it touches and leaves the rest as they were.
-          */
-          const hovered =
-            tipRow === row.key || (tipRow !== null && tipRow.startsWith(`${row.key}#`));
-          return (
+          {rows.map((row) => (
+            /*
+              The row under the pointer decides which tooltip is up, so every row is told
+              that one id and compares it with its own - see tipRow for why the pointer,
+              and not a hover event, is what decides.
+            */
             <TraitRow
               key={row.key}
               row={row}
-              hoveredId={hovered ? tipRow : null}
+              hoveredId={tipRow}
               isOpen={open.has(row.key)}
               ctx={rowCtx}
             />
-          );
-        })}
+          ))}
         </TooltipProvider>
 
         {rows.length === 0 && (

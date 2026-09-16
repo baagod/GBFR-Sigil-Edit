@@ -232,6 +232,26 @@ function ValueSlots({
 }
 
 /**
+ * The trait's explanation, as the bubble both kinds of row show above themselves: above
+ * the row and centred on it, so every row reads the same way and the list under the
+ * pointer is never covered. Wider than the stock bubble, and keeping the line breaks the
+ * game's own text has - some explanations are three lines of parameters, and a one-line
+ * bubble would cut them off. The open and close animations are off: the bubble changes
+ * rows without being animated in and out again.
+ */
+function TooltipBubble({ notation }: { notation: string }) {
+  return (
+    <TooltipContent
+      side="top"
+      align="center"
+      className="max-w-md items-start whitespace-pre-line data-open:animate-none data-closed:animate-none"
+    >
+      {notation}
+    </TooltipContent>
+  );
+}
+
+/**
  * The level a row edits, as text: the level is part of the address the row writes,
  * not a field of its own. A trait that spans several levels opens one row per level,
  * and one whose numbers live on a single level says so here.
@@ -335,20 +355,7 @@ function LevelRow({
           }
         />
       </TooltipTrigger>
-      {/*
-        Above the row and centred on it: every row reads the same way, and the list under
-        the pointer is never covered. Wider than the stock bubble, and keeping the line
-        breaks the game's own text has - some explanations are three lines of parameters,
-        and a one-line bubble would cut them off. The open and close animations are off:
-        the bubble changes rows without being animated in and out again.
-      */}
-      <TooltipContent
-        side="top"
-        align="center"
-        className="max-w-md items-start whitespace-pre-line data-open:animate-none data-closed:animate-none"
-      >
-        {notation}
-      </TooltipContent>
+      <TooltipBubble notation={notation} />
     </Tooltip>
   );
 }
@@ -471,13 +478,7 @@ export function TraitRow({
             )}
           </span>
         </TooltipTrigger>
-        <TooltipContent
-          side="top"
-          align="center"
-          className="max-w-md items-start whitespace-pre-line data-open:animate-none data-closed:animate-none"
-        >
-          {notation}
-        </TooltipContent>
+        <TooltipBubble notation={notation} />
       </Tooltip>
 
       {isOpen &&
