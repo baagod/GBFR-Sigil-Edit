@@ -65,6 +65,11 @@ Wait-Process -Name 'SigilEdit' -Timeout 15 -ErrorAction SilentlyContinue
 if (Test-Path -LiteralPath $Target) {
     $removed = $false
     foreach ($retry in 1..20) {
+        # Re-checked every attempt: the folder is empty for a moment below, so a game
+        # started now would load a half-copied mod.
+        if (Get-Process -Name 'granblue_fantasy_relink' -ErrorAction SilentlyContinue) {
+            throw 'The game was started while deploying; close it and run this again.'
+        }
         try {
             Remove-Item -LiteralPath $Target -Recurse -Force -ErrorAction Stop
             $removed = $true

@@ -158,14 +158,12 @@ export default function App() {
       A hash the name table does not know is kept: the mod does apply those, and an
       edit nobody can see is worse than one whose name is only a hash.
     */
-    // One to eight hex digits, which is what the mod accepts (its own parse is
-    // uint.TryParse over the same field) and what this file may have been written with by
-    // hand or by an older tool. A shorter key is not a typo to drop: it is an edit the
-    // game would apply, so dropping it here would delete it from Config.json on the next
-    // write - see the note above about an edit nobody can see being worse than a hash.
-    const hexKey = /^[0-9a-f]{1,8}$/i;
+    // A key that is not hex at all is not an edit the mod can apply either way, but it is
+    // still the user's line: it is kept, under its hash as the name, rather than filtered
+    // out - dropping it here would delete it from Config.json on the next write, and an
+    // edit nobody can see is worse than one whose name is only a hash.
     const loaded = (list ?? [])
-      .filter((e) => hexKey.test(String(e.key ?? "").trim()))
+      .filter((e) => String(e.key ?? "").trim() !== "")
       .map((e) => {
         // Every table the tool serves is keyed by the uppercase hash, and a key
         // written into Config.json by hand can be lower case. Normalising here is

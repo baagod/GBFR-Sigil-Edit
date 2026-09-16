@@ -21,7 +21,7 @@ A typical table mod brings its own edited `.tbl`; two such mods editing the same
 
 ## Using it
 
-- **Adding a sigil**: add the sigil you want to change in the dropdown. The new entry carries that sigil trait's original values, so only the number you want needs changing.
+- **Adding a sigil**: find it in the search box by name or hash, then tick its row - or a single level of it - to switch that trait on. The entry carries the trait's original values, so only the number you want needs changing.
 - **Editing parameters**: every row has ten slots; **hovering anywhere on the row** shows that sigil's description. The placeholders are numbered to line up with the slots, and an empty slot greys the game's own value out as a placeholder and writes that value back.
 - **Taking effect**: the **sigil description** changes live, but the **actual effect** applies when the next battle starts.
 
@@ -33,7 +33,7 @@ A typical table mod brings its own edited `.tbl`; two such mods editing the same
 
 ## Building from source
 
-Needs .NET SDK 8, Node.js 22.5+, Go 1.25+.
+Needs .NET SDK 8, Node.js 20+ (22.5+ only to regenerate the assets), Go 1.27+.
 
 ```powershell
 ./build.ps1 -Package # -> dist/GBFR.SigilEdit/ + dist/GBFR.SigilEdit-<version>.zip

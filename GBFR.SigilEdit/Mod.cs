@@ -180,6 +180,15 @@ public class Mod : IMod
                 continue;
             }
 
+            // Checked before the cast, because (uint) turns a negative level into a value in
+            // the billions: the row lookup would then fail with "row not found", which reads
+            // as a typo in the config rather than as a level the table cannot have.
+            if (edit.Level < 1)
+            {
+                Log($"  skip (level {edit.Level} is below the first level): {edit.Key}");
+                continue;
+            }
+
             if (PatchRow(file, key, (uint)edit.Level, edit.Values))
                 applied++;
         }

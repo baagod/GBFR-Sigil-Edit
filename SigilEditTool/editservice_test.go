@@ -342,6 +342,26 @@ func TestLoadEditsRewritesAFileWrittenWithTheOldKeys(t *testing.T) {
 	}
 }
 
+/*
+  padValues is what holds the "exactly ten slots" invariant whatever the file contains: a
+  short list is padded with zeros, a long one is cut, because the table row it feeds has
+  ten LevelValue slots and the mod writes them in order.
+*/
+func TestPadValuesAlwaysGivesTenSlots(t *testing.T) {
+	short := padValues([]float64{1, 2, 3})
+	if len(short) != LevelValueCount || short[0] != 1 || short[3] != 0 {
+		t.Fatalf("a short list was not padded to %d: %v", LevelValueCount, short)
+	}
+
+	long := padValues([]float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+	if len(long) != LevelValueCount {
+		t.Fatalf("a long list was not cut to %d: %v", LevelValueCount, long)
+	}
+	if long[0] != 1 || long[LevelValueCount-1] != 10 {
+		t.Fatalf("a long list kept the wrong values: %v", long)
+	}
+}
+
 // The name tables and the skill table come from separately generated assets: the
 // names are per-language text from the game, the values and levels are one table.
 // If their key sets drift, adding a skill silently produces zeros (or a blank

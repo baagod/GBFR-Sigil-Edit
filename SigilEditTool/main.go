@@ -57,6 +57,8 @@ var embeddedExplainJA []byte
 // silently disables the icon when it is not there - and this exe's resource is
 // named, not numbered, so ID 3 is empty and the title bar came up blank.
 //
+// build.ps1 copies this from icon/sigiledit-256.png before the build; a bare `go build`
+// uses whatever copy is already sitting here.
 //go:embed appicon.png
 var appIcon []byte
 

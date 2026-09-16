@@ -72,8 +72,8 @@ $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
 if (-not $npm) { $npm = Get-Command npm -ErrorAction SilentlyContinue }
 
 Assert-Tool dotnet 'Install the .NET SDK 8 (https://dotnet.microsoft.com/download), then reopen this shell.'
-Assert-Tool node   'Install Node.js 20 or newer (https://nodejs.org), then reopen this shell.'
-Assert-Tool go     'Install Go 1.25 or newer (https://go.dev/dl), then reopen this shell.'
+Assert-Tool node   'Install Node.js 20 or newer, 22.5+ only to regenerate the assets (https://nodejs.org), then reopen this shell.'
+Assert-Tool go     'Install Go 1.27 or newer (https://go.dev/dl), then reopen this shell.'
 if (-not $npm) {
     throw "'npm' was not found on PATH. It ships with Node.js; reinstall Node.js and reopen this shell."
 }
@@ -101,6 +101,10 @@ try {
     # error: run the compiler over the same sources before bundling.
     & $npm.Source run typecheck
     Assert-ExitCode 'npm run typecheck'
+    # The tests are a gate, not something to remember: a release that ships with a
+    # red suite is a release nobody checked.
+    & $npm.Source test
+    Assert-ExitCode 'npm test'
     & $npm.Source run build
     Assert-ExitCode 'npm run build'
 }
@@ -123,6 +127,8 @@ try {
     # "modified" flag into the binary, so the same sources built before and after
     # a commit are not the same bytes. Measured: it was the only difference between
     # two builds of one unchanged tree.
+    & go test ./...
+    Assert-ExitCode 'go test'
     & go build -trimpath -buildvcs=false -ldflags '-H windowsgui -s -w' -o SigilEdit.exe .
     Assert-ExitCode 'go build'
 }
