@@ -24,15 +24,15 @@ const LevelValueCount = 10
 // Values maps positionally onto LevelValue1..10, which is what the skill's own
 // description uses as {0}, {1}, {2} ...
 type SigilTrait struct {
-	Enabled bool      `json:"Enabled"`
-	Key     string    `json:"Key"`
-	Level   int       `json:"Level"`
-	Values  []float64 `json:"Values"`
+	Enabled bool      `json:"enabled"`
+	Key     string    `json:"key"`
+	Level   int       `json:"level"`
+	Values  []float64 `json:"values"`
 }
 
 // Config mirrors the mod's Config.cs. The mod deserialises exactly this shape.
 type Config struct {
-	Edits []SigilTrait `json:"Edits"`
+	Edits []SigilTrait `json:"edits"`
 }
 
 // modFolder is both the Reloaded-II folder name and the mod's ModId. It is not a
@@ -241,7 +241,14 @@ func (s *EditService) LoadEdits() ([]SigilTrait, error) {
 	}
 
 	var cfg Config
-	if err := jsonv2.Unmarshal(raw, &cfg); err != nil {
+	/*
+	  Case-insensitively, because this file carried "Edits"/"Enabled"/"Key"/… until the keys
+	  were lowercased. A case-sensitive read of such a file matches no member at all and
+	  answers with an empty list, which looks exactly like "nothing is switched on" - and the
+	  next keystroke would write that empty list back over the user's edits. The mod's own
+	  reader is case-insensitive for the same reason (Config.cs: PropertyNameCaseInsensitive).
+	*/
+	if err := jsonv2.Unmarshal(raw, &cfg, jsonv2.MatchCaseInsensitiveNames(true)); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 

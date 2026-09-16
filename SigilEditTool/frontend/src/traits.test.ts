@@ -27,16 +27,16 @@ import {
 } from "./traits";
 
 const record = (
-  Key: string,
-  Level: number,
-  Enabled: boolean,
-  Values: number[] = [],
+  key: string,
+  level: number,
+  enabled: boolean,
+  values: number[] = [],
 ): SigilTrait => ({
-  Enabled,
-  Key,
-  Level,
-  Values: pad(Values),
-  Typed: Array.from({ length: 10 }, () => false),
+  enabled,
+  key,
+  level,
+  values: pad(values),
+  typed: Array.from({ length: 10 }, () => false),
 });
 
 /*
@@ -186,14 +186,14 @@ describe("one edit per address", () => {
       record("B2", 3, true),
     ]);
     expect(changed).toBe(true);
-    expect(records.map((r) => addressOf(r.Key, r.Level))).toEqual(["A1#1", "B2#3"]);
+    expect(records.map((r) => addressOf(r.key, r.level))).toEqual(["A1#1", "B2#3"]);
   });
 
   /*
     Which one survives, by the order they are written in: the mod writes every enabled
     edit in turn and the last write to an address is what the game keeps, so the record
     to keep is the last enabled one - or, when the address holds none, the last of any.
-    Each case says which Values must be left standing, not just how many records remain.
+    Each case says which values must be left standing, not just how many records remain.
   */
   it.each([
     ["the later of two enabled", [true, true], [2, 3], 3],
@@ -202,11 +202,11 @@ describe("one edit per address", () => {
     ["the later of two switched off", [false, false], [2, 3], 3],
   ])("keeps %s", (_case, enabled, values, kept) => {
     const { records, changed } = dedupe(
-      enabled.map((on, i) => ({ ...record("A1", 1, on), Values: pad([values[i]]) })),
+      enabled.map((on, i) => ({ ...record("A1", 1, on), values: pad([values[i]]) })),
     );
     expect(changed).toBe(true);
     expect(records).toHaveLength(1);
-    expect(records[0].Values[0]).toBe(kept);
+    expect(records[0].values[0]).toBe(kept);
   });
 
   it("says nothing changed when every address is unique", () => {

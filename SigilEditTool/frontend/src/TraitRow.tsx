@@ -279,7 +279,7 @@ function LevelRow({
         }
       >
         <Checkbox
-          checked={record?.Enabled ?? false}
+          checked={record?.enabled ?? false}
           // 2px of room on the left: the row's first child is the box, and a focus ring
           // grows outward, so without this the container's edge clipped the ring.
           className="ml-0.5"
@@ -309,13 +309,13 @@ function LevelRow({
         </span>
 
         <ValueSlots
-          values={record ? record.Values : pad(row.info?.Levels?.[level - 1] ?? [])}
-          typed={record ? record.Typed : NO_TYPED}
+          values={record ? record.values : pad(row.info?.Levels?.[level - 1] ?? [])}
+          typed={record ? record.typed : NO_TYPED}
           defaults={row.info?.Levels?.[level - 1]}
           label={row.label}
           level={level}
           onChange={(values, typed) =>
-            ctx.updateLevel(row.key, level, { Values: values, Typed: typed })
+            ctx.updateLevel(row.key, level, { values: values, typed: typed })
           }
         />
       </TooltipTrigger>
@@ -354,7 +354,7 @@ export function TraitRow({
   isOpen: boolean;
   ctx: RowContext;
 }) {
-  const on = row.records.filter((record) => record.Enabled).length;
+  const on = row.records.filter((record) => record.enabled).length;
   const allOn = row.records.length > 0 && on === row.records.length;
 
   if (row.levels.length === 1) {

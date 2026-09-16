@@ -152,8 +152,8 @@ export default function App() {
       Call.ByName(`${SERVICE}.TraitMap`) as Promise<Record<string, TraitInfo>>,
     ]);
     /*
-      A record whose Key is not a hex hash is not an edit at all: the mod parses the
-      Key as hex before it looks at any row and skips the record when that fails, so
+      A record whose key is not a hex hash is not an edit at all: the mod parses the
+      key as hex before it looks at any row and skips the record when that fails, so
       the tool ignores it too instead of showing a row that can never write anything.
       A hash the name table does not know is kept: the mod does apply those, and an
       edit nobody can see is worse than one whose name is only a hash.
@@ -165,23 +165,23 @@ export default function App() {
     // write - see the note above about an edit nobody can see being worse than a hash.
     const hexKey = /^[0-9a-f]{1,8}$/i;
     const loaded = (list ?? [])
-      .filter((e) => hexKey.test(String(e.Key ?? "").trim()))
+      .filter((e) => hexKey.test(String(e.key ?? "").trim()))
       .map((e) => {
-        // Every table the tool serves is keyed by the uppercase hash, and a Key
+        // Every table the tool serves is keyed by the uppercase hash, and a key
         // written into Config.json by hand can be lower case. Normalising here is
-        // what lets every lookup below use the Key as it stands, instead of the
+        // what lets every lookup below use the key as it stands, instead of the
         // half-dozen call sites that used to uppercase it for themselves.
-        const key = e.Key.toUpperCase();
-        const values = pad(e.Values ?? []);
+        const key = e.key.toUpperCase();
+        const values = pad(e.values ?? []);
         // A number that is not the level's own was put there by someone - by hand
         // in Config.json, or on a level this edit has since left - so it counts as
         // typed and stops following the level.
-        const vanilla = traitMap?.[key]?.Levels?.[e.Level - 1];
+        const vanilla = traitMap?.[key]?.Levels?.[e.level - 1];
         return {
           ...e,
-          Key: key,
-          Values: values,
-          Typed: values.map((value, i) => value !== (vanilla?.[i] ?? value)),
+          key: key,
+          values: values,
+          typed: values.map((value, i) => value !== (vanilla?.[i] ?? value)),
         };
       });
     // A file can hold two edits for one address. Only one of them can ever be in
@@ -224,9 +224,9 @@ export default function App() {
   const rows = useMemo(() => {
     const byKey = new Map<string, SigilTrait[]>();
     for (const record of edits) {
-      const held = byKey.get(record.Key);
+      const held = byKey.get(record.key);
       if (held) held.push(record);
-      else byKey.set(record.Key, [record]);
+      else byKey.set(record.key, [record]);
     }
 
     /*
@@ -248,7 +248,7 @@ export default function App() {
       .map((key) => {
         const info: TraitInfo | undefined = traits[key];
         const records = byKey.get(key) ?? [];
-        const byLevel = new Map(records.map((record) => [record.Level, record]));
+        const byLevel = new Map(records.map((record) => [record.level, record]));
         const label = names[key] ?? key;
 
         return {
@@ -257,7 +257,7 @@ export default function App() {
           info,
           records,
           byLevel,
-          enabled: records.some((record) => record.Enabled),
+          enabled: records.some((record) => record.enabled),
           // Which levels the trait shows, and in what order, is traits.ts's business.
           levels: levelsOf(info, records),
         };
@@ -275,14 +275,14 @@ export default function App() {
   /** The edit a level's checkbox starts, from the game's own row for that level. */
   function newRecord(key: string, level: number): SigilTrait {
     return {
-      Enabled: true,
-      Key: key,
-      Level: level,
+      enabled: true,
+      key: key,
+      level: level,
       // The level's own numbers, not zeros: leaving every slot alone has to write
       // the game's row back untouched. Nothing is typed yet, so every slot still
       // reads as the game's number and follows the level.
-      Values: pad(traits[key]?.Levels?.[level - 1] ?? []),
-      Typed: Array.from({ length: SLOTS }, () => false),
+      values: pad(traits[key]?.Levels?.[level - 1] ?? []),
+      typed: Array.from({ length: SLOTS }, () => false),
     };
   }
 
@@ -293,12 +293,12 @@ export default function App() {
   */
   function toggleLevel(key: string, level: number) {
     beginTick();
-    const at = edits.findIndex((e) => e.Key === key && e.Level === level);
+    const at = edits.findIndex((e) => e.key === key && e.level === level);
     if (at < 0) {
       commit([...edits, newRecord(key, level)]);
       return;
     }
-    commit(edits.map((e, i) => (i === at ? { ...e, Enabled: !e.Enabled } : e)));
+    commit(edits.map((e, i) => (i === at ? { ...e, enabled: !e.enabled } : e)));
   }
 
   /** A trait's own checkbox: every level of it at once. */
@@ -312,12 +312,12 @@ export default function App() {
       levels stay underneath for anyone who wants them, and unticking still just switches
       off what is there.
     */
-    if (!edits.some((e) => e.Key === key)) {
+    if (!edits.some((e) => e.key === key)) {
       const level = traits[key]?.Default;
       if (nextChecked && level) commit([...edits, newRecord(key, level)]);
       return;
     }
-    commit(edits.map((e) => (e.Key === key ? { ...e, Enabled: nextChecked } : e)));
+    commit(edits.map((e) => (e.key === key ? { ...e, enabled: nextChecked } : e)));
   }
 
   /**
@@ -395,7 +395,7 @@ export default function App() {
       Only that first keystroke holds the scroll: creating the record can reorder the row
       the caret is in. Every keystroke after it changes numbers in a row that stays put.
     */
-    const at = edits.findIndex((e) => e.Key === key && e.Level === level);
+    const at = edits.findIndex((e) => e.key === key && e.level === level);
     if (at < 0) {
       beginTick();
       commit([...edits, { ...newRecord(key, level), ...patch }]);

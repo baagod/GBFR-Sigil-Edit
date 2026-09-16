@@ -8,10 +8,10 @@
 */
 
 export type SigilTrait = {
-  Enabled: boolean;
-  Key: string;
-  Level: number;
-  Values: number[];
+  enabled: boolean;
+  key: string;
+  level: number;
+  values: number[];
   /*
     Which slots someone has actually put a number into, per slot. Only the tool
     uses it, and only to tell apart "this slot shows the game's number" from "this
@@ -19,7 +19,7 @@ export type SigilTrait = {
     whether a slot follows the level. Go ignores the field, so it never reaches
     Config.json or the mod.
   */
-  Typed: boolean[];
+  typed: boolean[];
 };
 
 /**
@@ -59,13 +59,13 @@ export function dedupe(records: SigilTrait[]): {
   const lastEnabled = new Map<string, number>();
   const lastAny = new Map<string, number>();
   records.forEach((record, i) => {
-    const address = addressOf(record.Key, record.Level);
+    const address = addressOf(record.key, record.level);
     lastAny.set(address, i);
-    if (record.Enabled) lastEnabled.set(address, i);
+    if (record.enabled) lastEnabled.set(address, i);
   });
 
   const kept = records.filter((record, i) => {
-    const address = addressOf(record.Key, record.Level);
+    const address = addressOf(record.key, record.level);
     return i === (lastEnabled.get(address) ?? lastAny.get(address));
   });
   return { records: kept, changed: kept.length !== records.length };
@@ -185,12 +185,12 @@ export function levelsOf(
   info: TraitInfo | undefined,
   records: SigilTrait[],
 ): number[] {
-  const on = new Set(records.filter((record) => record.Enabled).map((r) => r.Level));
+  const on = new Set(records.filter((record) => record.enabled).map((r) => r.level));
   const levels = new Set<number>();
   if (info) {
     for (let level = info.Min; level <= info.Max; level++) levels.add(level);
   }
-  for (const record of records) levels.add(record.Level);
+  for (const record of records) levels.add(record.level);
 
   return [...levels].sort(
     (a, b) => (on.has(a) ? 0 : 1) - (on.has(b) ? 0 : 1) || a - b,
