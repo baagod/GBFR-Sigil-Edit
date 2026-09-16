@@ -92,6 +92,18 @@ public class Mod : IMod
             _dm = dm;
 
             var file = BuildEditedTable(_config, out var applied);
+
+            // Wired before the boot write is looked at, and whether or not it produced a
+            // table: a hot apply that is never created is an Install button that silently
+            // does nothing. With no table at boot - the archive not readable yet, or a
+            // layout this build does not know - the first apply reads the table again and
+            // takes the game's own bytes as what memory holds.
+            //
+            // The builder re-reads Config.json, so what it builds is the config as it
+            // stands at that moment, which is what the tool has just written.
+            _hotApply = new HotApply(Log, file, BuildTablePair, RegisterWithManager);
+            _hotApply.Start();
+
             if (file is null)
                 return;
 
@@ -105,20 +117,6 @@ public class Mod : IMod
                 dm.UpdateIndex();
                 Log($"SUCCESS: {applied} edit(s) applied and table written back");
             }
-
-            // The game is about to hold exactly the bytes in `file` - its loaded
-            // copy of the table, which is what a hot apply locates and overwrites.
-            // Wired regardless of the applied count: with every edit disabled the
-            // game holds the vanilla table, `file` holds the same bytes, so a
-            // later edit can still be live-applied the same way.
-            //
-            // A config that cannot be read yields NO table: an empty edit list
-            // would build the vanilla bytes, and writing those to the running
-            // game would undo the live edits instead of leaving them alone.
-            _hotApply = new HotApply(Log, file,
-                () => LoadConfig() is { } config ? BuildEditedTable(config, out _) : null,
-                RegisterWithManager);
-            _hotApply.Start();
         }
         catch (Exception ex)
         {
@@ -127,19 +125,54 @@ public class Mod : IMod
     }
 
     /// <summary>
-    /// Produces the table bytes for <paramref name="config"/>: reads the unaltered
-    /// table out of the game's archive, checks the layout this mod patches against,
-    /// and applies the enabled edits onto the copy.
+    /// Produces the table bytes for <paramref name="config"/>: the unaltered table,
+    /// with the enabled edits applied onto it.
     ///
     /// Returns null, after logging why, when the table cannot be produced. The
-    /// startup write and the hot apply need exactly the same bytes, so both go
-    /// through here - one place for the layout check and the row format, and one
-    /// place whose log lines say what went wrong.
+    /// startup write goes through here - one place for the layout check and the row
+    /// format, and one place whose log lines say what went wrong.
     /// </summary>
     private byte[]? BuildEditedTable(Config config, out int applied)
     {
-        applied = 0;
+        var file = TryReadTable();
+        if (file is null)
+        {
+            applied = 0;
+            return null;
+        }
+        applied = PatchRows(file, config);
+        return file;
+    }
 
+    /// <summary>
+    /// What the hot apply needs from one call: the bytes the game holds, and the bytes the
+    /// config asks for. The two differ whenever the boot write did not happen, and the scan
+    /// has to look for the former: it locates the copy the game loaded, not the one the tool
+    /// wants there.
+    ///
+    /// The config is re-read here, so what this builds is the file as it stands now - the
+    /// tool writes it and then signals.
+    /// </summary>
+    private (byte[]? Raw, byte[]? Edited) BuildTablePair()
+    {
+        if (LoadConfig() is not { } config)
+            return (null, null);
+
+        var raw = TryReadTable();
+        if (raw is null)
+            return (null, null);
+
+        var edited = (byte[])raw.Clone();
+        PatchRows(edited, config);
+        return (raw, edited);
+    }
+
+    /// <summary>
+    /// The unaltered table out of the game's archive, or null after logging why it cannot be
+    /// used: no data manager, nothing returned, or a layout these offsets do not describe.
+    /// </summary>
+    private byte[]? TryReadTable()
+    {
         if (_dm is null)
         {
             Log("FAIL: IDataManager controller not found (is gbfrelink.utility.manager enabled?)");
@@ -166,6 +199,16 @@ public class Mod : IMod
             return null;
         }
 
+        return file;
+    }
+
+    /// <summary>
+    /// Writes the enabled edits of <paramref name="config"/> into <paramref name="file"/> in
+    /// place, returning how many landed. Every skip says why it skipped.
+    /// </summary>
+    private int PatchRows(byte[] file, Config config)
+    {
+        var applied = 0;
         foreach (var edit in config.Edits)
         {
             if (!edit.Enabled)
@@ -193,7 +236,7 @@ public class Mod : IMod
                 applied++;
         }
 
-        return file;
+        return applied;
     }
 
     /// <summary>

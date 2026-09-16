@@ -34,9 +34,13 @@ internal sealed class HotApply
 
     private readonly Action<string> _log;
 
-    /// <summary>Builds the table bytes for the config as it stands now; null
-    /// after it has logged why the table cannot be produced.</summary>
-    private readonly Func<byte[]?> _buildTable;
+    /// <summary>
+    /// Reads the table and builds what the config asks for: the first is the bytes the game
+    /// holds, which the scan looks for, and the second is what they are replaced with. Either
+    /// is null, after a log line saying why, when the table cannot be read or its layout is
+    /// not the one this build patches.
+    /// </summary>
+    private readonly Func<(byte[]? Raw, byte[]? Edited)> _build;
 
     /// <summary>
     /// Registers the produced table with the data manager, so every parse the
@@ -46,10 +50,11 @@ internal sealed class HotApply
     private readonly Action<byte[]> _register;
 
     /// <summary>
-    /// The bytes the game was last known to hold - the boot-time table, then
-    /// whatever the last apply wrote.
+    /// The bytes the game was last known to hold - the boot-time table, then whatever the last
+    /// apply wrote. Null until something is known: the boot write cannot always read the table,
+    /// and the first apply then takes the game's own bytes as what memory holds.
     /// </summary>
-    private byte[] _currentTable;
+    private byte[]? _currentTable;
 
     /// <summary>
     /// Where the table was found last (the boot locate, then every apply).
@@ -81,11 +86,15 @@ internal sealed class HotApply
     private EventWaitHandle? _event;
     private volatile bool _stopped;
 
-    public HotApply(Action<string> log, byte[] bootTable, Func<byte[]?> buildTable, Action<byte[]> register)
+    public HotApply(
+        Action<string> log,
+        byte[]? bootTable,
+        Func<(byte[]? Raw, byte[]? Edited)> build,
+        Action<byte[]> register)
     {
         _log = log;
         _currentTable = bootTable;
-        _buildTable = buildTable;
+        _build = build;
         _register = register;
     }
 
@@ -149,11 +158,30 @@ internal sealed class HotApply
 
     private void Apply()
     {
-        var newTable = _buildTable();
+        var (raw, newTable) = _build();
         if (newTable is null)
-            return; // buildTable logged why
+        {
+            _log("hot apply: nothing to apply - the table could not be read, or its layout is not the one this build patches (see the lines above)");
+            return;
+        }
 
-        if (newTable.AsSpan().SequenceEqual(_currentTable))
+        /*
+          Nothing is known about what memory holds when the boot write could not read the
+          table: the game loaded its own copy, and that is what the scan has to look for.
+          Everything below then treats `current` as "the bytes in memory", exactly as at boot.
+        */
+        if (_currentTable is null || _currentTable.Length == 0)
+        {
+            if (raw is null)
+            {
+                _log("hot apply: the table cannot be read yet; nothing to do this time");
+                return;
+            }
+            _currentTable = raw;
+        }
+        var current = _currentTable;
+
+        if (newTable.AsSpan().SequenceEqual(current))
         {
             _log("hot apply: the edit list matches what is already in memory; nothing to do");
             return;
@@ -181,10 +209,10 @@ internal sealed class HotApply
         // taken on unanimous agreement.
         var candidates = WithoutOwnCopies(newTable, () =>
             (_cachedAddresses.Count > 0 &&
-             _cachedAddresses.All(address => TableLocator.ContentsMatch(address, _currentTable))
+             _cachedAddresses.All(address => TableLocator.ContentsMatch(address, current))
                  ? _cachedAddresses
                  : null)
-            ?? ScanAllCopies(_currentTable, newTable));
+            ?? ScanAllCopies(current, newTable));
 
         var updated = 0;
         var alreadyCurrent = 0;
@@ -293,6 +321,15 @@ internal sealed class HotApply
     /// </summary>
     private void PrewarmLoop()
     {
+        /*
+          Nothing to look for until something is known about what memory holds: the boot
+          write could not read the table, so the first apply adopts the game's own bytes and
+          scans then. Skipped rather than scanned so the log does not fill with failures for
+          a table nobody has read yet.
+        */
+        if (_currentTable is null || _currentTable.Length == 0)
+            return;
+
         for (var waited = 0; waited < PrewarmFirstDelayMs && !_stopped; waited += 250)
             Thread.Sleep(250);
 
@@ -310,7 +347,8 @@ internal sealed class HotApply
             var scan = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                found = WithoutOwnCopies(null, () => TableLocator.FindCopies(_currentTable));
+                var current = _currentTable;
+                found = WithoutOwnCopies(null, () => TableLocator.FindCopies(current));
             }
             catch (Exception ex)
             {
