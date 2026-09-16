@@ -312,16 +312,15 @@ function stageNames() {
     keeps the two assets in step: every trait the tool offers has an explanation, so
     the list has no row the tooltip cannot describe.
   */
-  const dropped = Object.keys(result)
-    .filter((hash) => !(hash in explain))
-    .map((hash) => [hash, result[hash]]);
-  for (const [hash] of dropped) delete result[hash];
+  for (const hash of Object.keys(result)) {
+    if (hash in explain) continue;
+    console.log(`  not offered (no explanation text): ${hash} ${result[hash]}`);
+    delete result[hash];
+  }
 
   writeAsset(`skillnames.${lang}.json`, result, "names");
   writeAsset(`skillexplain.${lang}.json`, explain, "explanations");
-  for (const [hash, name] of dropped) {
-    console.log(`  not offered (no explanation text): ${hash} ${name}`);
-  }
+
   for (const k of ["06719232", "29B07BEB"]) {
     console.log(`  ${k} => ${result[k] ?? "(none)"}`);
   }

@@ -351,22 +351,18 @@ export default function App() {
     followed up in resolveHoveredRow.
   */
   const [tipRow, setTipRow] = useState<string | null>(null);
-  /*
-    A tick reorders the list - what is on sorts to the top - and the browser follows the
-    box that was just clicked, because it still holds focus: it scrolls the row back
-    into view, which is what made a tick feel like the list jumped. The offset is taken
-    before the tick's re-render and put back after it, so the list moves under the
-    pointer instead of moving the viewport.
-
-    The same re-render is when the row under the pointer changes: what was hovered moved
-    away and another row slid into its place, so the tooltip is re-pointed at whatever is
-    under the pointer now (see resolveHoveredRow) rather than being closed and reopened -
-    closing it meant a bubble that vanished and faded back in a moment later, anchored to
-    the row instead of the pointer.
-  */
   const listBox = useRef<HTMLDivElement>(null);
+  /*
+    The scroll offset held across a tick's re-render, or null when no tick is due.
+
+    A tick reorders the list - what is on sorts to the top - and the browser follows the
+    box that was just clicked, because it still holds focus: it scrolls the row back into
+    view, which is what made a tick feel like the list jumped. The offset goes back in
+    the layout effect below, in the same pass that re-points the tooltip at whatever row
+    is under the pointer now (the row that was hovered has moved away and another slid
+    into its place), so both end up where the pointer is.
+  */
   const heldScroll = useRef<number | null>(null);
-  const ticked = useRef(false);
   /*
     Where the pointer last moved. A tick moves the rows under a pointer that has not
     moved, and moving inside a row fires no enter either, so neither the browser's hover
@@ -375,11 +371,8 @@ export default function App() {
   const lastMove = useRef<{ x: number; y: number } | null>(null);
 
   useLayoutEffect(() => {
-    if (!ticked.current) return;
-    ticked.current = false;
-    if (listBox.current && heldScroll.current !== null) {
-      listBox.current.scrollTop = heldScroll.current;
-    }
+    if (heldScroll.current === null) return;
+    if (listBox.current) listBox.current.scrollTop = heldScroll.current;
     heldScroll.current = null;
     resolveHoveredRow();
   });
@@ -610,14 +603,12 @@ export default function App() {
   }
 
   /**
-    What a tick does before its re-render: keeps the list's scroll offset (see
-    heldScroll) and asks for the hovered row to be worked out again (see the layout
-    effect) - a tick reorders the rows, and both the viewport and the tooltip have to
-    end up where the pointer is rather than where the row that moved went.
+    What a tick does before its re-render: remembers the scroll offset (heldScroll) for
+    the layout effect that follows, which puts the viewport back where it was and points
+    the tooltip at the row now under the pointer.
   */
   function beginTick() {
     heldScroll.current = listBox.current?.scrollTop ?? null;
-    ticked.current = true;
   }
 
   /*
@@ -632,19 +623,19 @@ export default function App() {
     const at = lastMove.current;
     if (!at) return;
     const row = document.elementFromPoint(at.x, at.y)?.closest("[data-row]");
+    const id = row?.getAttribute("data-row") ?? null;
     /*
-      The move that would have carried the pointer onto this row is replayed on it, at
-      the place the pointer already is. Base UI only lets a tooltip follow the cursor when
-      its own hover opened it (useClientPoint checks that the opening event was a
-      mouseenter or a mousemove), and a tick produces no hover at all - without this, the
-      tooltip that follows the pointer anchors to the middle of the row instead.
+      The move alone here, where restInRow replays the whole way in: the click that
+      caused the tick made Base UI close its popup, and a move is the opening its hover
+      accepts - a leave first would only close it again, and our open prop has not
+      changed for a row that stayed put.
     */
     if (row) {
       row.dispatchEvent(
         new window.MouseEvent("mousemove", { bubbles: true, clientX: at.x, clientY: at.y }),
       );
     }
-    setTipRow(row?.getAttribute("data-row") ?? null);
+    setTipRow(id);
   }
 
   /*
@@ -655,20 +646,19 @@ export default function App() {
   */
   function restInRow(id: string, e: PointerEvent<HTMLElement>) {
     /*
-      Whichever way the tooltip opens, Base UI only lets it follow the cursor if the
-      opening event on its record is a mouseenter or a mousemove (useClientPoint checks
-      exactly that), and after a click it refuses to let hover open at all until the
-      pointer has left and come back. Focus a value box, switch windows, come back and
-      sweep into the row, and the record still says focus, its own hover is still blocked
-      - so the first tooltip of the visit anchors to the row, and only the second one,
-      after the blocked attempt has cleared the latch, lands on the cursor.
+      Base UI only lets a tooltip follow the cursor when the event it opened on was a
+      mouseenter or a mousemove (useClientPoint checks exactly that), and after a click it
+      refuses to let hover open at all until the pointer has left the row and come back.
+      Focus a value box, switch windows, come back and sweep in, and the record still says
+      focus and its own hover is still blocked - so the first tooltip of the visit anchors
+      to the middle of the row, and only the second one lands on the cursor.
 
-      The way in is therefore replayed in full on the row: leave (which clears that
-      latch), enter (which is the hover opening Base UI will accept), then the move that
-      carries the pointer's place.
+      The way in is therefore replayed on the row, in full: leave clears that latch, enter
+      is the opening it accepts, move carries the pointer's place. resolveHoveredRow needs
+      less than this, because there the popup is already open on the row.
     */
-    const row = e.currentTarget;
     const at = { bubbles: true, clientX: e.clientX, clientY: e.clientY };
+    const row = e.currentTarget;
     row.dispatchEvent(new window.MouseEvent("mouseleave", at));
     row.dispatchEvent(new window.MouseEvent("mouseenter", at));
     row.dispatchEvent(new window.MouseEvent("mousemove", at));
@@ -872,7 +862,7 @@ export default function App() {
               return (
                 <Tooltip
                   key={addressOf(row.key, level)}
-                  open={Boolean(notation) && tipRow === addressOf(row.key, level)}
+                  open={tipRow === addressOf(row.key, level)}
                   disabled={!notation}
                   disableHoverablePopup
                   trackCursorAxis="x"
@@ -975,7 +965,7 @@ export default function App() {
             return (
               <Fragment key={row.key}>
                 <Tooltip
-                  open={Boolean(notation) && tipRow === row.key}
+                  open={tipRow === row.key}
                   disabled={!notation}
                   disableHoverablePopup
                   trackCursorAxis="x"
