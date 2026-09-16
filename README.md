@@ -15,10 +15,9 @@ A typical table mod brings its own edited `.tbl`; two such mods editing the same
 
 ## Installing
 
-1. Install Reloaded-II and enable `gbfrelink.utility.manager`.
-2. Unzip the release and move the `GBFR.SigilEdit` folder into `Reloaded-II\Mods\`.
-3. Enable `GBFR.SigilEdit` in Reloaded-II, then launch the game through Reloaded-II.
-4. Run `Reloaded-II\Mods\GBFR.SigilEdit\SigilEdit.exe` when you want to change values. Your edit list lives in `%APPDATA%\GBFR.SigilEdit\Config.json`.
+1. Unzip the release, move the `GBFR.SigilEdit` folder into `Reloaded-II\Mods\` and enable it (enable `gbfrelink.utility.manager` as well).
+2. Launch the game through Reloaded-II.
+3. Run `SigilEdit.exe` when you want to change values. Your edit list lives in `%APPDATA%\GBFR.SigilEdit\Config.json`.
 
 ## Using it
 

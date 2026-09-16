@@ -15,10 +15,9 @@
 
 ## 安装
 
-1. 安装 Reloaded-II 并启用 `gbfrelink.utility.manager`。
-2. 解压发布包，把 `GBFR.SigilEdit` 文件夹放进 `Reloaded-II\Mods\`。
-3. 在 Reloaded-II 里启用 `GBFR.SigilEdit` 后使用 Reloaded-II 启动游戏。
-4. 想改数值时运行 `Reloaded-II\Mods\GBFR.SigilEdit\SigilEdit.exe`。改动配置存放在 `%APPDATA%\GBFR.SigilEdit\Config.json`。
+1. 解压发布包，把 `GBFR.SigilEdit` 文件夹放进 `Reloaded-II\Mods\` 并启用 ( 同时启用 `gbfrelink.utility.manager` )。
+2. 使用 Reloaded-II 启动游戏。
+3. 想改数值时运行 `SigilEdit.exe`，改动配置存放在 `%APPDATA%\GBFR.SigilEdit\Config.json`。
 
 ## 使用
 
