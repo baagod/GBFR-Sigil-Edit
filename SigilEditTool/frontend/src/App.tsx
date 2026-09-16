@@ -145,7 +145,9 @@ export default function App() {
       A hash the name table does not know is kept: the mod does apply those, and an
       edit nobody can see is worse than one whose name is only a hash.
     */
-    const hexKey = /^[0-9a-f]{1,8}$/i;
+    // Eight hex digits, which is the length every table and every Config.json key uses:
+    // a shorter one can only be a typo, and it would list a row no table can describe.
+    const hexKey = /^[0-9a-f]{8}$/i;
     const loaded = (list ?? [])
       .filter((e) => hexKey.test(String(e.Key ?? "").trim()))
       .map((e) => {

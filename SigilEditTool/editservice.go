@@ -334,6 +334,7 @@ func (s *EditService) flushNow() {
 		s.timer.Stop()
 	}
 	edits := s.pending
+	s.pending = nil
 	s.mu.Unlock()
 
 	if edits == nil {

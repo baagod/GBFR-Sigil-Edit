@@ -227,6 +227,62 @@ func TestLoadEditsFallsBackToDefaults(t *testing.T) {
 	}
 }
 
+/*
+  A file that exists and cannot be parsed is an error that names the file.
+
+  What the screen shows is the point of the distinction: "cannot be parsed" says the file
+  is broken and which one, while an empty list looks exactly like "nothing is switched on"
+  - and the next keystroke would write that empty list back over the user's own edits.
+*/
+func TestLoadEditsRejectsAFileItCannotParse(t *testing.T) {
+	hermeticHome(t)
+
+	current := appDataConfig(t, "Config.json")
+	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(current, []byte("not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := (&EditService{}).LoadEdits()
+	if err == nil {
+		t.Fatalf("a file that cannot be parsed was accepted as %+v", loaded)
+	}
+	if !strings.Contains(err.Error(), "Config.json") {
+		t.Fatalf("the error does not say which file: %v", err)
+	}
+}
+
+// An empty list is what a first run leaves behind, so it is a starting point rather than
+// a list to keep: the two starting edits are what the user gets back from it.
+func TestLoadEditsTreatsAnEmptyListAsStartOver(t *testing.T) {
+	hermeticHome(t)
+
+	current := appDataConfig(t, "Config.json")
+	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(current, []byte(`{"Edits":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := (&EditService{}).LoadEdits()
+	if err != nil {
+		t.Fatalf("LoadEdits: %v", err)
+	}
+	want := defaultEdits()
+	if len(loaded) != len(want) {
+		t.Fatalf("an empty list did not fall back to the starting edits: %+v", loaded)
+	}
+	for i := range want {
+		if loaded[i].Key != want[i].Key || loaded[i].Level != want[i].Level ||
+			loaded[i].Enabled != want[i].Enabled {
+			t.Fatalf("edit %d is %+v, want %+v", i, loaded[i], want[i])
+		}
+	}
+}
+
 // The name tables and the skill table come from separately generated assets: the
 // names are per-language text from the game, the values and levels are one table.
 // If their key sets drift, adding a skill silently produces zeros (or a blank
@@ -449,5 +505,39 @@ func TestSaveEditsSignalsTheRunningMod(t *testing.T) {
 	}
 	if state != windows.WAIT_OBJECT_0 {
 		t.Fatal("the write did not signal the mod's event, so a running game would not hot-apply")
+	}
+}
+
+// Nothing waiting to be written means nothing written and nothing signalled: one burst of
+// edits is one write and one wake-up, however many times the flush is called.
+func TestFlushWithNothingPendingDoesNothing(t *testing.T) {
+	hermeticHome(t)
+
+	ptr, err := windows.UTF16PtrFromString(hotApplyEventName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := windows.CreateEvent(nil, 0, 0, ptr)
+	if err != nil {
+		t.Fatalf("creating the test event: %v", err)
+	}
+	defer windows.CloseHandle(event)
+
+	service := &EditService{}
+	edits := []SigilTrait{{Enabled: true, Key: "06719232", Level: 15, Values: []float64{30}}}
+	if err := service.SaveEdits(edits); err != nil {
+		t.Fatalf("SaveEdits: %v", err)
+	}
+	service.flushNow()
+	_ = windows.ResetEvent(event)
+
+	service.flushNow()
+
+	state, err := windows.WaitForSingleObject(event, 0)
+	if err != nil {
+		t.Fatalf("waiting on the mod's event: %v", err)
+	}
+	if state != uint32(windows.WAIT_TIMEOUT) {
+		t.Fatalf("a flush with nothing pending signalled the mod (wait state %#x)", state)
 	}
 }

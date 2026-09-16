@@ -321,6 +321,22 @@ function stageNames() {
   writeAsset(`skillnames.${lang}.json`, result, "names");
   writeAsset(`skillexplain.${lang}.json`, explain, "explanations");
 
+  /*
+    The other asset has to lose the same trait, and a different stage writes it:
+    skillinfo.json comes from `db`, which never sees an explanation, so the filter above
+    cannot reach it. Today the two agree - 199 traits each - and this is what says so out
+    loud. A trait with no explanation must not be in the numbers either, or the tool
+    offers a row whose tooltip it has nothing to fill with.
+  */
+  const info = JSON.parse(fs.readFileSync(path.join(ASSETS, "skillinfo.json"), "utf8"));
+  const orphans = Object.keys(info).filter((hash) => !(hash in result));
+  if (orphans.length) {
+    throw new Error(
+      `skillinfo.json carries ${orphans.length} trait(s) the names drop, so the two assets ` +
+        `have drifted: ${orphans.join(", ")} - regenerate skillinfo.json`,
+    );
+  }
+
   for (const k of ["06719232", "29B07BEB"]) {
     console.log(`  ${k} => ${result[k] ?? "(none)"}`);
   }
