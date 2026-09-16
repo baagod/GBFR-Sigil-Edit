@@ -170,12 +170,12 @@ export const stepValue = (value: number, direction: 1 | -1) => {
 };
 
 /*
-  The levels a trait shows, in ascending order.
+  The levels a trait shows: what is switched on first, then every other level by number.
 
-  Ascending and nothing else: these are the game's own rows for one skill, and a reader
-  looking for "level 12" reads down the numbers. Grouping them by what happens to be
-  switched on - which is what this did - reads as 1, 2, 5, 10, 12, 22, 23 … and then
-  drops the untouched levels after the last one, which looks like no order at all.
+  Two tiers and no more. There was a third - levels carrying a switched-off edit, between
+  the two - and it read as no order at all: a switched-off level 30 came before an
+  untouched level 3, so the list ran 1, 2, 5, 10, 12, 22, 23 … 30, 3, 4, 6 … . What is
+  switched on is worth lifting to the top; everything else belongs in numeric order.
 
   A level only the records know about (edited by hand, or left behind by a level the
   tables no longer carry) still gets a row, so it stays visible instead of being applied
@@ -185,13 +185,16 @@ export function levelsOf(
   info: TraitInfo | undefined,
   records: SigilTrait[],
 ): number[] {
+  const on = new Set(records.filter((record) => record.Enabled).map((r) => r.Level));
   const levels = new Set<number>();
   if (info) {
     for (let level = info.Min; level <= info.Max; level++) levels.add(level);
   }
   for (const record of records) levels.add(record.Level);
 
-  return [...levels].sort((a, b) => a - b);
+  return [...levels].sort(
+    (a, b) => (on.has(a) ? 0 : 1) - (on.has(b) ? 0 : 1) || a - b,
+  );
 }
 
 /**
