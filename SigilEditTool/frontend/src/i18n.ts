@@ -27,7 +27,7 @@ export const LANG_LABEL: Record<Lang, string> = {
   ja: "JA",
 };
 
-type Dict = {
+export type Dict = {
   searchTrait: string;
   clearSearch: string;
   noMatch: string;
