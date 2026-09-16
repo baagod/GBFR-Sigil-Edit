@@ -9,8 +9,9 @@ namespace GBFR.SigilEdit;
 /// Config.json, and feeds the table back through IDataManager.
 ///
 /// On top of that it can apply the same rows to the game WHILE IT RUNS: the
-/// tool signals a named event from its Install button, and HotApply overwrites
-/// the table the game already holds in memory - no restart, no hooking.
+/// tool signals a named event every time it saves the edit list - there is no
+/// button for it, editing is what signals - and HotApply overwrites the table
+/// the game already holds in memory, with no restart and no hooking.
 ///
 /// No static .tbl ships with the mod: the table is read from the game archive,
 /// edited in memory, and written back.
@@ -94,10 +95,11 @@ public class Mod : IMod
             var file = BuildEditedTable(_config, out var applied);
 
             // Wired before the boot write is looked at, and whether or not it produced a
-            // table: a hot apply that is never created is an Install button that silently
-            // does nothing. With no table at boot - the archive not readable yet, or a
-            // layout this build does not know - the first apply reads the table again and
-            // takes the game's own bytes as what memory holds.
+            // table: a hot apply that is never created is an edit that saves to the file
+            // and never reaches the game, with nothing anywhere saying so. With no table at
+            // boot - the archive not readable yet, or a layout this build does not know -
+            // the first apply reads the table again and takes the game's own bytes as what
+            // memory holds.
             //
             // The builder re-reads Config.json, so what it builds is the config as it
             // stands at that moment, which is what the tool has just written.

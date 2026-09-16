@@ -9,8 +9,8 @@ namespace GBFR.SigilEdit;
 /// change takes effect without restarting the game.
 ///
 /// The tool triggers this through a named win32 event rather than a config poll:
-/// Install() sets the event after writing Config.json, and until then nothing
-/// here wakes up at all.
+/// every save of the edit list sets the event - signing the file and waking this
+/// up are the same act - and until then nothing here wakes up at all.
 ///
 /// Copy addresses are located TWICE, in two different phases:
 ///   - at BOOT, in the background: copies of the table appear over the first
