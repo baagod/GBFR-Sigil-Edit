@@ -1,7 +1,8 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -103,7 +104,7 @@ var nameTables = map[string]map[string]string{
 // malformed, which is the answer either way.
 func decodeStrings(raw []byte) map[string]string {
 	decoded := make(map[string]string)
-	_ = json.Unmarshal(raw, &decoded)
+	_ = jsonv2.Unmarshal(raw, &decoded)
 	return decoded
 }
 
@@ -143,7 +144,7 @@ var traitInfo = loadTraitInfo()
 
 func loadTraitInfo() map[string]TraitInfo {
 	info := make(map[string]TraitInfo)
-	_ = json.Unmarshal(embeddedSkillInfo, &info)
+	_ = jsonv2.Unmarshal(embeddedSkillInfo, &info)
 	return info
 }
 
@@ -232,7 +233,7 @@ func (s *EditService) LoadEdits() ([]SigilTrait, error) {
 	}
 
 	var cfg Config
-	if err := json.Unmarshal(raw, &cfg); err != nil {
+	if err := jsonv2.Unmarshal(raw, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 
@@ -293,7 +294,7 @@ func writeEdits(edits []SigilTrait) error {
 		return errors.New("could not resolve the %APPDATA% config folder")
 	}
 
-	cfgBytes, err := json.MarshalIndent(Config{Edits: edits}, "", "  ")
+	cfgBytes, err := jsonv2.Marshal(Config{Edits: edits}, jsontext.WithIndent("  "))
 	if err != nil {
 		return fmt.Errorf("serialising the edit list: %w", err)
 	}

@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"fmt"
 	"log"
 	"os"
@@ -76,7 +76,7 @@ func TestSaveEditsWritesConfigWhereTheModReadsIt(t *testing.T) {
 		t.Fatalf("Config.json is not where the mod looks for it: %v", err)
 	}
 	var cfg Config
-	if err := json.Unmarshal(raw, &cfg); err != nil {
+	if err := jsonv2.Unmarshal(raw, &cfg); err != nil {
 		t.Fatalf("Config.json is not valid JSON: %v", err)
 	}
 	if len(cfg.Edits) != 1 || cfg.Edits[0].Key != "06719232" || cfg.Edits[0].Values[0] != 30 {
@@ -131,7 +131,7 @@ func TestSaveEditsWaitsForTheEditingToStop(t *testing.T) {
 			t.Fatalf("the debounce never wrote Config.json: %v", err)
 		}
 		var cfg Config
-		if err := json.Unmarshal(raw, &cfg); err != nil {
+		if err := jsonv2.Unmarshal(raw, &cfg); err != nil {
 			t.Fatalf("Config.json is not valid JSON: %v", err)
 		}
 		if len(cfg.Edits) != 1 || cfg.Edits[0].Values[0] != 300 {
@@ -371,7 +371,8 @@ func TestLevelRangesAreUsable(t *testing.T) {
 
 	// The three cases the rule treats differently. Levels are the table's own, so
 	// these are the numbers the game shows. 黑龙的咒印 keeps its numbers on level 15
-	// alone, which is why its field is pinned there; 穷寇心 ramps from level 1.
+	// alone, which is why its field is pinned there; 穷寇心 ramps from level 1, and
+	// 浩劫 exists on level 25 alone.
 	for _, want := range []struct {
 		name          string
 		hash          string
@@ -380,7 +381,7 @@ func TestLevelRangesAreUsable(t *testing.T) {
 	}{
 		{"pinned to its only level", "06719232", 15, 15, 15, "numbers on level 15 only: the field is pinned there"},
 		{"free across 30 levels", "70395731", 1, 15, 30, "30 levels: default to the usual 15, free from 1 to 30"},
-		{"single-level skill", "CAC6AFF2", 1, 1, 1, "1 level: default to it, not to 15"},
+		{"single-level skill", "40223C28", 25, 25, 25, "its only level is 25: default to it, not to 15"},
 	} {
 		t.Run(want.name, func(t *testing.T) {
 			got, ok := traitInfo[want.hash]
