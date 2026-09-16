@@ -33,6 +33,7 @@ import { TraitRow, type RowContext } from "./TraitRow";
 import {
   dedupe,
   explainAt,
+  isEdit,
   levelsOf,
   matches,
   pad,
@@ -182,13 +183,16 @@ export default function App() {
           typed: values.map((value, i) => value !== (vanilla?.[i] ?? value)),
         };
       });
-    // A file can hold two edits for one address. Only one of them can ever be in
-    // effect, and the list has room for exactly one, so the pruned list is written
-    // straight back: the file then says what the tool shows and the game does.
-    const { records, changed } = dedupe(loaded);
+    // A file can hold two edits for one address, and a record that is not an edit at all
+    // (an older build wrote them: switched off, carrying the game's own numbers). Only
+    // one of the first can ever be in effect, and the second is not an edit, so the
+    // pruned list is written straight back: the file then says what the tool shows and
+    // the game does.
+    const kept = loaded.filter(isEdit);
+    const { records, changed } = dedupe(kept);
     setEdits(records);
     setTraits(traitMap ?? {});
-    if (changed) {
+    if (changed || kept.length !== loaded.length) {
       Call.ByName(`${SERVICE}.SaveEdits`, records).catch((err) =>
         showError({ title: MESSAGES[lang].writeFailed, detail: String(err) }),
       );
@@ -285,10 +289,11 @@ export default function App() {
   }
 
   /*
-    One level's checkbox. With no edit at that address yet, ticking it is what
-    creates one, from the game's own row for that level; unticking drops it again.
-    What is off is not saved, so there is nothing to keep: the numbers go back to the
-    game's own, and a level that is off has no row in Config.json at all.
+    One level's checkbox. With no edit at that address yet, ticking it is what creates
+    one, from the game's own row for that level; unticking switches the edit off and
+    keeps its numbers - a switched-off record that carries typed numbers is still saved
+    (see isEdit), it is simply not applied. Unticking one that carries nothing the user
+    typed leaves no edit at all, and commit drops it.
   */
   function toggleLevel(key: string, level: number) {
     beginTick();
@@ -297,7 +302,7 @@ export default function App() {
       commit([...edits, newRecord(key, level)]);
       return;
     }
-    commit(edits.filter((_, i) => i !== at));
+    commit(edits.map((e, i) => (i === at ? { ...e, enabled: !e.enabled } : e)));
   }
 
   /** A trait's own checkbox: every level of it at once. */
@@ -308,15 +313,17 @@ export default function App() {
       at all - which is how 暴君 and 暴击伤害 read as rows that cannot be selected. It now
       selects the trait the way the game uses it: a record at the level the tables call
       the default, which is the level a sigil carries (15 for these). The rest of the
-      levels stay underneath for anyone who wants them, and unticking drops them all,
-      the way a level's own box does.
+      levels stay underneath for anyone who wants them.
+
+      Switching one off keeps the levels that carry typed numbers and drops the rest
+      (commit asks isEdit): what is saved is what is switched on or was typed into.
     */
     if (!edits.some((e) => e.key === key)) {
       const level = traits[key]?.Default;
       if (nextChecked && level) commit([...edits, newRecord(key, level)]);
       return;
     }
-    if (!nextChecked) commit(edits.filter((e) => e.key !== key));
+    commit(edits.map((e) => (e.key === key ? { ...e, enabled: nextChecked } : e)));
   }
 
   /**
@@ -385,14 +392,30 @@ export default function App() {
   }
 
   /*
-    A value box on a level that is on. A level that is off has no edit - and its boxes
-    are not typeable (TraitRow disables them) - so this only ever patches a record that
-    exists: a tick is what starts one, and a tick is also what saves it, because
-    Config.json holds what is on and nothing else.
+    A value box. Typing into a level that has no edit yet starts one, the way ticking its
+    box does - but it does NOT switch it on: the numbers are the user's and are saved,
+    and ticking the box is what puts them into the game. An edit that was typed but never
+    applied is a state the list shows plainly (its box is empty), not a surprise.
+
+    Only that first keystroke holds the scroll: creating the record can reorder the row
+    the caret is in. Every keystroke after it changes numbers in a row that stays put.
   */
   function updateLevel(key: string, level: number, patch: Partial<SigilTrait>) {
+    const at = edits.findIndex((e) => e.key === key && e.level === level);
+    if (at < 0) {
+      beginTick();
+      commit([...edits, { ...newRecord(key, level), ...patch, enabled: false }]);
+      return;
+    }
     commit(
-      edits.map((e) => (e.key === key && e.level === level ? { ...e, ...patch } : e)),
+      edits.map((e, i) => {
+        if (i !== at) return e;
+        const next = { ...e, ...patch };
+        // Emptying the last typed number takes the whole edit away: what made it an edit
+        // was that number, so the box goes back to empty and commit drops the record
+        // (this is the one thing that switches an edit off by itself).
+        return next.typed.some(Boolean) ? next : { ...next, enabled: false };
+      }),
     );
   }
 
@@ -419,15 +442,21 @@ export default function App() {
     Every edit goes through here: the list on screen is the whole state, and it is
     also what the running game ends up with.
 
-    The frontend is deliberately dumb about when that happens. It hands the whole
+    What is not an edit is dropped on the way through (see isEdit): a record that is
+    neither switched on nor carrying a typed number has nothing to write - the game's own
+    row, back where it came from. So ticking a level and unticking it leaves nothing
+    behind, and emptying every box of an edit takes the whole edit away.
+
+    The frontend is deliberately dumb about when the write happens. It hands the whole
     list over on every change and does not wait for an answer; the backend's
     trailing debounce turns a burst of keystrokes into a single Config.json write
     and one live apply, and only a list that cannot be accepted at all comes back
     as a failure worth interrupting for.
   */
   function commit(next: SigilTrait[]) {
-    setEdits(next);
-    Call.ByName(`${SERVICE}.SaveEdits`, next).catch((err) =>
+    const kept = next.filter(isEdit);
+    setEdits(kept);
+    Call.ByName(`${SERVICE}.SaveEdits`, kept).catch((err) =>
       showError({ title: MESSAGES[lang].writeFailed, detail: String(err) }),
     );
   }

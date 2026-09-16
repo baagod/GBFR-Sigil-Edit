@@ -40,6 +40,20 @@ export const NO_TYPED: boolean[] = Array.from({ length: SLOTS }, () => false);
 /** The table row an edit writes: one address per trait hash and level. */
 export const addressOf = (key: string, level: number) => `${key}#${level}`;
 
+/**
+ * Whether a record is an edit at all, which is what decides if it is saved.
+ *
+ * Two things make one: it is switched on, or it carries a number someone typed - the
+ * numbers on screen are the game's own until then, so an untouched record would write
+ * the game's row back and say nothing. A record with neither is a row the user ticked
+ * and unticked, or typed into and emptied again, and Config.json holds no such row.
+ *
+ * Typed, not "differs from the game's number": typing 20 into a slot whose game value is
+ * 20 is still the user's 20 (see the note on SigilTrait.typed).
+ */
+export const isEdit = (record: SigilTrait) =>
+  record.enabled || record.typed.some(Boolean);
+
 export const pad = (values: number[]) =>
   Array.from({ length: SLOTS }, (_, i) => values[i] ?? 0);
 

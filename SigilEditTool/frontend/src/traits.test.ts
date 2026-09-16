@@ -13,6 +13,7 @@ import {
   dedupe,
   explainAt,
   HALF_TYPED,
+  isEdit,
   levelsOf,
   matches,
   MAX_VALUE,
@@ -228,6 +229,29 @@ describe("one edit per address", () => {
   it("says nothing changed when every address is unique", () => {
     const { changed } = dedupe([record("A1", 1, true), record("A1", 2, true)]);
     expect(changed).toBe(false);
+  });
+});
+
+describe("what counts as an edit", () => {
+  const typedAt = (slot: number) =>
+    Array.from({ length: 10 }, (_, i) => i === slot);
+
+  it("keeps a record that is switched on, even with nothing typed into it", () => {
+    // Ticking a level is what selects it, so the tick alone is already an edit - it writes
+    // the game's own row back, which is what "on at its own values" means.
+    expect(isEdit(record("A1", 15, true))).toBe(true);
+  });
+
+  it("keeps a record that carries a typed number, even with its box empty", () => {
+    // The numbers are the user's, so they are saved; ticking the box is then the only
+    // thing left to do, and what is saved is not applied until it happens.
+    expect(isEdit({ ...record("A1", 15, false), typed: typedAt(0) })).toBe(true);
+  });
+
+  it("drops a record that is neither switched on nor typed into", () => {
+    // A level ticked and unticked, or one whose typed numbers were emptied again: it
+    // would write the game's own row back and say nothing.
+    expect(isEdit(record("A1", 15, false))).toBe(false);
   });
 });
 
