@@ -213,17 +213,11 @@ export type ExplainBand = { from: number; text: string };
  * The bands are the game's own rows, folded: most skills say the same thing at every level,
  * some change it partway - a 30-level resistance reads "受到的伤害-{0}%" until level 29 and
  * "…免疫" at 30, and one skill has six bands. A level past the last band, which only a
- * hand-edited Config.json can name, reads the last band: the same rule, no special case.
+ * hand-edited Config.json can name, is the same rule with nothing extra: no band matches and
+ * the last one answers.
  */
-export function explainAt(bands: ExplainBand[] | undefined, level: number): string {
-  if (!bands || bands.length === 0) return "";
-  let found = bands[0];
-  for (const band of bands) {
-    if (band.from > level) break;
-    found = band;
-  }
-  return found.text;
-}
+export const explainAt = (bands: ExplainBand[] | undefined, level: number) =>
+  bands?.findLast((band) => band.from <= level)?.text ?? bands?.[0]?.text ?? "";
 
 /*
   The tooltip is a template, not a sentence with the numbers already in it: {N} is rewritten

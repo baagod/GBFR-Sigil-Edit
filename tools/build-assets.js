@@ -362,13 +362,6 @@ function stageNames() {
       );
     }
   }
-
-  for (const k of ["06719232", "29B07BEB"]) {
-    console.log(`  ${k} => ${result[k] ?? "(none)"}`);
-  }
-  for (const k of ["06719232", "B064A634"]) {
-    console.log(`  explain ${k} => ${(explain[k] ?? "(none)").replace(/\n/g, " | ")}`);
-  }
 }
 
 // name text key -> the language's text
