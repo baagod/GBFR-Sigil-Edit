@@ -22,12 +22,8 @@ const LevelValueCount = 10
 
 // SigilTrait mirrors the mod's Config.cs SigilTrait: one skill_status row override.
 // Values maps positionally onto LevelValue1..10, which is what the skill's own
-// description uses as {0}, {1}, {2} ...
-//
-// A slot is either a number someone typed or nil, which means "the game's own value,
-// untouched": the mod writes only the numbers and leaves the rest of the row as it
-// found it, so a slot the tool knows nothing about cannot overwrite it with a stale
-// copy of the game's table.
+// description uses as {0}, {1}, {2} ... A slot is a number or nil, and nil means the
+// game's own value is left alone there (see traits.ts, which decides what that is).
 type SigilTrait struct {
 	Enabled bool       `json:"enabled"`
 	Key     string     `json:"key"`
@@ -259,14 +255,9 @@ func (s *EditService) LoadEdits() ([]SigilTrait, error) {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 
-	/*
-	  What is an edit and what is not is the frontend's call, because only it knows which
-	  slots were typed into (see isEdit in traits.ts): a record is kept while it is switched
-	  on or carries a typed number, and a file with nothing left in it stays empty - the
-	  starting edits are for a file that is not there at all, so emptying the list (or
-	  reading a file from an older format, whose members match no member here) is not undone
-	  by two edits the user never asked for.
-	*/
+	// Nothing is filtered here: which records are edits is the frontend's call (see asEdits
+	// in traits.ts), and Go only pads. An emptied list stays empty too - the starting edits
+	// are for a file that is not there at all.
 	edits := cfg.Edits
 	for i := range edits {
 		edits[i].Values = padValues(edits[i].Values)

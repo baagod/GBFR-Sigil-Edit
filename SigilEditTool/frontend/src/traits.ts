@@ -12,11 +12,10 @@ export type SigilTrait = {
   key: string;
   level: number;
   /*
-    The ten LevelValue slots, positionally. A slot is a number someone typed, or null, which
-    means "the game's own value, untouched" - the mod writes only the numbers and leaves the
-    rest of the row as it found it. That is what makes null worth its own spelling: a slot
-    nobody touched cannot be overwritten with a stale copy of the game's table, and typing a
-    number that happens to equal the game's own is still a number, not an untouched slot.
+    The ten LevelValue slots, positionally. A slot is a number, or null for "the game's own
+    value, untouched": the mod writes only the numbers and leaves the rest of the row as it
+    found it, so a slot nobody set cannot be overwritten with a stale copy of the game's
+    table. What counts as untouched is trimGameValues.
   */
   values: (number | null)[];
 };
@@ -39,33 +38,41 @@ export const addressOf = (key: string, level: number) => `${key}#${level}`;
 /**
  * Whether a record is an edit at all, which is what decides if it is saved.
  *
- * Two things make one: it is switched on, or it carries a number someone typed. A record
- * with neither is a row the user ticked and unticked, and Config.json holds no such row.
- *
- * A number, not "differs from the game's number": typing 20 into a slot whose game value is
- * 20 is still the user's 20, and null is the one thing that means "untouched".
+ * Two things make one: it is switched on, or it carries a number. A record with neither is a
+ * row the user ticked and unticked, and Config.json holds no such row.
  */
 export const isEdit = (record: SigilTrait) =>
   record.enabled || record.values.some((value) => value !== null);
 
 /**
- * The values with the level's own numbers taken back out: a slot holding the game's number
- * is not an input, so it is null - which leaves that part of the row alone and shows the
- * number as a placeholder, the way an untouched slot reads.
+ * The values with the level's own numbers taken back out: a slot holding the game's number is
+ * not an input, so it is null - which leaves that part of the row alone and shows the number
+ * as a placeholder. This is also what makes an old file read right, since builds before null
+ * existed filled every slot with the game's own numbers to write the row back.
  *
- * This is what makes an old file read right: builds before null existed filled every slot
- * with the game's own numbers to write the row back, and those copies are not edits. It runs
- * on the way in and on the way through commit, so the list, the file and the game agree on
- * what "untouched" is - and typing the game's own number back in is that same thing, which
- * is why it does not survive as a number.
- *
- * A level the tables do not know (a hand-added record) keeps its numbers: there is nothing
- * to compare them with, and they may well be what the game needs written.
+ * A level the tables do not know (a hand-added record) keeps its numbers: there is nothing to
+ * compare them with, and they may well be what the game needs written.
  */
 export const trimGameValues = (
   values: (number | null)[],
   vanilla: number[] | undefined,
 ) => values.map((value, i) => (value === vanilla?.[i] ? null : value));
+
+/**
+ * The records as edits: every slot that only held the game's number emptied, and the records
+ * that are then not edits at all dropped. Every path in and out of the list goes through
+ * this, so the list, Config.json and the game agree on what an edit is.
+ */
+export const asEdits = (records: SigilTrait[], info: Record<string, TraitInfo>) =>
+  records
+    .map((record) => ({
+      ...record,
+      values: trimGameValues(
+        record.values,
+        info[record.key]?.Levels?.[record.level - 1],
+      ),
+    }))
+    .filter(isEdit);
 
 export const pad = (values: (number | null)[]) =>
   Array.from({ length: SLOTS }, (_, i) => values[i] ?? null);

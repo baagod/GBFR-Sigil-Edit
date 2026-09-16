@@ -31,14 +31,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { LANGS, LANG_LABEL, MESSAGES, initialLang, rememberLang, type Lang } from "./i18n";
 import { TraitRow, type RowContext } from "./TraitRow";
 import {
+  asEdits,
   dedupe,
   explainAt,
-  isEdit,
   levelsOf,
   matches,
   pad,
   slotLabel,
-  trimGameValues,
   type ExplainBand,
   type SigilTrait,
   type TraitInfo,
@@ -52,20 +51,11 @@ const SERVICE = "main.EditService";
 */
 const SAVE_FAILED = "GBFR.SigilEdit.SaveFailed";
 
-/**
- * Whether the list the tool would write is the one it just read, record for record. Reading
- * normalises what it finds (see trimGameValues and isEdit), and the file is written straight
- * back when it does not already say what the tool shows - so an old file converges on the
- * first open instead of on the next keystroke.
- */
+/** Whether the list the tool would write is the one it read: same edits, same numbers. */
 const sameRecords = (a: SigilTrait[], b: SigilTrait[]) =>
   a.length === b.length &&
-  a.every(
-    (record, i) =>
-      record.enabled === b[i].enabled &&
-      record.key === b[i].key &&
-      record.level === b[i].level &&
-      record.values.every((value, slot) => value === b[i].values[slot]),
+  a.every((record, i) =>
+    record.values.every((value, slot) => value === b[i].values[slot]),
   );
 
 /** A value as it was a moment ago: the search box filters a 200-row list per keystroke otherwise. */
@@ -179,10 +169,9 @@ export default function App() {
     // still the user's line: it is kept, under its hash as the name, rather than filtered
     // out - dropping it here would delete it from Config.json on the next write, and an
     // edit nobody can see is worse than one whose name is only a hash.
-    // What the file holds, as it holds it: two edits for one address can both be there, a
-    // key can be lower case, and a build before null existed filled every slot with the
-    // game's own numbers. Reading is what cleans that up, so the raw list is kept to tell
-    // whether the file already says what the tool is about to show.
+    // What the file holds, as it holds it: two edits for one address can both be there, and
+    // a key can be lower case. Reading is what cleans that up, so the raw list is kept to
+    // tell whether the file already says what the tool is about to show.
     const raw = (list ?? [])
       .filter((e) => String(e.key ?? "").trim() !== "")
       .map((e) => ({
@@ -197,23 +186,13 @@ export default function App() {
         values: pad(e.values ?? []),
       }));
 
-    // The numbers the game itself supplies are not inputs (see trimGameValues), and a
-    // record that is not an edit at all - switched off, carrying nothing but those numbers -
-    // has nothing to write. Both are dropped here, and the pruned list is written straight
-    // back when it differs from the file: the file then says what the tool shows and the
-    // game does.
-    const loaded = raw.map((record) => ({
-      ...record,
-      values: trimGameValues(
-        record.values,
-        traitMap?.[record.key]?.Levels?.[record.level - 1],
-      ),
-    }));
-    const kept = loaded.filter(isEdit);
-    const { records, changed } = dedupe(kept);
+    // One edit per address, and nothing but edits (see asEdits). The file is written
+    // straight back when the result differs from it: an old file converges on the first
+    // open rather than on the next keystroke.
+    const { records } = dedupe(asEdits(raw, traitMap ?? {}));
     setEdits(records);
     setTraits(traitMap ?? {});
-    if (changed || !sameRecords(records, raw)) {
+    if (!sameRecords(records, raw)) {
       Call.ByName(`${SERVICE}.SaveEdits`, records).catch((err) =>
         showError({ title: MESSAGES[lang].writeFailed, detail: String(err) }),
       );
@@ -295,10 +274,15 @@ export default function App() {
       );
   }, [edits, names, traits, search, lang]);
 
-  /** The edit a level's checkbox starts: the game's own row, with nothing typed. */
-  function newRecord(key: string, level: number): SigilTrait {
+  /**
+   * The edit a level's checkbox starts: nothing typed, so every slot is the game's own.
+   *
+   * `enabled` is what the caller means by starting one: ticking a level switches it on,
+   * typing into it does not (see updateLevel).
+   */
+  function newRecord(key: string, level: number, enabled: boolean): SigilTrait {
     return {
-      enabled: true,
+      enabled,
       key: key,
       level: level,
       // No numbers at all: an untouched slot is null, which leaves the game's own value
@@ -318,7 +302,7 @@ export default function App() {
     beginTick();
     const at = edits.findIndex((e) => e.key === key && e.level === level);
     if (at < 0) {
-      commit([...edits, newRecord(key, level)]);
+      commit([...edits, newRecord(key, level, true)]);
       return;
     }
     commit(edits.map((e, i) => (i === at ? { ...e, enabled: !e.enabled } : e)));
@@ -339,7 +323,7 @@ export default function App() {
     */
     if (!edits.some((e) => e.key === key)) {
       const level = traits[key]?.Default;
-      if (nextChecked && level) commit([...edits, newRecord(key, level)]);
+      if (nextChecked && level) commit([...edits, newRecord(key, level, true)]);
       return;
     }
     commit(edits.map((e) => (e.key === key ? { ...e, enabled: nextChecked } : e)));
@@ -423,7 +407,7 @@ export default function App() {
     const at = edits.findIndex((e) => e.key === key && e.level === level);
     if (at < 0) {
       beginTick();
-      commit([...edits, { ...newRecord(key, level), ...patch, enabled: false }]);
+      commit([...edits, { ...newRecord(key, level, false), ...patch }]);
       return;
     }
     commit(
@@ -460,19 +444,10 @@ export default function App() {
     );
 
   /*
-    Every edit goes through here: the list on screen is the whole state, and it is
-    also what the running game ends up with.
-
-    Two rules are applied on the way through, both from traits.ts.
-
-    A slot holding the level's own number is not an input (trimGameValues): it goes back to
-    null, which is what leaves that part of the row alone and shows the number as a
-    placeholder. That is why typing the game's own number back in does not stay a number.
-
-    What is not an edit at all is dropped (isEdit): a record that is neither switched on nor
-    carrying a number has nothing to write - the game's own row, back where it came from. So
-    ticking a level and unticking it leaves nothing behind, and emptying every box of an
-    edit takes the whole edit away.
+    Every edit goes through here: the list on screen is the whole state, and it is also what
+    the running game ends up with. What is not an edit is dropped on the way through
+    (asEdits) - so ticking a level and unticking it leaves nothing behind, and emptying every
+    box of an edit takes the whole edit away.
 
     The frontend is deliberately dumb about when the write happens. It hands the whole
     list over on every change and does not wait for an answer; the backend's
@@ -481,15 +456,7 @@ export default function App() {
     as a failure worth interrupting for.
   */
   function commit(next: SigilTrait[]) {
-    const kept = next
-      .map((record) => ({
-        ...record,
-        values: trimGameValues(
-          record.values,
-          traits[record.key]?.Levels?.[record.level - 1],
-        ),
-      }))
-      .filter(isEdit);
+    const kept = asEdits(next, traits);
     setEdits(kept);
     Call.ByName(`${SERVICE}.SaveEdits`, kept).catch((err) =>
       showError({ title: MESSAGES[lang].writeFailed, detail: String(err) }),
