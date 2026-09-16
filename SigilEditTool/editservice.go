@@ -127,14 +127,13 @@ func (s *EditService) NameMap(lang string) map[string]string {
 //
 // Default is the level a new edit should start on: the trait's own maximum when
 // that is a normal 20 or less, otherwise the usual 15, except for the few traits
-// whose values only exist higher up. Min and Max are what the level field is
-// clamped to - Min is the lowest level carrying numbers, so a trait whose numbers
-// exist on one level only cannot be moved off it.
+// whose values only exist higher up. Rows is every level that actually carries
+// values - the levels the picker offers, which is not the span between the first
+// and the last: 万能药 has rows 15 and 30 with nothing in between.
 type TraitInfo struct {
 	Levels  [][]float64 `json:"Levels"`
 	Default int         `json:"Default"`
-	Max     int         `json:"Max"`
-	Min     int         `json:"Min"`
+	Rows    []int       `json:"Rows"`
 }
 
 // traitInfo maps a skill_status Key - a trait hash, the game calls these rows

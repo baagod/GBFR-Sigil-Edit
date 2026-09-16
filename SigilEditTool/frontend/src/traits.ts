@@ -26,10 +26,11 @@ export type SigilTrait = {
  * One trait's vanilla numbers per level. Levels is indexed by level - 1, so
  * Levels[3] is the row the game shows as level 4 - which is what a slot's
  * placeholder, and the value an emptied box writes back, have to come from.
- * Min/Max are the levels that carry numbers: a trait whose values exist on one
- * level only has Min == Max.
+ * Rows is every level that carries numbers - the levels the picker offers, which is
+ * not the span between the first and the last: 万能药 has rows 15 and 30 with nothing
+ * in between.
  */
-export type TraitInfo = { Levels: number[][]; Default: number; Max: number; Min: number };
+export type TraitInfo = { Levels: number[][]; Default: number; Rows: number[] };
 
 export const SLOTS = 10;
 
@@ -178,26 +179,23 @@ export const stepValue = (value: number, direction: 1 | -1) => {
 };
 
 /*
-  The levels a trait shows: what is switched on first, then every other level by number.
+  The levels a trait shows: the game's rows that carry numbers, plus any level an edit
+  already names, with what is switched on lifted to the top.
 
-  Two tiers and no more. There was a third - levels carrying a switched-off edit, between
-  the two - and it read as no order at all: a switched-off level 30 came before an
-  untouched level 3, so the list ran 1, 2, 5, 10, 12, 22, 23 … 30, 3, 4, 6 … . What is
-  switched on is worth lifting to the top; everything else belongs in numeric order.
+  The rows, not the span between them: every level has a table row, but most of them are all
+  zeros - 万能药 has values on 15 and 30 only - and an edit pointed at a zero row writes a
+  value the game never reads there. traitInfo.Rows is that set (build-assets.js derives it
+  the same way).
 
-  A level only the records know about (edited by hand, or left behind by a level the
-  tables no longer carry) still gets a row, so it stays visible instead of being applied
-  invisibly.
+  A level only the records know about (edited by hand, or left behind by a level the tables
+  no longer carry) still gets a row, so it stays visible instead of being applied invisibly.
 */
 export function levelsOf(
   info: TraitInfo | undefined,
   records: SigilTrait[],
 ): number[] {
   const on = new Set(records.filter((record) => record.enabled).map((r) => r.level));
-  const levels = new Set<number>();
-  if (info) {
-    for (let level = info.Min; level <= info.Max; level++) levels.add(level);
-  }
+  const levels = new Set<number>(info?.Rows ?? []);
   for (const record of records) levels.add(record.level);
 
   return [...levels].sort(

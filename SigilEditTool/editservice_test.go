@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -404,8 +405,8 @@ func TestSkillTablesAgree(t *testing.T) {
 		// One row per level, each carrying the ten LevelValue slots: the level an
 		// edit names has to have a row of its own, or a slot's placeholder (and the
 		// value an emptied box writes back) would come from a different level.
-		if len(info.Levels) != info.Max {
-			t.Fatalf("skill %s has %d level rows, want %d", key, len(info.Levels), info.Max)
+		if len(info.Levels) == 0 {
+			t.Fatalf("skill %s has no level rows", key)
 		}
 		for level, row := range info.Levels {
 			if len(row) != LevelValueCount {
@@ -467,66 +468,88 @@ func TestKnownSkillDefault(t *testing.T) {
 	}
 }
 
-// A skill's default level has to be one it actually has values on, and the level
-// field is only ever clamped to a level that exists.
+// The picker offers a skill's real levels - the ones that carry values - and the
+// default is one of them.
+//
+// The table has a row for every level up to the highest, most of them empty:
+// 万能药 is Lv15 and Lv30 with 14 blank rows in between, so listing the span
+// 15..30 would offer a dozen levels the game never uses.
 func TestLevelRangesAreUsable(t *testing.T) {
 	if len(traitInfo) == 0 {
 		t.Fatal("skillinfo.json did not load")
 	}
-	for hash, info := range traitInfo {
-		if info.Min < 1 || info.Default < 1 {
-			t.Fatalf("%s has a level below 1: %+v", hash, info)
+	carries := func(levels [][]float64, level int) bool {
+		for _, value := range levels[level-1] {
+			if value != 0 {
+				return true
+			}
 		}
-		if info.Default > info.Max || info.Min > info.Default {
-			t.Fatalf("%s range is Lv%d..%d with default Lv%d", hash, info.Min, info.Max, info.Default)
+		return false
+	}
+	for hash, info := range traitInfo {
+		if len(info.Rows) == 0 {
+			t.Fatalf("%s offers no level at all", hash)
+		}
+		offered := make(map[int]bool, len(info.Rows))
+		for i, level := range info.Rows {
+			if level < 1 || level > len(info.Levels) {
+				t.Fatalf("%s offers Lv%d, outside its %d level rows", hash, level, len(info.Levels))
+			}
+			if i > 0 && info.Rows[i-1] >= level {
+				t.Fatalf("%s offers levels out of order: %v", hash, info.Rows)
+			}
+			if !carries(info.Levels, level) {
+				t.Fatalf("%s offers Lv%d, which carries no values", hash, level)
+			}
+			offered[level] = true
+		}
+		if !offered[info.Default] {
+			t.Fatalf("%s defaults to Lv%d but offers %v", hash, info.Default, info.Rows)
 		}
 
-		// The clamped range is only honest if Min is the first level that carries
-		// numbers: every row below it has to be all zeros, or the field would be
-		// refusing levels the game does define.
-		carries := func(level int) bool {
-			for _, value := range info.Levels[level-1] {
-				if value != 0 {
-					return true
-				}
-			}
-			return false
-		}
-		if !carries(info.Min) {
-			t.Fatalf("%s: level %d carries no values, so it is not a lower bound", hash, info.Min)
-		}
-		for level := 1; level < info.Min; level++ {
-			if carries(level) {
-				t.Fatalf("%s: level %d carries values below the minimum %d", hash, level, info.Min)
+		// Nothing left out may carry values either, or the picker would hide a level
+		// the game defines.
+		for level := 1; level <= len(info.Levels); level++ {
+			if !offered[level] && carries(info.Levels, level) {
+				t.Fatalf("%s: Lv%d carries values but is not offered", hash, level)
 			}
 		}
 	}
 
 	// The three cases the rule treats differently. Levels are the table's own, so
 	// these are the numbers the game shows. 黑龙的咒印 keeps its numbers on level 15
-	// alone, which is why its field is pinned there; 穷寇心 ramps from level 1, and
-	// 浩劫 exists on level 25 alone.
+	// alone; 穷寇心 ramps from level 1; 浩劫 exists on level 25 alone, so a fixed
+	// default of 15 would name a level it does not have.
 	for _, want := range []struct {
-		name          string
-		hash          string
-		min, def, max int
-		why           string
+		name string
+		hash string
+		rows []int
+		def  int
+		why  string
 	}{
-		{"pinned to its only level", "06719232", 15, 15, 15, "numbers on level 15 only: the field is pinned there"},
-		{"free across 30 levels", "70395731", 1, 15, 30, "30 levels: default to the usual 15, free from 1 to 30"},
-		{"single-level skill", "40223C28", 25, 25, 25, "its only level is 25: default to it, not to 15"},
+		{"pinned to its only level", "06719232", []int{15}, 15, "numbers on level 15 only"},
+		{"free across 30 levels", "70395731", seq(1, 30), 15, "30 levels: default to the usual 15"},
+		{"single-level skill", "40223C28", []int{25}, 25, "its only level is 25: default to it, not to 15"},
 	} {
 		t.Run(want.name, func(t *testing.T) {
 			got, ok := traitInfo[want.hash]
 			if !ok {
 				t.Fatalf("%s missing from the skill table", want.hash)
 			}
-			if got.Min != want.min || got.Default != want.def || got.Max != want.max {
-				t.Fatalf("%s: got Lv%d..%d (default %d), want Lv%d..%d (default %d) (%s)",
-					want.hash, got.Min, got.Max, got.Default, want.min, want.max, want.def, want.why)
+			if !slices.Equal(got.Rows, want.rows) || got.Default != want.def {
+				t.Fatalf("%s: got levels %v (default %d), want %v (default %d) (%s)",
+					want.hash, got.Rows, got.Default, want.rows, want.def, want.why)
 			}
 		})
 	}
+}
+
+func seq(from, to int) []int {
+	levels := make([]int, 0, to-from+1)
+	for level := from; level <= to; level++ {
+		levels = append(levels, level)
+	}
+	return levels
 }
 
 // The rows that are not really skills must be absent from every table.

@@ -232,7 +232,25 @@ describe("one edit per address", () => {
 });
 
 describe("the levels a trait shows", () => {
-  const info: TraitInfo = { Min: 1, Max: 4, Default: 2, Levels: [[], [], [], []] };
+  const info: TraitInfo = {
+    Rows: [1, 2, 3, 4],
+    Default: 2,
+    Levels: [[], [], [], []],
+  };
+
+  it("shows the game's real rows, not the span between them", () => {
+    // 万能药 has values on 15 and 30 only; its other rows are all zeros, and an edit on one
+    // of those writes a value the game never reads.
+    const cure: TraitInfo = {
+      Rows: [15, 30],
+      Default: 15,
+      Levels: Array.from({ length: 30 }, () => []),
+    };
+    expect(levelsOf(cure, [])).toEqual([15, 30]);
+
+    // An edit at a level the rows do not know still gets a row, so it stays visible.
+    expect(levelsOf(cure, [record("A1", 20, true)])).toEqual([20, 15, 30]);
+  });
 
   it("lifts what is switched on, and keeps the rest by level", () => {
     // Two tiers: the levels that are on come first, everything else follows in numeric
@@ -246,8 +264,7 @@ describe("the levels a trait shows", () => {
     expect(levels).toEqual([1, 2, 3, 4]);
 
     const wide: TraitInfo = {
-      Min: 1,
-      Max: 5,
+      Rows: [1, 2, 3, 4, 5],
       Default: 1,
       Levels: Array.from({ length: 5 }, () => []),
     };

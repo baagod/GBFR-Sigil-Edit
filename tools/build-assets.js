@@ -180,28 +180,34 @@ function stageDb() {
     const max = levels.length;
 
     /*
-      The lowest level that carries numbers. Rows below it are all zeros - the game
-      keeps them empty - so pointing an edit there would write a value into a row
-      that has none. The level field is clamped to this range, which is what stops
-      a skill whose numbers only exist on one level from being moved off it.
+      The levels that actually carry numbers.
+
+      Every level has a row - the table is contiguous - but the game keeps most of them
+      empty: 万能药 has values on 15 and 30 only, and its other 28 rows are all zeros. An
+      edit pointed at a zero row writes a value the game never reads there, so the list
+      offers these levels and not the span between them. A skill whose every row is zero
+      keeps its last level: it has to offer something.
+
+      This is what the list shows, and what an edit's level is clamped to.
     */
-    const first = levels.findIndex((row) => row.some((v) => v !== 0));
-    const min = first < 0 ? max : first + 1;
+    const rows = levels
+      .map((values, i) => (values.some((v) => v !== 0) ? i + 1 : 0))
+      .filter((level) => level !== 0);
+    if (rows.length === 0) rows.push(max);
 
     /*
       Which level a new edit should point at.
 
       The skill's own maximum while that is a normal 20 or less, otherwise the usual
-      15 - except where 15 holds nothing (min is above it), in which case the maximum
-      is the only row that would do anything.
+      15 - except where 15 holds nothing (the first real level is above it), in which
+      case the maximum is the only row that would do anything.
     */
-    const defaultLevel = max <= 20 || min > 15 ? max : 15;
+    const defaultLevel = max <= 20 || rows[0] > 15 ? max : 15;
 
     out[hash] = {
       Default: defaultLevel,
-      Max: max,
-      Min: min,
       Levels: levels,
+      Rows: rows,
     };
   }
 
@@ -211,7 +217,7 @@ function stageDb() {
     const atDefault = info?.Levels?.[info.Default - 1] ?? [];
     console.log(
       `  ${names[k] ?? k} (${k}) = [${atDefault.join(", ")}]  Lv${
-        info ? `${info.Min}..${info.Max} (default ${info.Default})` : "?"
+        info ? `${info.Rows.join("/")} (default ${info.Default})` : "?"
       }`,
     );
   }
