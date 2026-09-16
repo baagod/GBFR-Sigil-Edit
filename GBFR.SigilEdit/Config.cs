@@ -39,7 +39,11 @@ public class SigilTrait
 /// </summary>
 public class Config
 {
-    [JsonPropertyName("Edits")]
+    /// <summary>
+    /// The tool's edit list. The name spells the key the tool writes; the options below
+    /// also accept the capitalised spelling older files carry.
+    /// </summary>
+    [JsonPropertyName("edits")]
     public List<SigilTrait> Edits { get; set; } = [];
 
     private static readonly JsonSerializerOptions Options = new()
