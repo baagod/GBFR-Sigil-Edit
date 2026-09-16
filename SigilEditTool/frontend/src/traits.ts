@@ -152,9 +152,22 @@ export function slotEdit(
   return { kind: "commit", values: next, typed: withSlot(typed, i, true), keeps: text };
 }
 
-/** One step of the arrow keys and the wheel. */
-export const stepValue = (value: number, direction: 1 | -1) =>
-  Math.round((value + direction) * 100) / 100;
+/**
+ * The largest value a box may hold, and the bound the two patterns below encode: 9 digits
+ * before the point, 6 after it.
+ *
+ * Written out because a step has to respect it too. Stepping is the third way a value
+ * changes - after typing and a hand-edited file - and without the clamp a box at
+ * 999999999 answered an arrow key with 1000000000: ten digits, which its own pattern then
+ * refuses, so the box showed a number no keystroke would be accepted on.
+ */
+export const MAX_VALUE = 999999999.999999;
+
+/** One step of the arrow keys and the wheel, held inside what a box may hold. */
+export const stepValue = (value: number, direction: 1 | -1) => {
+  const next = Math.round((value + direction) * 100) / 100;
+  return Math.abs(next) <= MAX_VALUE ? next : value;
+};
 
 /*
   The levels a trait shows, in the order it shows them: what is on first, then the

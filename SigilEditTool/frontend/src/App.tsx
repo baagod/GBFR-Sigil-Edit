@@ -145,9 +145,12 @@ export default function App() {
       A hash the name table does not know is kept: the mod does apply those, and an
       edit nobody can see is worse than one whose name is only a hash.
     */
-    // Eight hex digits, which is the length every table and every Config.json key uses:
-    // a shorter one can only be a typo, and it would list a row no table can describe.
-    const hexKey = /^[0-9a-f]{8}$/i;
+    // One to eight hex digits, which is what the mod accepts (its own parse is
+    // uint.TryParse over the same field) and what this file may have been written with by
+    // hand or by an older tool. A shorter key is not a typo to drop: it is an edit the
+    // game would apply, so dropping it here would delete it from Config.json on the next
+    // write - see the note above about an edit nobody can see being worse than a hash.
+    const hexKey = /^[0-9a-f]{1,8}$/i;
     const loaded = (list ?? [])
       .filter((e) => hexKey.test(String(e.Key ?? "").trim()))
       .map((e) => {

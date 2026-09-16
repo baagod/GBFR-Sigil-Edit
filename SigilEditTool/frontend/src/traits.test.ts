@@ -14,6 +14,7 @@ import {
   HALF_TYPED,
   levelsOf,
   matches,
+  MAX_VALUE,
   NUMBER,
   pad,
   slotEdit,
@@ -39,10 +40,13 @@ const record = (
   A stand-in for one value box: it shows what the user has typed (half typed text while
   it is not a number yet, otherwise the committed number), and a keystroke is appended
   to what is shown - which is what the browser does with the caret at the end.
+
+  `committed` starts it in the state a box is in after a value has been saved - the number
+  on screen rather than empty - which is where the bound becomes visible to the user.
 */
-function type(value: number, keys: string) {
+function type(value: number, keys: string, committed = false) {
   let values = [value];
-  let typed = [false];
+  let typed = [committed];
   let half: string | undefined;
   for (const ch of keys) {
     const shown = half ?? (typed[0] ? String(values[0]) : "");
@@ -138,6 +142,18 @@ describe("the two patterns", () => {
       expect(slotEdit(text, 0, [0], [false], () => 0)).toEqual({ kind: "drop" });
     }
   });
+
+  it("leaves the committed value alone when a longer number is refused", () => {
+    // A refused keystroke is not a cleared box: the number already committed stays, and
+    // the box goes on showing it. There is no hint that anything happened - which is why
+    // the bound is documented here rather than explained in the UI.
+    expect(type(123456789, "0", true)).toMatchObject({
+      value: 123456789,
+      shown: "123456789",
+    });
+    // A point is still a step on the way to a number, so it is shown, not committed.
+    expect(type(123456789, ".", true).shown).toBe("123456789.");
+  });
 });
 
 describe("stepping a slot", () => {
@@ -146,6 +162,16 @@ describe("stepping a slot", () => {
     expect(stepValue(2, -1)).toBe(1);
     expect(stepValue(0.1, 1)).toBe(1.1);
     expect(stepValue(-0.2, -1)).toBe(-1.2);
+  });
+
+  it("will not step a box past what its own text may hold", () => {
+    // The clamp is what keeps stepping - the third way a value changes, after typing and
+    // a hand-edited file - from producing a number the pattern above refuses: 999999999
+    // used to step to 1000000000, and then no keystroke in that box was accepted.
+    expect(stepValue(999999999, 1)).toBe(999999999);
+    expect(stepValue(-999999999, -1)).toBe(-999999999);
+    expect(stepValue(MAX_VALUE - 0.01, 1)).toBe(MAX_VALUE - 0.01);
+    expect(stepValue(999999998, 1)).toBe(999999999);
   });
 });
 
@@ -167,10 +193,10 @@ describe("one edit per address", () => {
     Each case says which Values must be left standing, not just how many records remain.
   */
   it.each([
-    ["two enabled, the later one wins", [true, true], [2, 3], 3],
-    ["an enabled one before a switched-off one", [true, false], [2, 3], 2],
-    ["an enabled one after a switched-off one", [false, true], [2, 3], 3],
-    ["two switched off, the later one wins", [false, false], [2, 3], 3],
+    ["the later of two enabled", [true, true], [2, 3], 3],
+    ["the enabled one written before a switched-off one", [true, false], [2, 3], 2],
+    ["the enabled one written after a switched-off one", [false, true], [2, 3], 3],
+    ["the later of two switched off", [false, false], [2, 3], 3],
   ])("keeps %s", (_case, enabled, values, kept) => {
     const { records, changed } = dedupe(
       enabled.map((on, i) => ({ ...record("A1", 1, on), Values: pad([values[i]]) })),

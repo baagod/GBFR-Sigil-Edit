@@ -324,9 +324,9 @@ function stageNames() {
   /*
     The other asset has to lose the same trait, and a different stage writes it:
     skillinfo.json comes from `db`, which never sees an explanation, so the filter above
-    cannot reach it. Today the two agree - 199 traits each - and this is what says so out
-    loud. A trait with no explanation must not be in the numbers either, or the tool
-    offers a row whose tooltip it has nothing to fill with.
+    cannot reach it. What is checked is that the names cover every key skillinfo carries -
+    one direction only, because the names are the authority on which traits are offered
+    and there is no second source to check them against. Today that is 199 either way.
 
     Only when that asset is there to compare with: on a fresh setup this stage runs first
     (the Chinese names are what decide which traits are offered), so there is nothing to

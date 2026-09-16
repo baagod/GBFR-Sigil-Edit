@@ -30,7 +30,7 @@ import {
   type TraitInfo,
 } from "./traits";
 
-/** One trait's row and its levels, as App's memo hands them over. */
+/** One trait's row and its levels, as the list builds them. */
 export type Row = {
   key: string;
   label: string;
@@ -42,9 +42,9 @@ export type Row = {
 };
 
 /**
- * What a row needs from App: the copy, the explanation text for a trait, whether the
- * pointer has arrived or left, and the edits a row can ask for. Passed as one object so
- * the markup above does not carry a dozen props around.
+ * What a row needs from App: the copy, the explanation text for a trait, and the edits a
+ * row can ask for - including the two pointer handlers the tooltip runs on. Passed as one
+ * object so the markup above does not carry a dozen props around.
  */
 export type RowContext = {
   t: Dict;
