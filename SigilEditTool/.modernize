@@ -1,0 +1,4 @@
+# 被有意忽略的现代化建议（格式：<日期> <类别> <说明>）
+# 见 use-modern-go / golang-modernize 技能：列在这里的项不再重复建议。
+2026-09-17 json-omitzero Config.json 是与 C# mod 的固定契约，Edits/Enabled/Key/Level/Values 必须总在，加 omitzero 会改文件格式
+2026-09-17 slices-clone padValues 里的 copy(out, values) 是把切片补齐到固定 10 槽（不是克隆），换成 slices.Clone 会变成 len(values)，改变行为
