@@ -48,6 +48,25 @@ export const addressOf = (key: string, level: number) => `${key}#${level}`;
 export const isEdit = (record: SigilTrait) =>
   record.enabled || record.values.some((value) => value !== null);
 
+/**
+ * The values with the level's own numbers taken back out: a slot holding the game's number
+ * is not an input, so it is null - which leaves that part of the row alone and shows the
+ * number as a placeholder, the way an untouched slot reads.
+ *
+ * This is what makes an old file read right: builds before null existed filled every slot
+ * with the game's own numbers to write the row back, and those copies are not edits. It runs
+ * on the way in and on the way through commit, so the list, the file and the game agree on
+ * what "untouched" is - and typing the game's own number back in is that same thing, which
+ * is why it does not survive as a number.
+ *
+ * A level the tables do not know (a hand-added record) keeps its numbers: there is nothing
+ * to compare them with, and they may well be what the game needs written.
+ */
+export const trimGameValues = (
+  values: (number | null)[],
+  vanilla: number[] | undefined,
+) => values.map((value, i) => (value === vanilla?.[i] ? null : value));
+
 export const pad = (values: (number | null)[]) =>
   Array.from({ length: SLOTS }, (_, i) => values[i] ?? null);
 

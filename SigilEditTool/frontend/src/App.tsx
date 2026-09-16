@@ -38,6 +38,7 @@ import {
   matches,
   pad,
   slotLabel,
+  trimGameValues,
   type ExplainBand,
   type SigilTrait,
   type TraitInfo,
@@ -50,6 +51,22 @@ const SERVICE = "main.EditService";
   and arrives as this event instead.
 */
 const SAVE_FAILED = "GBFR.SigilEdit.SaveFailed";
+
+/**
+ * Whether the list the tool would write is the one it just read, record for record. Reading
+ * normalises what it finds (see trimGameValues and isEdit), and the file is written straight
+ * back when it does not already say what the tool shows - so an old file converges on the
+ * first open instead of on the next keystroke.
+ */
+const sameRecords = (a: SigilTrait[], b: SigilTrait[]) =>
+  a.length === b.length &&
+  a.every(
+    (record, i) =>
+      record.enabled === b[i].enabled &&
+      record.key === b[i].key &&
+      record.level === b[i].level &&
+      record.values.every((value, slot) => value === b[i].values[slot]),
+  );
 
 /** A value as it was a moment ago: the search box filters a 200-row list per keystroke otherwise. */
 function useDebounced<T>(value: T, delay = 150): T {
@@ -162,29 +179,41 @@ export default function App() {
     // still the user's line: it is kept, under its hash as the name, rather than filtered
     // out - dropping it here would delete it from Config.json on the next write, and an
     // edit nobody can see is worse than one whose name is only a hash.
-    const loaded = (list ?? [])
+    // What the file holds, as it holds it: two edits for one address can both be there, a
+    // key can be lower case, and a build before null existed filled every slot with the
+    // game's own numbers. Reading is what cleans that up, so the raw list is kept to tell
+    // whether the file already says what the tool is about to show.
+    const raw = (list ?? [])
       .filter((e) => String(e.key ?? "").trim() !== "")
       .map((e) => ({
+        ...e,
         // Every table the tool serves is keyed by the uppercase hash, and a key
         // written into Config.json by hand can be lower case. Normalising here is
         // what lets every lookup below use the key as it stands, instead of the
         // half-dozen call sites that used to uppercase it for themselves.
-        ...e,
         key: e.key.toUpperCase(),
         // Ten slots, a number or null: a file that is short, or has no values at all,
         // pads with null - the game's own number, which writes nothing.
         values: pad(e.values ?? []),
       }));
-    // A file can hold two edits for one address, and a record that is not an edit at all
-    // (an older build wrote them: switched off, carrying the game's own numbers). Only
-    // one of the first can ever be in effect, and the second is not an edit, so the
-    // pruned list is written straight back: the file then says what the tool shows and
-    // the game does.
+
+    // The numbers the game itself supplies are not inputs (see trimGameValues), and a
+    // record that is not an edit at all - switched off, carrying nothing but those numbers -
+    // has nothing to write. Both are dropped here, and the pruned list is written straight
+    // back when it differs from the file: the file then says what the tool shows and the
+    // game does.
+    const loaded = raw.map((record) => ({
+      ...record,
+      values: trimGameValues(
+        record.values,
+        traitMap?.[record.key]?.Levels?.[record.level - 1],
+      ),
+    }));
     const kept = loaded.filter(isEdit);
     const { records, changed } = dedupe(kept);
     setEdits(records);
     setTraits(traitMap ?? {});
-    if (changed || kept.length !== loaded.length) {
+    if (changed || !sameRecords(records, raw)) {
       Call.ByName(`${SERVICE}.SaveEdits`, records).catch((err) =>
         showError({ title: MESSAGES[lang].writeFailed, detail: String(err) }),
       );
@@ -434,10 +463,16 @@ export default function App() {
     Every edit goes through here: the list on screen is the whole state, and it is
     also what the running game ends up with.
 
-    What is not an edit is dropped on the way through (see isEdit): a record that is
-    neither switched on nor carrying a typed number has nothing to write - the game's own
-    row, back where it came from. So ticking a level and unticking it leaves nothing
-    behind, and emptying every box of an edit takes the whole edit away.
+    Two rules are applied on the way through, both from traits.ts.
+
+    A slot holding the level's own number is not an input (trimGameValues): it goes back to
+    null, which is what leaves that part of the row alone and shows the number as a
+    placeholder. That is why typing the game's own number back in does not stay a number.
+
+    What is not an edit at all is dropped (isEdit): a record that is neither switched on nor
+    carrying a number has nothing to write - the game's own row, back where it came from. So
+    ticking a level and unticking it leaves nothing behind, and emptying every box of an
+    edit takes the whole edit away.
 
     The frontend is deliberately dumb about when the write happens. It hands the whole
     list over on every change and does not wait for an answer; the backend's
@@ -446,7 +481,15 @@ export default function App() {
     as a failure worth interrupting for.
   */
   function commit(next: SigilTrait[]) {
-    const kept = next.filter(isEdit);
+    const kept = next
+      .map((record) => ({
+        ...record,
+        values: trimGameValues(
+          record.values,
+          traits[record.key]?.Levels?.[record.level - 1],
+        ),
+      }))
+      .filter(isEdit);
     setEdits(kept);
     Call.ByName(`${SERVICE}.SaveEdits`, kept).catch((err) =>
       showError({ title: MESSAGES[lang].writeFailed, detail: String(err) }),

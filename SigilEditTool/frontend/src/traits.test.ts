@@ -22,6 +22,7 @@ import {
   slotEdit,
   slotLabel,
   stepValue,
+  trimGameValues,
   type ExplainBand,
   type SigilTrait,
   type TraitInfo,
@@ -249,6 +250,29 @@ describe("what counts as an edit", () => {
     // A level ticked and unticked, or one whose numbers were emptied again: there is
     // nothing to write, so Config.json keeps no row for it.
     expect(isEdit(record("A1", 15, false))).toBe(false);
+  });
+});
+
+describe("the game's own numbers are not inputs", () => {
+  const vanilla = [10, 3, 20, 0, 0, 0, 0, 0, 0, 0];
+
+  it("takes the level's own number back out of a slot", () => {
+    // What an older build wrote: every slot filled in with the game's row so it could write
+    // the row back. Those copies are not edits - showing them as values read as if all ten
+    // slots had been typed into.
+    expect(trimGameValues(pad([10, 3, 20]), vanilla)).toEqual(pad([]));
+  });
+
+  it("keeps a number that differs, including a zero where the game has one", () => {
+    // 0 is a number like any other here: setting a slot the game fills with 200 to 0 is an
+    // edit, and it stays one.
+    expect(trimGameValues(pad([30, 3, 0]), vanilla)).toEqual(pad([30, null, 0]));
+  });
+
+  it("leaves a level the tables do not know alone", () => {
+    // A hand-added record may name a trait or level the tables have nothing for; there is
+    // nothing to compare against, and its numbers may be what the game needs written.
+    expect(trimGameValues(pad([30, 3]), undefined)).toEqual(pad([30, 3]));
   });
 });
 
