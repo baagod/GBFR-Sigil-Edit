@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type MouseEvent,
+  type PointerEvent,
 } from "react";
 import { Call, Events } from "@wailsio/runtime";
 import { X } from "lucide-react";
@@ -88,7 +89,8 @@ export default function App() {
     Base UI's own reasons for closing (a press inside the trigger, focus moving from a
     value box to the row) are what took the explanation away mid-row before, so the
     open state is controlled from here instead and the pointer is the only thing that
-    changes it.
+    changes it - including a tick, which moves the rows rather than the pointer and is
+    followed up in resolveHoveredRow.
   */
   const [tipRow, setTipRow] = useState<string | null>(null);
   const listBox = useRef<HTMLDivElement>(null);
@@ -98,14 +100,23 @@ export default function App() {
     A tick reorders the list - what is on sorts to the top - and the browser follows the
     box that was just clicked, because it still holds focus: it scrolls the row back into
     view, which is what made a tick feel like the list jumped. The offset goes back in
-    the layout effect below, so the viewport stays where the pointer is.
+    the layout effect below, in the same pass that re-points the tooltip at whatever row
+    is under the pointer now (the row that was hovered has moved away and another slid
+    into its place), so both end up where the pointer is.
   */
   const heldScroll = useRef<number | null>(null);
+  /*
+    Where the pointer last moved. A tick moves the rows under a pointer that has not
+    moved, and moving inside a row fires no enter either, so neither the browser's hover
+    nor our own enter/leave can say which row is being hovered after a tick.
+  */
+  const lastMove = useRef<{ x: number; y: number } | null>(null);
 
   useLayoutEffect(() => {
     if (heldScroll.current === null) return;
     if (listBox.current) listBox.current.scrollTop = heldScroll.current;
     heldScroll.current = null;
+    resolveHoveredRow();
   });
   const [query, setQuery] = useState("");
   const search = useDebounced(query);
@@ -319,21 +330,63 @@ export default function App() {
   }
 
   /**
-    What a tick does before its re-render: remembers the scroll offset (heldScroll) for the
-    layout effect that follows, which puts the viewport back where it was, and drops the
-    tooltip - the rows have moved under a pointer that has not, so the row it named is not
-    the row under the pointer any more. The pointer's next row opens it again.
+    What a tick does before its re-render: remembers the scroll offset (heldScroll) for
+    the layout effect that follows, which puts the viewport back where it was and points
+    the tooltip at the row now under the pointer.
   */
   function beginTick() {
     heldScroll.current = listBox.current?.scrollTop ?? null;
-    setTipRow(null);
+  }
+
+  /*
+    Which row the pointer is over, asked of the document rather than of a hover event:
+    after a tick the rows have moved under a pointer that has not, and moving inside a
+    row fires no enter either, so hover events cannot say which row is being hovered.
+    Called from the layout effect that follows a tick, so the row found here is the one
+    under the pointer now - whether it is the row that was ticked or the one that slid
+    into its place - and the tooltip simply follows it.
+  */
+  function resolveHoveredRow() {
+    const at = lastMove.current;
+    if (!at) return;
+    const row = document.elementFromPoint(at.x, at.y)?.closest("[data-row]");
+    const id = row?.getAttribute("data-row") ?? null;
+    /*
+      The move alone here, where restInRow replays the whole way in: the click that
+      caused the tick made Base UI close its popup, and a move is the opening its hover
+      accepts - a leave first would only close it again, and our open prop has not
+      changed for a row that stayed put.
+    */
+    row?.dispatchEvent(
+      new window.MouseEvent("mousemove", { bubbles: true, clientX: at.x, clientY: at.y }),
+    );
+    setTipRow(id);
   }
 
   /*
     The pointer enters and leaves rows; the row it is in is the only thing that decides
-    whether a tooltip is up (see tipRow).
+    whether a tooltip is up (see tipRow). The only thing that changes it is the pointer
+    moving from one row to another - or a tick, which moves the rows instead and is
+    handled in resolveHoveredRow.
   */
-  function restInRow(id: string) {
+  function restInRow(id: string, e: PointerEvent<HTMLElement>) {
+    /*
+      Base UI only lets a tooltip follow the cursor when the event it opened on was a
+      mouseenter or a mousemove (useClientPoint checks exactly that), and after a click it
+      refuses to let hover open at all until the pointer has left the row and come back.
+      Focus a value box, switch windows, come back and sweep in, and the record still says
+      focus and its own hover is still blocked - so the first tooltip of the visit anchors
+      to the middle of the row, and only the second one lands on the cursor.
+
+      The way in is therefore replayed on the row, in full: leave clears that latch, enter
+      is the opening it accepts, move carries the pointer's place. resolveHoveredRow needs
+      less than this, because there the popup is already open on the row.
+    */
+    const at = { bubbles: true, clientX: e.clientX, clientY: e.clientY };
+    const row = e.currentTarget;
+    row.dispatchEvent(new window.MouseEvent("mouseleave", at));
+    row.dispatchEvent(new window.MouseEvent("mouseenter", at));
+    row.dispatchEvent(new window.MouseEvent("mousemove", at));
     setTipRow(id);
   }
 
@@ -537,6 +590,9 @@ export default function App() {
       <div
         ref={listBox}
         className="trait-rows mt-6 min-h-0 flex-1 overflow-y-auto pr-4 [scrollbar-gutter:stable]"
+        onPointerMove={(e) => {
+          lastMove.current = { x: e.clientX, y: e.clientY };
+        }}
       >
         {/*
           One provider for the list: which tooltip is open is decided here (see tipRow),
