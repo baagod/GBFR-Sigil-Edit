@@ -203,3 +203,37 @@ export function levelsOf(
  */
 export const matches = (label: string, key: string, needle: string) =>
   !needle || label.toLowerCase().includes(needle) || key.toLowerCase().includes(needle);
+
+/** One stretch of levels that share an explanation: the text, from the level it starts at. */
+export type ExplainBand = { from: number; text: string };
+
+/**
+ * The explanation a level shows: the last band that starts at or below it.
+ *
+ * The bands are the game's own rows, folded: most skills say the same thing at every level,
+ * some change it partway - a 30-level resistance reads "受到的伤害-{0}%" until level 29 and
+ * "…免疫" at 30, and one skill has six bands. A level past the last band, which only a
+ * hand-edited Config.json can name, reads the last band: the same rule, no special case.
+ */
+export function explainAt(bands: ExplainBand[] | undefined, level: number): string {
+  if (!bands || bands.length === 0) return "";
+  let found = bands[0];
+  for (const band of bands) {
+    if (band.from > level) break;
+    found = band;
+  }
+  return found.text;
+}
+
+/*
+  The tooltip is a template, not a sentence with the numbers already in it: {N} is rewritten
+  to the slot it stands for, counted from 1 like the ten boxes, so the reader can see which
+  box feeds which part of the effect. Whatever else the game's placeholder carries is
+  dropped - "{0:.1f}" becomes "{1}", because the slot number is all the tooltip is saying -
+  and the "<d>" markers a few explanations carry are markup rather than text.
+*/
+export const slotLabel = (text: string) =>
+  text
+    .replace(/\{(\d+)(?::[^}]*)?\}/g, (_, d) => `{${Number(d) + 1}}`)
+    .replace(/<\/?[a-z][^>]*>/g, "")
+    .trim();

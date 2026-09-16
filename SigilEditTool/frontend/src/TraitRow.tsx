@@ -48,7 +48,7 @@ export type Row = {
  */
 export type RowContext = {
   t: Dict;
-  notationOf: (key: string) => string;
+  notationOf: (key: string, level: number) => string;
   rest: (id: string, e: PointerEvent<HTMLElement>) => void;
   leave: (id: string) => void;
   toggleLevel: (key: string, level: number) => void;
@@ -230,17 +230,18 @@ function LevelRow({
   row,
   level,
   nested,
-  notation,
   hovered,
   ctx,
 }: {
   row: Row;
   level: number;
   nested: boolean;
-  notation: string;
   hovered: boolean;
   ctx: RowContext;
 }) {
+  // Its own level's wording, not the trait's: a resistance reads "受到的伤害-{1}%" until
+  // level 29 and "…免疫" at 30, and this row is one of them (see explainAt).
+  const notation = ctx.notationOf(row.key, level);
   const record = row.byLevel.get(level);
   const id = addressOf(row.key, level);
 
@@ -353,7 +354,6 @@ export function TraitRow({
   isOpen: boolean;
   ctx: RowContext;
 }) {
-  const notation = ctx.notationOf(row.key);
   const on = row.records.filter((record) => record.Enabled).length;
   const allOn = row.records.length > 0 && on === row.records.length;
 
@@ -363,12 +363,15 @@ export function TraitRow({
         row={row}
         level={row.levels[0]}
         nested={false}
-        notation={notation}
         hovered={hoveredId === addressOf(row.key, row.levels[0])}
         ctx={ctx}
       />
     );
   }
+
+  // The parent row stands for the trait and has no level of its own: it reads the band
+  // covering the level a new edit would use (Default), falling back to the first row.
+  const notation = ctx.notationOf(row.key, row.info?.Default ?? row.levels[0] ?? 1);
 
   return (
     <>
@@ -470,7 +473,6 @@ export function TraitRow({
             row={row}
             level={level}
             nested
-            notation={notation}
             hovered={hoveredId === addressOf(row.key, level)}
             ctx={ctx}
           />

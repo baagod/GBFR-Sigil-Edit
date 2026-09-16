@@ -30,7 +30,18 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LANGS, LANG_LABEL, MESSAGES, initialLang, rememberLang, type Lang } from "./i18n";
 import { TraitRow, type RowContext } from "./TraitRow";
-import { dedupe, levelsOf, matches, pad, SLOTS, type SigilTrait, type TraitInfo } from "./traits";
+import {
+  dedupe,
+  explainAt,
+  levelsOf,
+  matches,
+  pad,
+  SLOTS,
+  slotLabel,
+  type ExplainBand,
+  type SigilTrait,
+  type TraitInfo,
+} from "./traits";
 
 const SERVICE = "main.EditService";
 /*
@@ -55,7 +66,9 @@ export default function App() {
   const [edits, setEdits] = useState<SigilTrait[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [traits, setTraits] = useState<Record<string, TraitInfo>>({});
-  const [explains, setExplains] = useState<Record<string, string>>({});
+  // Per trait, the stretches of levels that share an explanation - most have one, a few
+  // change the wording partway (see explainAt).
+  const [explains, setExplains] = useState<Record<string, ExplainBand[]>>({});
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
   const [errorOpen, setErrorOpen] = useState(false);
   // Which traits are open. A trait whose numbers live on one level has nothing to
@@ -128,7 +141,7 @@ export default function App() {
     ])
       .then(([map, texts]) => {
         setNames((map ?? {}) as Record<string, string>);
-        setExplains((texts ?? {}) as Record<string, string>);
+        setExplains((texts ?? {}) as Record<string, ExplainBand[]>);
       })
       .catch((err) => showError({ title: t.readFailed, detail: String(err) }));
   }, [lang]);
@@ -428,17 +441,16 @@ export default function App() {
   }
 
   /*
-    The trait's own explanation, with each {N} rewritten as the slot it belongs to.
+    The explanation a row shows: the wording that covers its level (see explainAt), with
+    each {N} rewritten as the slot it belongs to (see slotLabel).
 
     The game's placeholders are 0-based ({0} is the first value); the row shows
     numbers, so the tooltip says {1} for the first one and lets the reader count
     along. Substituting the values was the wrong idea: the numbers are already on
     screen, what is not obvious is which of them means what.
   */
-  function slotNotation(key: string): string {
-    const text = explains[key];
-    if (!text) return "";
-    return text.replace(/\{(\d+)\}/g, (_, d) => `{${Number(d) + 1}}`);
+  function slotNotation(key: string, level: number): string {
+    return slotLabel(explainAt(explains[key], level));
   }
 
   /*

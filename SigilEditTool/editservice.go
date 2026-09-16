@@ -94,16 +94,16 @@ const LangZH = "zh"
 // nameTables maps a UI language to its skill-name table. The keys are the same
 // 8-hex hashes in every language; only the display names differ.
 var nameTables = map[string]map[string]string{
-	LangZH: decodeStrings(embeddedNamesZH),
-	"en":   decodeStrings(embeddedNamesEN),
-	"ja":   decodeStrings(embeddedNamesJA),
+	LangZH: decode[string](embeddedNamesZH),
+	"en":   decode[string](embeddedNamesEN),
+	"ja":   decode[string](embeddedNamesJA),
 }
 
-// decodeStrings turns one embedded string table into a map. There is no empty
+// decode turns one embedded table into a map keyed by trait hash. There is no empty
 // case to handle: Unmarshal leaves the map empty when the table is absent or
 // malformed, which is the answer either way.
-func decodeStrings(raw []byte) map[string]string {
-	decoded := make(map[string]string)
+func decode[T any](raw []byte) map[string]T {
+	decoded := make(map[string]T)
 	_ = jsonv2.Unmarshal(raw, &decoded)
 	return decoded
 }
@@ -155,18 +155,26 @@ func (s *EditService) TraitMap() map[string]TraitInfo {
 	return traitInfo
 }
 
+// ExplainBand is one stretch of levels that share an explanation: the text, and the level
+// it starts at. Most skills have a single band; a few change the wording partway through,
+// so the frontend picks the band that covers the row it is showing.
+type ExplainBand struct {
+	From int    `json:"from"`
+	Text string `json:"text"`
+}
+
 // explainTables holds, per language, the game's own explanation of each trait.
 // The text contains {N} placeholders standing for LevelValue(N+1) - the numbers
 // this tool edits - which is what makes a slot's meaning knowable at all.
-var explainTables = map[string]map[string]string{
-	LangZH: decodeStrings(embeddedExplainZH),
-	"en":   decodeStrings(embeddedExplainEN),
-	"ja":   decodeStrings(embeddedExplainJA),
+var explainTables = map[string]map[string][]ExplainBand{
+	LangZH: decode[[]ExplainBand](embeddedExplainZH),
+	"en":   decode[[]ExplainBand](embeddedExplainEN),
+	"ja":   decode[[]ExplainBand](embeddedExplainJA),
 }
 
 // ExplainMap returns the whole hash -> explanation table for a language, with the
 // same fallback as NameMap.
-func (s *EditService) ExplainMap(lang string) map[string]string {
+func (s *EditService) ExplainMap(lang string) map[string][]ExplainBand {
 	if texts, ok := explainTables[lang]; ok {
 		return texts
 	}

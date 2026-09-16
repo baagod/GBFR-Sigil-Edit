@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   addressOf,
   dedupe,
+  explainAt,
   HALF_TYPED,
   levelsOf,
   matches,
@@ -18,7 +19,9 @@ import {
   NUMBER,
   pad,
   slotEdit,
+  slotLabel,
   stepValue,
+  type ExplainBand,
   type SigilTrait,
   type TraitInfo,
 } from "./traits";
@@ -257,5 +260,64 @@ describe("the search", () => {
     expect(matches("暴君", "71F11A9B", "71f11a9b")).toBe(true);
     expect(matches("暴君", "71F11A9B", "霸")).toBe(false);
     expect(matches("暴君", "71F11A9B", "")).toBe(true);
+  });
+});
+
+describe("the explanation a level shows", () => {
+  const resistance: ExplainBand[] = [
+    { from: 1, text: "受到的伤害-{0}%" },
+    { from: 30, text: "灼热免疫" },
+  ];
+
+  it("reads the band the level falls in", () => {
+    // The complaint this exists for: level 1 used to say "灼热免疫" because only the
+    // highest row's text was kept.
+    expect(explainAt(resistance, 1)).toBe("受到的伤害-{0}%");
+    expect(explainAt(resistance, 29)).toBe("受到的伤害-{0}%");
+    expect(explainAt(resistance, 30)).toBe("灼热免疫");
+  });
+
+  it("reads the last band for a level past the end, and the first below the start", () => {
+    // Only a hand-edited Config.json can name these, and the same rule covers both.
+    expect(explainAt(resistance, 99)).toBe("灼热免疫");
+    expect(explainAt([{ from: 15, text: "Lv15 起" }], 3)).toBe("Lv15 起");
+  });
+
+  it("says nothing when the skill has no bands", () => {
+    expect(explainAt(undefined, 1)).toBe("");
+    expect(explainAt([], 1)).toBe("");
+  });
+
+  it("is what the six-band crab factor relies on", () => {
+    const crab: ExplainBand[] = [
+      { from: 1, text: "（攻击力+{0}%）" },
+      { from: 5, text: "（暴击率+{1}%）" },
+      { from: 9, text: "（HP持续回复，每次回复最大HP的{2:.1f}%）" },
+      { from: 13, text: "（回复造成伤害{3:.1f}%的HP）" },
+      { from: 17, text: "（伤害上限+{4}%）" },
+      { from: 20, text: "（伤害上限+{4}% / 防御力+{5}%）" },
+    ];
+    expect(explainAt(crab, 4)).toContain("攻击力");
+    expect(explainAt(crab, 12)).toContain("HP持续回复");
+    expect(explainAt(crab, 20)).toContain("防御力");
+  });
+});
+
+describe("the slot labels in a tooltip", () => {
+  it("counts the slots from one, the way the boxes do", () => {
+    expect(slotLabel("受到的伤害-{0}%")).toBe("受到的伤害-{1}%");
+    expect(slotLabel("{2}秒内防御DOWN{0}%（可叠加至{1}层）")).toBe(
+      "{3}秒内防御DOWN{1}%（可叠加至{2}层）",
+    );
+  });
+
+  it("drops the format the game's placeholder carries", () => {
+    // "{0:.1f}" is a template for a number the tooltip never prints; the slot is the point.
+    expect(slotLabel("造成的伤害+{0:.1f}%")).toBe("造成的伤害+{1}%");
+    expect(slotLabel("（昏厥值+{1:10}）")).toBe("（昏厥值+{2}）");
+  });
+
+  it("drops the markup a few explanations carry", () => {
+    expect(slotLabel("<d>攻击和<d>攻击的伤害上限+{0}%")).toBe("攻击和攻击的伤害上限+{1}%");
   });
 });

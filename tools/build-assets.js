@@ -286,20 +286,39 @@ function stageNames() {
     against sibling skills whose templates use {1} and {2} for the second and
     third values.
 
-    Taken from the highest level row, the same row the default values come from.
+    Per level, as bands. Every skill_status row names its own explanation text, and while
+    most skills name the same one for all their levels, some change it partway: of the 199
+    traits the tool offers, 20 have two (Lv1-29 "受到的伤害-{0}%", then Lv30 "…免疫"), one
+    has four and one has six. Reading only the highest row - which this did - showed the
+    maxed-out wording at every level, so a level 1 trait claimed immunity.
+
+    Shape: [{ from, text }, …] with one entry per level where the wording changes, starting
+    at the first level the skill has. A level is read with the last entry whose `from` is at
+    or below it, which also covers a level past the last band (a hand-edited Config.json can
+    name one) without a special case.
   */
-  const highest = new Map();
-  for (const row of db.prepare("select Key, LevelDescription, Level from skill_status").all()) {
-    const key = String(row.Key);
-    const best = highest.get(key);
-    if (!best || row.Level > best.Level) highest.set(key, row);
+  const rowsByKey = new Map();
+  for (const row of db.prepare("select Key, Level, LevelDescription from skill_status").all()) {
+    if (!rowsByKey.has(row.Key)) rowsByKey.set(row.Key, []);
+    rowsByKey.get(row.Key).push(row);
   }
+
   const explain = {};
-  for (const [key, row] of highest) {
+  for (const [key, rows] of rowsByKey) {
     const hash = norm(idToHash, key);
     if (!(hash in result)) continue;
-    const text = textOf(cs, row.LevelDescription);
-    if (text) explain[hash] = text;
+
+    rows.sort((a, b) => a.Level - b.Level);
+    const bands = [];
+    for (const row of rows) {
+      const text = textOf(cs, row.LevelDescription);
+      if (!text) continue;
+      // A new band only where the wording changes; a repeat folds into the one before it.
+      const last = bands[bands.length - 1];
+      if (last && last.text === text) continue;
+      bands.push({ from: row.Level, text });
+    }
+    if (bands.length) explain[hash] = bands;
   }
 
   /*
