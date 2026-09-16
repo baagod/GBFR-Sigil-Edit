@@ -7,7 +7,7 @@
   arrives as props: the row data, whether the pointer is on this row, whether this trait
   is open, and a context of the handful of callbacks App owns.
 */
-import { Fragment, useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type MouseEvent } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
@@ -48,7 +48,7 @@ export type Row = {
 export type RowContext = {
   t: Dict;
   notationOf: (key: string, level: number) => string;
-  rest: (id: string, e: PointerEvent<HTMLElement>) => void;
+  rest: (id: string) => void;
   leave: (id: string) => void;
   toggleLevel: (key: string, level: number) => void;
   toggleTrait: (key: string, nextChecked: boolean) => void;
@@ -270,7 +270,7 @@ function LevelRow({
       */}
       <TooltipTrigger
         data-row={id}
-        onPointerEnter={(e) => ctx.rest(id, e)}
+        onPointerEnter={() => ctx.rest(id)}
         onPointerLeave={() => ctx.leave(id)}
         render={
           <div
@@ -390,7 +390,7 @@ export function TraitRow({
       >
         <TooltipTrigger
           data-row={row.key}
-          onPointerEnter={(e) => ctx.rest(row.key, e)}
+          onPointerEnter={() => ctx.rest(row.key)}
           onPointerLeave={() => ctx.leave(row.key)}
           /*
             The trigger is the row, checkbox included, and the row is also what opens
