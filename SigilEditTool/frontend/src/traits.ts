@@ -1,0 +1,189 @@
+/*
+  The tool's pure half: everything about a record that is decided by values alone,
+  with no React and no DOM in sight, so it can be read and tested on its own.
+
+  The row list keeps its shape here too (addresses, slots, ordering of a trait's
+  levels), because that shape is what Config.json and the mod's table rows are keyed
+  by - see the note on dedupe, which is the invariant the whole list rests on.
+*/
+
+export type SigilTrait = {
+  Enabled: boolean;
+  Key: string;
+  Level: number;
+  Values: number[];
+  /*
+    Which slots someone has actually put a number into, per slot. Only the tool
+    uses it, and only to tell apart "this slot shows the game's number" from "this
+    slot was typed, and happens to hold the same number" - which is what decides
+    whether a slot follows the level. Go ignores the field, so it never reaches
+    Config.json or the mod.
+  */
+  Typed: boolean[];
+};
+
+/**
+ * One trait's vanilla numbers per level. Levels is indexed by level - 1, so
+ * Levels[3] is the row the game shows as level 4 - which is what a slot's
+ * placeholder, and the value an emptied box writes back, have to come from.
+ * Min/Max are the levels that carry numbers: a trait whose values exist on one
+ * level only has Min == Max.
+ */
+export type TraitInfo = { Levels: number[][]; Default: number; Max: number; Min: number };
+
+export const SLOTS = 10;
+
+/** The typed flags of a level with no edit yet: nobody has typed in any slot. */
+export const NO_TYPED: boolean[] = Array.from({ length: SLOTS }, () => false);
+
+/** The table row an edit writes: one address per trait hash and level. */
+export const addressOf = (key: string, level: number) => `${key}#${level}`;
+
+export const pad = (values: number[]) =>
+  Array.from({ length: SLOTS }, (_, i) => values[i] ?? 0);
+
+/*
+  At most one edit per address, which is the invariant the whole list rests on.
+
+  The mod walks the edit list in order and writes every enabled edit into the table
+  row its (hash, level) names, so when two of them share an address the last enabled
+  one is what the game ends up with (Mod.cs:169 and the patch loop after it). A file
+  can still hold both - an older version of this tool wrote them, or someone edited
+  Config.json by hand - and the list can only show one of them, so the last enabled
+  one is kept (the last of any, when the address holds none that is enabled).
+*/
+export function dedupe(records: SigilTrait[]): {
+  records: SigilTrait[];
+  changed: boolean;
+} {
+  const lastEnabled = new Map<string, number>();
+  const lastAny = new Map<string, number>();
+  records.forEach((record, i) => {
+    const address = addressOf(record.Key, record.Level);
+    lastAny.set(address, i);
+    if (record.Enabled) lastEnabled.set(address, i);
+  });
+
+  const kept = records.filter((record, i) => {
+    const address = addressOf(record.Key, record.Level);
+    return i === (lastEnabled.get(address) ?? lastAny.get(address));
+  });
+  return { records: kept, changed: kept.length !== records.length };
+}
+
+/*
+  What a box may hold: an optional leading minus sign, digits, and at most one
+  decimal point - so "-", "0." and "-.5" are all reachable states, while a second
+  minus, a second point, a letter or exponent notation never reach the box. Keeping
+  exponent notation out matters: a number input used to accept 1e999, and JSON turns
+  that into null, which the tool then saved as a 0.
+*/
+export const HALF_TYPED = /^-?\d*\.?\d*$/;
+
+/*
+  ...and what counts as a number once the box is done with: -3, 30, 0.6, .5
+
+  The digit after the point is required, and that is the whole point: "0." is a state
+  on the way to 0.5, and treating it as the number 0 committed it, cleared the half
+  typed text and left the next 5 to be typed after a 0 that was already saved - so
+  typing 0.5 produced 5.
+*/
+export const NUMBER = /^-?(\d+\.\d+|\.\d+|\d+)$/;
+
+/** The typed flags with one slot set or cleared. */
+export const withSlot = (typed: boolean[], i: number, set: boolean) => {
+  const next = typed.slice();
+  next[i] = set;
+  return next;
+};
+
+/**
+ * What one keystroke in one slot does.
+ *
+ * The box keeps half typed text on screen while it has focus, because "-" and "0." are
+ * states on the way to a number and a controlled input cannot show them otherwise;
+ * anything that could never become a number is dropped and the box is left as it was.
+ * Returned as data rather than applied, so the rule is one function that a test can
+ * drive key by key.
+ */
+export type SlotEdit =
+  | { kind: "drop" }
+  | { kind: "half"; text: string }
+  | { kind: "commit"; values: number[]; typed: boolean[]; keeps?: string };
+
+export function slotEdit(
+  text: string,
+  i: number,
+  values: number[],
+  typed: boolean[],
+  vanillaOf: (i: number) => number,
+): SlotEdit {
+  if (!HALF_TYPED.test(text)) return { kind: "drop" };
+  if (text === "") {
+    // Emptied: the game's own number goes back, its placeholder shows again, and the
+    // slot follows the level from here on.
+    const next = [...values];
+    next[i] = vanillaOf(i);
+    return { kind: "commit", values: next, typed: withSlot(typed, i, false) };
+  }
+  if (!NUMBER.test(text)) return { kind: "half", text };
+
+  /*
+    A number: committed now, but the box keeps showing what was typed until it is left
+    (see `keeps`). That is not cosmetic. Committing is what the game sees, and it has to
+    happen per keystroke; the *text*, though, has to stay the user's, because a prefix of
+    a number is often a number itself - 0.0 is 0, 0.00 is 0 - and rendering the box from
+    the committed number dropped the rest of what was typed: 0.004 came out as 4, 5.05 as
+    50. On blur the box renders the number again, which is what makes 06 read back as 6.
+  */
+  const next = [...values];
+  next[i] = Number(text);
+  return { kind: "commit", values: next, typed: withSlot(typed, i, true), keeps: text };
+}
+
+/** One step of the arrow keys and the wheel. */
+export const stepValue = (value: number, direction: 1 | -1) =>
+  Math.round((value + direction) * 100) / 100;
+
+/** One trait's row, as the list needs it: the records, and the levels to show. */
+export type TraitRowData = {
+  key: string;
+  label: string;
+  info?: TraitInfo;
+  records: SigilTrait[];
+  byLevel: Map<number, SigilTrait>;
+  enabled: boolean;
+  levels: number[];
+};
+
+/*
+  The levels a trait shows, in the order it shows them: what is on first, then the
+  levels carrying a switched-off edit, then the untouched ones - each group ascending.
+  A level only the records know about (edited by hand, or left behind by a level the
+  tables no longer carry) still gets a row, so it stays visible instead of being
+  applied invisibly.
+*/
+export function levelsOf(
+  info: TraitInfo | undefined,
+  records: SigilTrait[],
+): number[] {
+  const byLevel = new Map(records.map((record) => [record.Level, record]));
+  const levels = new Set<number>();
+  if (info) {
+    for (let level = info.Min; level <= info.Max; level++) levels.add(level);
+  }
+  for (const record of records) levels.add(record.Level);
+
+  const rank = (level: number) => {
+    const record = byLevel.get(level);
+    return record ? (record.Enabled ? 0 : 1) : 2;
+  };
+  return [...levels].sort((a, b) => rank(a) - rank(b) || a - b);
+}
+
+/**
+ * The name search: a trait is kept when what was typed is in the name, or is the hash
+ * the tables and Config.json key it by (which is how one row is put on screen by hand).
+ */
+export const matches = (label: string, key: string, needle: string) =>
+  !needle || label.toLowerCase().includes(needle) || key.toLowerCase().includes(needle);

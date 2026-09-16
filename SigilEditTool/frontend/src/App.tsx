@@ -37,30 +37,20 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { LANGS, LANG_LABEL, MESSAGES, initialLang, rememberLang, type Lang } from "./i18n";
-
-type SigilTrait = {
-  Enabled: boolean;
-  Key: string;
-  Level: number;
-  Values: number[];
-  /*
-    Which slots someone has actually put a number into, per slot. Only the tool
-    uses it, and only to tell apart "this slot shows the game's number" from "this
-    slot was typed, and happens to hold the same number" - which is what decides
-    whether a slot follows the level. Go ignores the field, so it never reaches
-    Config.json or the mod.
-  */
-  Typed: boolean[];
-};
-
-/**
- * One trait's vanilla numbers per level. Levels is indexed by level - 1, so
- * Levels[3] is the row the game shows as level 4 - which is what a slot's
- * placeholder, and the value an emptied box writes back, have to come from.
- * Min/Max are the levels that carry numbers: a trait whose values exist on one
- * level only has Min == Max.
- */
-type TraitInfo = { Levels: number[][]; Default: number; Max: number; Min: number };
+import {
+  addressOf,
+  dedupe,
+  levelsOf,
+  matches,
+  NO_TYPED,
+  pad,
+  SLOTS,
+  slotEdit,
+  stepValue,
+  withSlot,
+  type SigilTrait,
+  type TraitInfo,
+} from "./traits";
 
 const SERVICE = "main.EditService";
 /*
@@ -69,42 +59,6 @@ const SERVICE = "main.EditService";
   and arrives as this event instead.
 */
 const SAVE_FAILED = "GBFR.SigilEdit.SaveFailed";
-const SLOTS = 10;
-
-/** The typed flags of a level with no edit yet: nobody has typed in any slot. */
-const NO_TYPED: boolean[] = Array.from({ length: SLOTS }, () => false);
-
-/** The table row an edit writes: one address per trait hash and level. */
-const addressOf = (key: string, level: number) => `${key}#${level}`;
-
-const pad = (values: number[]) =>
-  Array.from({ length: SLOTS }, (_, i) => values[i] ?? 0);
-
-/*
-  At most one edit per address, which is the invariant the whole list rests on.
-
-  The mod walks the edit list in order and writes every enabled edit into the table
-  row its (hash, level) names, so when two of them share an address the last enabled
-  one is what the game ends up with (Mod.cs:169 and the patch loop after it). A file
-  can still hold both - an older version of this tool wrote them, or someone edited
-  Config.json by hand - and the list can only show one of them, so the last enabled
-  one is kept (the last of any, when the address holds none that is enabled).
-*/
-function dedupe(records: SigilTrait[]): { records: SigilTrait[]; changed: boolean } {
-  const lastEnabled = new Map<string, number>();
-  const lastAny = new Map<string, number>();
-  records.forEach((record, i) => {
-    const address = addressOf(record.Key, record.Level);
-    lastAny.set(address, i);
-    if (record.Enabled) lastEnabled.set(address, i);
-  });
-
-  const kept = records.filter((record, i) => {
-    const address = addressOf(record.Key, record.Level);
-    return i === (lastEnabled.get(address) ?? lastAny.get(address));
-  });
-  return { records: kept, changed: kept.length !== records.length };
-}
 
 /** A value as it was a moment ago: the search box filters a 200-row list per keystroke otherwise. */
 function useDebounced<T>(value: T, delay = 150): T {
@@ -132,30 +86,18 @@ function useDebounced<T>(value: T, delay = 150): T {
  *
  * A number is what the box shows, not what is typed into it. What is typed has to
  * pass through states that are not numbers yet - "-" on the way to -5, "0." on the
- * way to 0.6 - so the box keeps that half-typed text on screen while it has focus,
- * and drops it on blur. Dropping it is what puts back the value the box started
- * from. As soon as the text is a number it is committed and the box renders from
- * the number instead, which is what makes "06" read back as 6.
+ * way to 0.6 - so the box keeps the typed text on screen while it has focus, and drops
+ * it on blur. Dropping it is what puts back the value the box started from.
+ *
+ * The number itself is committed as it is typed, so the game sees it live, but the box
+ * goes on showing the text until it is left: a prefix of a number is often a number
+ * itself (0.0 is 0, 0.00 is 0), so rendering the box from the committed number ate the
+ * rest of what was typed - 0.004 came out as 4. Leaving renders the number, which is
+ * what makes "06" read back as 6.
+ *
+ * Which of those a keystroke is, is decided in traits.ts (slotEdit), so the rule can
+ * be tested key by key instead of only through a browser.
  */
-/*
-  What a box may hold: an optional leading minus sign, digits, and at most one
-  decimal point - so "-", "0." and "-.5" are all reachable states, while a second
-  minus, a second point, a letter or exponent notation never reach the box. Keeping
-  exponent notation out matters: a number input used to accept 1e999, and JSON turns
-  that into null, which the tool then saved as a 0.
-*/
-const HALF_TYPED = /^-?\d*\.?\d*$/;
-
-/** ...and what counts as a number once the box is done with: -3, 30, 0.6, .5 */
-const NUMBER = /^-?(\d+\.\d+|\.\d+|\d+)$/;
-
-/** The typed flags with one slot set or cleared. */
-const withSlot = (typed: boolean[], i: number, set: boolean) => {
-  const next = typed.slice();
-  next[i] = set;
-  return next;
-};
-
 function ValueSlots({
   values,
   typed,
@@ -167,8 +109,10 @@ function ValueSlots({
   defaults?: number[];
   onChange: (values: number[], typed: boolean[]) => void;
 }) {
-  // The half-typed text of the box being edited, if any: "-" or "0." cannot be a
-  // committed number, so they live here and nowhere else. Dropped on blur.
+  // The text the box is showing while it is being edited, if it differs from what the
+  // committed number renders as: "-" and "0." are states on the way to a number, and a
+  // typed number keeps its own text too (0.004 must not render as 0 mid-typing).
+  // Dropped on blur, which is when the box goes back to rendering the number.
   const [halfTyped, setHalfTyped] = useState<Record<number, string>>({});
 
   const vanillaOf = (i: number) => defaults?.[i] ?? 0;
@@ -234,36 +178,22 @@ function ValueSlots({
               (typed[i] || values[i] !== vanillaOf(i) ? String(values[i]) : "")
             }
             onChange={(e) => {
-              const text = e.target.value;
-
-              // A keystroke that could never become a number - a second minus, a
-              // second point, a letter, exponent notation - is dropped, and the box
-              // is left showing what it already had.
-              if (!HALF_TYPED.test(text)) return;
-
-              if (text === "") {
-                // Emptied: the game's own number goes back, its placeholder shows
-                // again, and the slot follows the level from here on.
-                setHalfTyped(({ [i]: _dropped, ...rest }) => rest);
-                const next = [...values];
-                next[i] = vanillaOf(i);
-                onChange(next, withSlot(typed, i, false));
+              // What a keystroke means - dropped, half typed, or a number to commit -
+              // is decided in traits.ts, where a test can drive it key by key.
+              const edit = slotEdit(e.target.value, i, values, typed, vanillaOf);
+              if (edit.kind === "drop") return;
+              if (edit.kind === "half") {
+                setHalfTyped((prev) => ({ ...prev, [i]: edit.text }));
                 return;
               }
-
-              if (!NUMBER.test(text)) {
-                // Still half-typed: on screen until it is a number, or until the
-                // box is left, which puts back the value it started from.
-                setHalfTyped((prev) => ({ ...prev, [i]: text }));
-                return;
-              }
-
-              // A number: committed, and rendered from the number from here on, so
-              // "06" reads back as 6.
-              setHalfTyped(({ [i]: _dropped, ...rest }) => rest);
-              const next = [...values];
-              next[i] = Number(text);
-              onChange(next, withSlot(typed, i, true));
+              // The number is committed, but the box keeps the text that was typed until
+              // it is left: a prefix of a number is often a number itself (0.0, 0.00), so
+              // rendering the box from the committed number ate the rest of what was
+              // typed - 0.004 came out as 4. Blur renders the number again.
+              setHalfTyped(({ [i]: _dropped, ...rest }) =>
+                edit.keeps ? { ...rest, [i]: edit.keeps } : rest,
+              );
+              onChange(edit.values, edit.typed);
             }}
             onBlur={() => setHalfTyped(({ [i]: _dropped, ...rest }) => rest)}
             /*
@@ -285,8 +215,7 @@ function ValueSlots({
               // list that scrolls it would scroll that too.
               e.preventDefault();
               const next = [...values];
-              next[i] =
-                Math.round((values[i] + (e.key === "ArrowUp" ? 1 : -1)) * 100) / 100;
+              next[i] = stepValue(values[i], e.key === "ArrowUp" ? 1 : -1);
               setHalfTyped(({ [i]: _dropped, ...rest }) => rest);
               onChange(next, withSlot(typed, i, true));
             }}
@@ -511,24 +440,6 @@ export default function App() {
         const byLevel = new Map(records.map((record) => [record.Level, record]));
         const label = names[key] ?? key;
 
-        const levels = new Set<number>();
-        if (info) {
-          // The levels the trait's own numbers live on. A trait whose values exist
-          // on one level only has Min == Max, and is a row with no children.
-          for (let level = info.Min; level <= info.Max; level++) levels.add(level);
-        }
-        // A level only the records know about - edited by hand, or left behind by a
-        // level the tables no longer carry - still gets a row, so it stays visible
-        // instead of being applied invisibly.
-        for (const record of records) levels.add(record.Level);
-
-        // Enabled levels first, then the levels carrying a switched-off edit, then
-        // the untouched ones - each group in ascending order.
-        const rank = (level: number) => {
-          const record = byLevel.get(level);
-          return record ? (record.Enabled ? 0 : 1) : 2;
-        };
-
         return {
           key,
           label,
@@ -536,17 +447,13 @@ export default function App() {
           records,
           byLevel,
           enabled: records.some((record) => record.Enabled),
-          levels: [...levels].sort((a, b) => rank(a) - rank(b) || a - b),
+          // Which levels the trait shows, and in what order, is traits.ts's business.
+          levels: levelsOf(info, records),
         };
       })
-      // The trait's hash matches too, so a row can be found by the number the tables
-      // and Config.json use - which is how a single row is put on screen for testing.
-      .filter(
-        (row) =>
-          !needle ||
-          row.label.toLowerCase().includes(needle) ||
-          row.key.toLowerCase().includes(needle),
-      )
+      // The search is by name, or by the hash the tables and Config.json key the trait
+      // by - which is how a single row is put on screen by hand.
+      .filter((row) => matches(row.label, row.key, needle))
       .sort(
         (a, b) =>
           Number(b.enabled) - Number(a.enabled) ||
