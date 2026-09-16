@@ -215,13 +215,24 @@ describe("one edit per address", () => {
 describe("the levels a trait shows", () => {
   const info: TraitInfo = { Min: 1, Max: 4, Default: 2, Levels: [[], [], [], []] };
 
-  it("puts what is on first, then switched-off edits, then the untouched", () => {
+  it("is ascending, whatever is switched on", () => {
+    // The rows are the game's own levels of one skill, so they read as numbers. This used
+    // to group them (enabled, then switched-off edits, then untouched), which put a level
+    // 30 row before the untouched level 3 and looked like no order at all.
     const levels = levelsOf(info, [
       record("A1", 3, false),
       record("A1", 2, true),
       record("A1", 1, true),
     ]);
     expect(levels).toEqual([1, 2, 3, 4]);
+
+    const wide: TraitInfo = { Min: 1, Max: 10, Default: 1, Levels: Array.from({ length: 10 }, () => []) };
+    const sparse = levelsOf(wide, [
+      record("A1", 10, false),
+      record("A1", 5, false),
+      record("A1", 1, true),
+    ]);
+    expect(sparse).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
 
   it("keeps a level only the records know about", () => {

@@ -170,28 +170,28 @@ export const stepValue = (value: number, direction: 1 | -1) => {
 };
 
 /*
-  The levels a trait shows, in the order it shows them: what is on first, then the
-  levels carrying a switched-off edit, then the untouched ones - each group ascending.
+  The levels a trait shows, in ascending order.
+
+  Ascending and nothing else: these are the game's own rows for one skill, and a reader
+  looking for "level 12" reads down the numbers. Grouping them by what happens to be
+  switched on - which is what this did - reads as 1, 2, 5, 10, 12, 22, 23 … and then
+  drops the untouched levels after the last one, which looks like no order at all.
+
   A level only the records know about (edited by hand, or left behind by a level the
-  tables no longer carry) still gets a row, so it stays visible instead of being
-  applied invisibly.
+  tables no longer carry) still gets a row, so it stays visible instead of being applied
+  invisibly.
 */
 export function levelsOf(
   info: TraitInfo | undefined,
   records: SigilTrait[],
 ): number[] {
-  const byLevel = new Map(records.map((record) => [record.Level, record]));
   const levels = new Set<number>();
   if (info) {
     for (let level = info.Min; level <= info.Max; level++) levels.add(level);
   }
   for (const record of records) levels.add(record.Level);
 
-  const rank = (level: number) => {
-    const record = byLevel.get(level);
-    return record ? (record.Enabled ? 0 : 1) : 2;
-  };
-  return [...levels].sort((a, b) => rank(a) - rank(b) || a - b);
+  return [...levels].sort((a, b) => a - b);
 }
 
 /**
