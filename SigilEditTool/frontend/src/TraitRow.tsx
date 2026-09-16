@@ -136,11 +136,11 @@ function ValueSlots({
     // exactly the boxes that accept typing, and every box types: a level with no edit
     // yet shows the game's numbers as placeholders and the first keystroke starts it.
     //
-    // The right padding is the disclosure's column, exactly: a parent row ends in a 28px
-    // chevron, and a row of values ends where that chevron's box begins, so the last slot
-    // stops at the same line the arrow starts on. 28px is pr-7. The arrow's own glyph is
-    // 16px inside that box, which leaves about 6px of white between the two on screen.
-    <div ref={host} className="flex min-w-0 flex-1 items-center pr-7">
+    // The right padding is a fixed 11px, not the disclosure's column: the arrow only exists
+    // on a parent row, and a parent row carries no values, so nothing here can overlap it.
+    // Reserving the arrow's 28px instead (which this did) only took width away from the ten
+    // slots. 11px is what the layout was tuned to.
+    <div ref={host} className="flex min-w-0 flex-1 items-center pr-[11px]">
       {Array.from({ length: SLOTS }, (_, i) => (
         <Fragment key={i}>
           {/* Every slot, the first one too: it separates the values from the level
