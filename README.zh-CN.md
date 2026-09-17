@@ -6,7 +6,13 @@
 
 常见的改表 mod 会自带一份改好的 `.tbl`，两个这样的 mod 改同一张表就会互相覆盖；本 mod 不带 `.tbl`，而是从游戏封包中读出表，在游戏启动时从内存中改写 `skill_status.tbl` 的行，因此它可以和其他 **改表** mod 并存。
 
-**下载**：[Nexus 页面](https://www.nexusmods.com/granbluefantasyrelink/mods/858) / [GitHub Release](https://github.com/baagod/GBFR-Sigil-Edit/releases)
+> **AI 辅助开发声明**：本 mod 代码由 AI 助手在人类指导下编写；需求设计、游戏内验证与文档生成等由人类主导。 
+> 
+> 本 mod 不修改任何游戏本体文件，数据仅从归档读出，写进内存，不改存档。
+> 
+> **仅供单机使用，联机游玩时风险自负。**
+
+**下载**：[Nexus](https://www.nexusmods.com/granbluefantasyrelink/mods/858) / [GitHub Release](https://github.com/baagod/GBFR-Sigil-Edit/releases)
 
 ## 前置条件
 
