@@ -23,8 +23,8 @@ SigilEditTool/appicon.png
 # Development-only inputs.
 #
 # The game's own tables, the toolchain that reads them, and the databases the
-# asset scripts build from. The assets those scripts produce
-# (SigilEditTool/assets/skillnames.*.json and skillinfo.json) are committed, so
+# asset generator builds from. The assets it produces
+# (SigilEditTool/assets/skill_status.json and skill.<lang>.json) are committed, so
 # neither a build nor a release needs any of this - only regenerating them does,
 # and that requires a copy of the game.
 GBFRDataTools/

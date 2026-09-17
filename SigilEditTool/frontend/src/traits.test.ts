@@ -1,11 +1,9 @@
 /*
-  The rules the list rests on, driven directly instead of through a browser: these are
-  the ones that decide what Config.json ends up holding, so a table here is worth more
-  than another screenshot.
+  列表赖以为生的规则，直接驱动而不是过浏览器：决定 Config.json 最终内容的正是这些规则，
+  所以这里的一张表比再来一张截图值钱。
 
-  The first block is the regression that motivated the file: typing 0.5 used to reach
-  the table as 5, because "0." counted as a number and was committed (and the half typed
-  text cleared) the moment the point was typed.
+  第一块是促使写下这个文件的那次回归：输入 0.5 曾经以 5 写进表里，因为 "0." 被当成数字，
+  在小数点敲下的那一刻就被提交（半成品文本也一并清掉）。
 */
 import { describe, expect, it } from "vitest";
 import {
@@ -19,6 +17,7 @@ import {
   MAX_VALUE,
   NUMBER,
   pad,
+  parentState,
   slotEdit,
   slotLabel,
   stepValue,
@@ -41,13 +40,11 @@ const record = (
 });
 
 /*
-  A stand-in for one value box: it shows what the user has typed (half typed text while
-  it is not a number yet, otherwise the number), and a keystroke is appended to what is
-  shown - which is what the browser does with the caret at the end.
+  一个数值输入框的替身：显示用户输入的内容（还不是数字时显示半成品文本，否则显示数字），
+  每次按键追加到显示内容之后——浏览器在光标位于末尾时就是这么做的。
 
-  `committed` starts it in the state a box is in after a value has been saved - the number
-  on screen rather than an empty box showing the game's placeholder, which is where the
-  bound becomes visible to the user.
+  `committed` 让它从"数值刚被保存过"的状态开始——屏幕上显示数字，而不是显示游戏占位符的
+  空框；上界正是在这个状态下对用户可见。
 */
 function type(value: number, keys: string, committed = false) {
   let values: (number | null)[] = [committed ? value : null];
@@ -86,8 +83,8 @@ describe("a keystroke in a value box", () => {
   });
 
   it("drops what could never become a number, and the box carries on", () => {
-    // A dropped keystroke leaves the box exactly as it was - including its half typed
-    // text - so the next digit is typed after whatever was already there.
+    // 被丢弃的按键让输入框一点都不变——包括它的半成品文本——所以下一个数字会接在原本
+    // 已有的内容后面。
     for (const text of ["1-", "1..", "1e", "1a"]) {
       expect(slotEdit(text, 0, [1]), text).toEqual({ kind: "drop" });
     }
@@ -96,8 +93,8 @@ describe("a keystroke in a value box", () => {
   });
 
   it("empties a box back to the game's own number, which is what null is", () => {
-    // The game's number is read from the tables, so the file does not carry a copy of it:
-    // an empty box is null, and the mod leaves that part of the row alone.
+    // 游戏数值是从表里读的，所以文件里不带它的副本：空框就是 null，mod 会保持行的
+    // 那部分不动。
     const edit = slotEdit("", 0, [5]);
     expect(edit).toEqual({ kind: "commit", values: [null] });
   });
@@ -123,8 +120,8 @@ describe("the two patterns", () => {
   });
 
   it("replaces leading zeroes instead of refusing the keystroke", () => {
-    // 0 then 4 means 4: the 0 was the box's, so the digit replaces it. The zero a decimal
-    // point needs stays - 0.5 is not .5 - and a lone 0 is still 0.
+    // 0 后面接 4 就是 4：0 是输入框自己的，所以这个数字把它替换掉。小数点需要的那个零
+    // 留下——0.5 不是 .5——单独一个 0 仍然是 0。
     expect(slotEdit("04", 0, [0])).toMatchObject({
       kind: "commit",
       values: [4],
@@ -141,8 +138,8 @@ describe("the two patterns", () => {
     expect(slotEdit("0", 0, [0])).toMatchObject({ values: [0], keeps: "0" });
     expect(slotEdit("0.", 0, [0])).toMatchObject({ kind: "half", text: "0." });
 
-    // The patterns themselves still refuse a leading zero pair: normalising happens before
-    // them, so anything that reaches them with "01" is not a number.
+    // 两个模式本身仍然拒绝前导零对：归一化在它们之前发生，
+    // 所以任何带着 "01" 到达它们的内容都不算数字。
     for (const text of ["01", "007", "00.5"]) {
       expect(HALF_TYPED.test(text), text).toBe(false);
       expect(NUMBER.test(text), text).toBe(false);
@@ -150,13 +147,13 @@ describe("the two patterns", () => {
   });
 
   it("refuses more digits than the game can carry, so no box can hold Infinity", () => {
-    // 9 digits before the point and 6 after it is the whole input domain; the largest
-    // value is 999999999.999999. Anything longer is dropped rather than committed: a
-    // 309-digit paste would commit Infinity, JSON refuses to write that, and every save
-    // after it failed with the dialog on screen.
-    expect(NUMBER.test("999999999")).toBe(true);
-    expect(NUMBER.test("999999999.999999")).toBe(true);
-    expect(HALF_TYPED.test("1000000000")).toBe(false);
+    // 小数点前 6 位、后 6 位就是整个输入域；最大值是 999999.999999。
+    // 更长的内容一律丢弃而不是提交：粘进来的 309 位数会被提交成 Infinity，
+    // JSON 拒绝写它，之后每次保存都带着对话框失败。
+    expect(NUMBER.test("999999")).toBe(true);
+    expect(NUMBER.test("999999.999999")).toBe(true);
+    expect(NUMBER.test("1000000")).toBe(false);
+    expect(HALF_TYPED.test("1000000")).toBe(false);
     expect(HALF_TYPED.test("0.1234567")).toBe(false);
     for (const text of ["9".repeat(20), "9".repeat(309), "9".repeat(400)]) {
       expect(HALF_TYPED.test(text), `${text.length} digits`).toBe(false);
@@ -165,15 +162,14 @@ describe("the two patterns", () => {
   });
 
   it("leaves the committed value alone when a longer number is refused", () => {
-    // A refused keystroke is not a cleared box: the number already committed stays, and
-    // the box goes on showing it. There is no hint that anything happened - which is why
-    // the bound is documented here rather than explained in the UI.
-    expect(type(123456789, "0", true)).toMatchObject({
-      value: 123456789,
-      shown: "123456789",
+    // 被拒绝的按键不等于清空输入框：已经提交的数字留着，输入框继续显示它。没有任何
+    // 发生过事情的提示——所以这个上界写在这里，而不是在界面上解释。
+    expect(type(123456, "7", true)).toMatchObject({
+      value: 123456,
+      shown: "123456",
     });
-    // A point is still a step on the way to a number, so it is shown, not committed.
-    expect(type(123456789, ".", true).shown).toBe("123456789.");
+    // 小数点仍然是通往数字的一步，所以只显示，不提交。
+    expect(type(123456, ".", true).shown).toBe("123456.");
   });
 });
 
@@ -186,13 +182,12 @@ describe("stepping a slot", () => {
   });
 
   it("will not step a box past what its own text may hold", () => {
-    // The clamp is what keeps stepping - the third way a value changes, after typing and
-    // a hand-edited file - from producing a number the pattern above refuses: 999999999
-    // used to step to 1000000000, and then no keystroke in that box was accepted.
-    expect(stepValue(999999999, 1)).toBe(999999999);
-    expect(stepValue(-999999999, -1)).toBe(-999999999);
+    // 步进是值变化的第三条路，排在输入和手改文件之后；上界只对它生效（输入域的上界由
+    // 模式给，比这里宽）。停在 999999 的框按一下方向键就该原地不动。
+    expect(stepValue(999999, 1)).toBe(999999);
+    expect(stepValue(-999999, -1)).toBe(-999999);
     expect(stepValue(MAX_VALUE - 0.01, 1)).toBe(MAX_VALUE - 0.01);
-    expect(stepValue(999999998, 1)).toBe(999999999);
+    expect(stepValue(999998, 1)).toBe(999999);
   });
 });
 
@@ -208,10 +203,9 @@ describe("one edit per address", () => {
   });
 
   /*
-    Which one survives, by the order they are written in: the mod writes every enabled
-    edit in turn and the last write to an address is what the game keeps, so the record
-    to keep is the last enabled one - or, when the address holds none, the last of any.
-    Each case says which values must be left standing, not just how many records remain.
+    留下哪一条取决于它们的写入顺序：mod 依次写每条已启用的编辑，
+    游戏保留的是对同一地址的最后一次写入，所以要留的是最后一条已启用的——该地址一条已启用的都没有时，
+    留最后一条，不论启用与否。每个用例说的是必须留下哪些数值，而不只是剩几条记录。
   */
   it.each([
     ["the later of two enabled", [true, true], [2, 3], 3],
@@ -235,20 +229,20 @@ describe("one edit per address", () => {
 
 describe("what counts as an edit", () => {
   it("keeps a record that is switched on, even with nothing typed into it", () => {
-    // Ticking a level is what selects it, so the tick alone is already an edit: it writes
-    // nothing (every slot is null), which is what "on at the game's own values" means.
+    // 勾选一个等级就是选中它，所以只勾选就已经算编辑：它什么都不写（每个槽都是 null），
+    // 这就是 "以游戏自己的数值开启" 的意思。
     expect(isEdit(record("A1", 15, true))).toBe(true);
   });
 
   it("keeps a record that carries a number, even with its switch off", () => {
-    // The numbers are the user's, so they are saved; ticking the box is then the only
-    // thing left to do, and what is saved is not applied until it happens.
+    // 数字是用户的，所以要保存；剩下的唯一一件事就是勾选，而在勾选之前，
+    // 保存的内容不会被应用。
     expect(isEdit({ ...record("A1", 15, false), values: pad([30]) })).toBe(true);
   });
 
   it("drops a record that is neither switched on nor carrying a number", () => {
-    // A level ticked and unticked, or one whose numbers were emptied again: there is
-    // nothing to write, so Config.json keeps no row for it.
+    // 勾了又取消的等级，或者数值又被清空的等级：没有东西可写，
+    // Config.json 不会为它保留任何行。
     expect(isEdit(record("A1", 15, false))).toBe(false);
   });
 });
@@ -257,51 +251,51 @@ describe("the game's own numbers are not inputs", () => {
   const vanilla = [10, 3, 20, 0, 0, 0, 0, 0, 0, 0];
 
   it("takes the level's own number back out of a slot", () => {
-    // What an older build wrote: every slot filled in with the game's row so it could write
-    // the row back. Those copies are not edits - showing them as values read as if all ten
-    // slots had been typed into.
+    // 旧版本写下的内容：为了让行能写回去，每个槽都填上了游戏的那一行。
+    // 这些副本不算编辑——把它们当成数值显示，会读起来像十个槽都被输入过。
     expect(trimGameValues(pad([10, 3, 20]), vanilla)).toEqual(pad([]));
   });
 
   it("keeps a number that differs, including a zero where the game has one", () => {
-    // 0 is a number like any other here: setting a slot the game fills with 200 to 0 is an
-    // edit, and it stays one.
+    // 在这里 0 和别的数字一样：把游戏填 200 的槽设成 0 就是一次编辑，而且一直是。
     expect(trimGameValues(pad([30, 3, 0]), vanilla)).toEqual(pad([30, null, 0]));
   });
 
   it("leaves a level the tables do not know alone", () => {
-    // A hand-added record may name a trait or level the tables have nothing for; there is
-    // nothing to compare against, and its numbers may be what the game needs written.
+    // 手工添加的记录可能指向表里根本没有的因子或等级；没有东西可以比对，
+    // 而它的数字可能正是游戏需要写入的。
     expect(trimGameValues(pad([30, 3]), undefined)).toEqual(pad([30, 3]));
   });
 });
 
 describe("the levels a trait shows", () => {
   const info: TraitInfo = {
-    Rows: [1, 2, 3, 4],
-    Default: 2,
-    Levels: [[], [], [], []],
+    rows: [
+      [1, []],
+      [2, []],
+      [3, []],
+      [4, []],
+    ],
   };
 
   it("shows the game's real rows, not the span between them", () => {
-    // 万能药 has values on 15 and 30 only; its other rows are all zeros, and an edit on one
-    // of those writes a value the game never reads. Its Levels are left empty here because
-    // levelsOf reads Rows alone - the fixture is not the asset.
+    // 万能药只有 15、30 两级有值；它其它行全是零，
+    // 在那些行上编辑会在游戏根本不读的地方写值——所以那些行根本不在资产里。
     const cure: TraitInfo = {
-      Rows: [15, 30],
-      Default: 15,
-      Levels: Array.from({ length: 30 }, () => []),
+        rows: [
+        [15, []],
+        [30, []],
+      ],
     };
     expect(levelsOf(cure, [])).toEqual([15, 30]);
 
-    // An edit at a level the rows do not know still gets a row, so it stays visible.
+    // 行表不知道的等级上的编辑仍然会得到一行，所以它保持可见。
     expect(levelsOf(cure, [record("A1", 20, true)])).toEqual([20, 15, 30]);
   });
 
   it("lifts what is switched on, and keeps the rest by level", () => {
-    // Two tiers: the levels that are on come first, everything else follows in numeric
-    // order - including the ones carrying a switched-off edit, which used to form their
-    // own tier and pushed the untouched levels out of order behind them.
+    // 两个梯队：开着的等级排在最前，其余按数字顺序跟上——包括那些带着已关闭编辑的等级，
+    // 它们曾经自成一层，把没动过的等级挤到后面、打乱了顺序。
     const levels = levelsOf(info, [
       record("A1", 3, false),
       record("A1", 2, true),
@@ -310,11 +304,15 @@ describe("the levels a trait shows", () => {
     expect(levels).toEqual([1, 2, 3, 4]);
 
     const wide: TraitInfo = {
-      Rows: [1, 2, 3, 4, 5],
-      Default: 1,
-      Levels: Array.from({ length: 5 }, () => []),
+        rows: [
+        [1, []],
+        [2, []],
+        [3, []],
+        [4, []],
+        [5, []],
+      ],
     };
-    // 2 and 4 on, 3 carrying a switched-off edit, 1 and 5 untouched.
+    // 2、4 开着，3 带着一条已关闭的编辑，1、5 没动过。
     const mixed = levelsOf(wide, [
       record("A1", 3, false),
       record("A1", 4, true),
@@ -333,6 +331,26 @@ describe("the levels a trait shows", () => {
   });
 });
 
+describe("父行的勾选态", () => {
+  const levels = [1, 2, 3, 4];
+  const on = (list: number[]) => new Map(list.map((level) => [level, record("A1", level, true)]));
+
+  it("说的是这一行显示的等级，而不是碰巧有几条记录", () => {
+    expect(parentState(levels, new Map())).toBe("none");
+    expect(parentState(levels, on(levels))).toBe("all");
+    // 十一个等级只开了一个：按"记录数"算会读成全选（一条记录，开的正是它），
+    // 半选态就永远不出现——本次修的就是这个。
+    const eleven = Array.from({ length: 11 }, (_, i) => i + 1);
+    expect(parentState(eleven, on([1]))).toBe("some");
+    // 1 开着、2 有一条关着的记录，3、4 没有任何记录
+    const mixed = new Map([
+      [1, record("A1", 1, true)],
+      [2, record("A1", 2, false)],
+    ]);
+    expect(parentState(levels, mixed)).toBe("some");
+  });
+});
+
 describe("the search", () => {
   it("matches the name, and the hash it is keyed by", () => {
     expect(matches("暴君", "71F11A9B", "暴")).toBe(true);
@@ -344,22 +362,21 @@ describe("the search", () => {
 
 describe("the explanation a level shows", () => {
   const resistance: ExplainBand[] = [
-    { from: 1, text: "受到的伤害-{0}%" },
-    { from: 30, text: "灼热免疫" },
+    [1, "受到的伤害-{0}%"],
+    [30, "灼热免疫"],
   ];
 
   it("reads the band the level falls in", () => {
-    // The complaint this exists for: level 1 used to say "灼热免疫" because only the
-    // highest row's text was kept.
+    // 这个功能就是为这条抱怨而生的：1 级以前会说"灼热免疫"，因为当时只保留最高那一行的文本。
     expect(explainAt(resistance, 1)).toBe("受到的伤害-{0}%");
     expect(explainAt(resistance, 29)).toBe("受到的伤害-{0}%");
     expect(explainAt(resistance, 30)).toBe("灼热免疫");
   });
 
   it("reads the last band for a level past the end, and the first below the start", () => {
-    // Only a hand-edited Config.json can name these, and the same rule covers both.
+    // 只有手改 Config.json 才能指名这两种情况，而同一条规则覆盖了它们。
     expect(explainAt(resistance, 99)).toBe("灼热免疫");
-    expect(explainAt([{ from: 15, text: "Lv15 起" }], 3)).toBe("Lv15 起");
+    expect(explainAt([[15, "Lv15 起"]], 3)).toBe("Lv15 起");
   });
 
   it("says nothing when the skill has no bands", () => {
@@ -369,12 +386,12 @@ describe("the explanation a level shows", () => {
 
   it("is what the six-band crab factor relies on", () => {
     const crab: ExplainBand[] = [
-      { from: 1, text: "（攻击力+{0}%）" },
-      { from: 5, text: "（暴击率+{1}%）" },
-      { from: 9, text: "（HP持续回复，每次回复最大HP的{2:.1f}%）" },
-      { from: 13, text: "（回复造成伤害{3:.1f}%的HP）" },
-      { from: 17, text: "（伤害上限+{4}%）" },
-      { from: 20, text: "（伤害上限+{4}% / 防御力+{5}%）" },
+      [1, "（攻击力+{0}%）"],
+      [5, "（暴击率+{1}%）"],
+      [9, "（HP持续回复，每次回复最大HP的{2:.1f}%）"],
+      [13, "（回复造成伤害{3:.1f}%的HP）"],
+      [17, "（伤害上限+{4}%）"],
+      [20, "（伤害上限+{4}% / 防御力+{5}%）"],
     ];
     expect(explainAt(crab, 4)).toContain("攻击力");
     expect(explainAt(crab, 12)).toContain("HP持续回复");
@@ -391,7 +408,7 @@ describe("the slot labels in a tooltip", () => {
   });
 
   it("drops the format the game's placeholder carries", () => {
-    // "{0:.1f}" is a template for a number the tooltip never prints; the slot is the point.
+    // "{0:.1f}" 是一个数字模板，提示框从不打印这个数字；重点在槽号。
     expect(slotLabel("造成的伤害+{0:.1f}%")).toBe("造成的伤害+{1}%");
     expect(slotLabel("（昏厥值+{1:10}）")).toBe("（昏厥值+{2}）");
   });

@@ -39,7 +39,7 @@
 
 ## 从源码构建
 
-需要 .NET SDK 8、Node.js 20+（仅重新生成资产需要 22.5+）、Go 1.27+。
+需要 .NET SDK 8、Node.js 20+、Go 1.27+（重新生成资产：`cd tools/build-assets && go run .`）。
 
 ```powershell
 ./build.ps1 -Package   # -> dist/GBFR.SigilEdit/ 与 dist/GBFR.SigilEdit-<版本>.zip

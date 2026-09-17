@@ -38,27 +38,26 @@ import {
   matches,
   pad,
   slotLabel,
-  type ExplainBand,
   type SigilTrait,
+  type SkillText,
   type TraitInfo,
 } from "./traits";
 
 const SERVICE = "main.EditService";
 /*
-  Mirrors saveFailedEvent in editservice.go. The debounced write happens after the
-  call that asked for it has returned, so a failure there has no answer to return
-  and arrives as this event instead.
+  与 editservice.go 里的 saveFailedEvent 保持一致。防抖写入发生在请求它的那次调用
+  返回之后，所以那里的失败没有可以返回的答复，只能以这个事件的形式到达。
 */
 const SAVE_FAILED = "GBFR.SigilEdit.SaveFailed";
 
-/** Whether the list the tool would write is the one it read: same edits, same numbers. */
+/** 工具准备写入的列表是否就是它读到的那个：同样的编辑，同样的数值。 */
 const sameRecords = (a: SigilTrait[], b: SigilTrait[]) =>
   a.length === b.length &&
   a.every((record, i) =>
     record.values.every((value, slot) => value === b[i].values[slot]),
   );
 
-/** A value as it was a moment ago: the search box filters a 200-row list per keystroke otherwise. */
+/** 稍早之前的那个值：否则搜索框每敲一个键都要过滤一遍 200 行的列表。 */
 function useDebounced<T>(value: T, delay = 150): T {
   const [settled, setSettled] = useState(value);
   useEffect(() => {
@@ -71,44 +70,37 @@ function useDebounced<T>(value: T, delay = 150): T {
 export default function App() {
   const [lang, setLang] = useState<Lang>(initialLang);
   const [edits, setEdits] = useState<SigilTrait[]>([]);
-  const [names, setNames] = useState<Record<string, string>>({});
+  // 所选语言对每个因子的说法：名字、概要，以及共享同一段说明的那些连续等级——
+  // 大多数只有一段，少数会在中途换措辞（见 explainAt）。
+  const [texts, setTexts] = useState<Record<string, SkillText>>({});
   const [traits, setTraits] = useState<Record<string, TraitInfo>>({});
-  // Per trait, the stretches of levels that share an explanation - most have one, a few
-  // change the wording partway (see explainAt).
-  const [explains, setExplains] = useState<Record<string, ExplainBand[]>>({});
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
   const [errorOpen, setErrorOpen] = useState(false);
-  // Which traits are open. A trait whose numbers live on one level has nothing to
-  // open, so only the traits that span several levels ever land in here.
+  // 哪些因子是展开的。数值只落在一个等级上的因子没有可展开的东西，
+  // 所以只有跨多个等级的因子会进到这里。
   const [open, setOpen] = useState<Set<string>>(new Set());
   /*
-    The row the pointer is resting in, which is the whole of what a tooltip depends on:
-    while the pointer is in a row its explanation is up, and only leaving the row takes
-    it away.
+    指针停留在的那一行，tooltip 是否显示全看它：指针在行里，说明就显示；只有离开这一行才会收起。
 
-    Base UI's own reasons for closing (a press inside the trigger, focus moving from a
-    value box to the row) are what took the explanation away mid-row before, so the
-    open state is controlled from here instead and the pointer is the only thing that
-    changes it - including a tick, which moves the rows rather than the pointer and is
-    followed up in resolveHoveredRow.
+    以前 Base UI 自己的关闭理由（在触发器内部按下、焦点从数值框移到行上）会在
+    指针还在行里时就把说明收走，所以打开状态改成由这里控制，只有指针能改变它，
+    包括一次勾选：它是行在动而不是指针在动，随后由 resolveHoveredRow 跟进。
   */
   const [tipRow, setTipRow] = useState<string | null>(null);
   const listBox = useRef<HTMLDivElement>(null);
   /*
-    The scroll offset held across a tick's re-render, or null when no tick is due.
+    跨过一次勾选重渲染保留的滚动偏移，没有待处理的勾选时为 null。
 
-    A tick reorders the list - what is on sorts to the top - and the browser follows the
-    box that was just clicked, because it still holds focus: it scrolls the row back into
-    view, which is what made a tick feel like the list jumped. The offset goes back in
-    the layout effect below, in the same pass that re-points the tooltip at whatever row
-    is under the pointer now (the row that was hovered has moved away and another slid
-    into its place), so both end up where the pointer is.
+    一次勾选会重排列表——打开的内容排到最前——而浏览器会跟着刚被点击、仍持有焦点的
+    那个勾选框走：它把该行滚回视野，这正是让勾选感觉列表跳了一下的原因。偏移在下面
+    的 layout effect 里放回去，和把 tooltip 重新指向此刻指针下那一行（原本悬停的行已经
+    移开，另一行滑到了它的位置）是同一次 pass，于是两者都落在指针所在的位置。
   */
   const heldScroll = useRef<number | null>(null);
   /*
-    Where the pointer last moved. A tick moves the rows under a pointer that has not
-    moved, and moving inside a row fires no enter either, so neither the browser's hover
-    nor our own enter/leave can say which row is being hovered after a tick.
+    指针最后一次移动的位置。一次勾选会在指针没动的情况下移动行，
+    而在行内移动也不会触发 enter，所以勾选之后，浏览器的 hover
+    和我们自己的 enter/leave 都说不出当前悬停的是哪一行。
   */
   const lastMove = useRef<{ x: number; y: number } | null>(null);
 
@@ -120,15 +112,14 @@ export default function App() {
   });
   const [query, setQuery] = useState("");
   const search = useDebounced(query);
-  // The search box, so its clear button can hand the caret back to it.
+  // 搜索框本身，好让它的清除按钮能把光标交还给它。
   const searchBox = useRef<HTMLInputElement>(null);
 
   const t = MESSAGES[lang];
 
   /*
-    Showing a failure both remembers it and opens the dialog. Closing only closes:
-    the message stays in state so the exit animation still has something to draw,
-    where clearing it on close blanked the dialog for the whole fade-out.
+    显示一次失败既记下它，也打开对话框。关闭只是关闭：消息留在 state 里，
+    好让退场动画仍有东西可画——以前在关闭时清空，会让对话框在整个淡出过程中一片空白。
   */
   function showError(next: { title: string; detail: string }) {
     setError(next);
@@ -136,19 +127,18 @@ export default function App() {
   }
 
   /*
-    Trait names come from the game's own text for the chosen language, so they are
-    fetched again whenever it changes. The edit list is language-neutral and is
-    deliberately left alone.
+    因子的名字和说明来自游戏针对所选语言的自有文本，
+    所以语言一变就重新取一次。编辑列表与语言无关，这里刻意不去动它。
   */
   useEffect(() => {
     rememberLang(lang);
-    Promise.all([
-      Call.ByName(`${SERVICE}.NameMap`, lang),
-      Call.ByName(`${SERVICE}.ExplainMap`, lang),
-    ])
-      .then(([map, texts]) => {
-        setNames((map ?? {}) as Record<string, string>);
-        setExplains((texts ?? {}) as Record<string, ExplainBand[]>);
+    /*
+      整个语言一次调用：每个因子的名字、概要和说明。列表三者都直接从这里读，
+      所以切换语言不会让它们各自描述不同的表。
+    */
+    Call.ByName(`${SERVICE}.SkillMap`, lang)
+      .then((map) => {
+        setTexts((map ?? {}) as Record<string, SkillText>);
       })
       .catch((err) => showError({ title: t.readFailed, detail: String(err) }));
   }, [lang]);
@@ -158,37 +148,26 @@ export default function App() {
       Call.ByName(`${SERVICE}.LoadEdits`) as Promise<SigilTrait[]>,
       Call.ByName(`${SERVICE}.TraitMap`) as Promise<Record<string, TraitInfo>>,
     ]);
-    /*
-      A record whose key is not a hex hash is not an edit at all: the mod parses the
-      key as hex before it looks at any row and skips the record when that fails, so
-      the tool ignores it too instead of showing a row that can never write anything.
-      A hash the name table does not know is kept: the mod does apply those, and an
-      edit nobody can see is worse than one whose name is only a hash.
-    */
-    // A key that is not hex at all is not an edit the mod can apply either way, but it is
-    // still the user's line: it is kept, under its hash as the name, rather than filtered
-    // out - dropping it here would delete it from Config.json on the next write, and an
-    // edit nobody can see is worse than one whose name is only a hash.
-    // What the file holds, as it holds it: two edits for one address can both be there, and
-    // a key can be lower case. Reading is what cleans that up, so the raw list is kept to
-    // tell whether the file already says what the tool is about to show.
+    // 根本不是十六进制的 key 也不是模组能应用的编辑，但它仍然是用户的一行：它被保留，
+    // 用自己的 hash 当名字，而不是被过滤掉——在这里丢掉它，下一次写入就会把它从Config.json 中删除，
+    // 而一个谁都看不见的编辑，比一个名字只是 hash 的更糟。
+    // 文件里有什么就照原样拿什么：同一个地址可以同时有两条编辑，key 也可能是小写。
+    // 清理是"读取"这一步做的事，所以原始列表被留着，用来判断文件是否已经说出了工具即将显示的内容。
     const raw = (list ?? [])
       .filter((e) => String(e.key ?? "").trim() !== "")
       .map((e) => ({
         ...e,
-        // Every table the tool serves is keyed by the uppercase hash, and a key
-        // written into Config.json by hand can be lower case. Normalising here is
-        // what lets every lookup below use the key as it stands, instead of the
-        // half-dozen call sites that used to uppercase it for themselves.
+        // 工具所提供的每张表都以大写 hash 为键，而手写进 Config.json 的 key 可能是小写。
+        // 在这里归一化，下面的每一次查找才能直接用 key 本身，
+        // 而不是靠过去那半打各自把它转成大写的调用点。
         key: e.key.toUpperCase(),
-        // Ten slots, a number or null: a file that is short, or has no values at all,
-        // pads with null - the game's own number, which writes nothing.
+        // 十个槽，数字或 null：短了一截或者一个值都没有的文件用 null 补齐 ——
+        // null 就是游戏自己的数值，什么都不写入。
         values: pad(e.values ?? []),
       }));
 
-    // One edit per address, and nothing but edits (see asEdits). The file is written
-    // straight back when the result differs from it: an old file converges on the first
-    // open rather than on the next keystroke.
+    // 一个地址一条编辑，且只留编辑（见 asEdits）。结果与文件不同时立刻写回：
+    // 旧文件在第一次打开时就被理顺，而不是等到下一次敲键。
     const { records } = dedupe(asEdits(raw, traitMap ?? {}));
     setEdits(records);
     setTraits(traitMap ?? {});
@@ -204,11 +183,9 @@ export default function App() {
   }, []);
 
   /*
-    A write that failed after the debounce, pushed from the backend - see
-    SAVE_FAILED. It gets the same dialog as the immediate failures, because from
-    the reader's side they are one thing: the edit is not on disk. Re-subscribed
-    when the language changes so the title follows the switch, and the function
-    On hands back is the unsubscribe React runs on the way out.
+    防抖之后才失败的写入，由后端推送过来——见 SAVE_FAILED。它和立即失败共用同一个
+    对话框，因为在用户看来它们是同一件事：编辑没有落到磁盘上。语言变化时重新订阅，
+    好让标题跟着切换走；On 交回的函数就是 React 在退出时运行的取消订阅。
   */
   useEffect(
     () =>
@@ -219,9 +196,8 @@ export default function App() {
   );
 
   /*
-    Every trait the game has, not only the edited ones: a row is a trait and its
-    checkboxes are the levels that trait is edited at. Finding one is the search
-    box's job, so this list is the catalogue rather than a list of additions.
+    游戏有的每个因子，而不仅是编辑过的那些：一行就是一个因子，它的勾选框是该因子
+    被编辑的等级。找到某个因子是搜索框的活，所以这份列表是总目录，而不是一份新增清单。
   */
   const rows = useMemo(() => {
     const byKey = new Map<string, SigilTrait[]>();
@@ -232,16 +208,15 @@ export default function App() {
     }
 
     /*
-      What is switched on comes first, at both levels: a trait with an enabled level
-      sorts above the rest, and inside a trait the enabled levels sort above its other
-      rows. What is on is what the game is doing, so it is what has to be found first.
+      两个层级上都是打开的内容排最前：有启用等级的因子排在其余因子之上，
+      因子内部启用的等级排在它的其他行之上。
+      打开的内容就是游戏正在生效的东西，所以它必须最先被找到。
     */
-    const keys = [...Object.keys(names)];
-    // A hash the tables do not know - a Config.json written by hand, an edit from
-    // another build - is kept rather than dropped, because an edit the list cannot
-    // show is an edit nobody can see is being applied. It sorts with the rest.
+    const keys = [...Object.keys(texts)];
+    // 表里没有的 hash——手写的 Config.json、别的版本留下的编辑——保留而不是丢掉，
+    // 因为列表显示不出来的编辑，就是谁都不知道正在生效的编辑。它和其他因子一起排序。
     for (const key of byKey.keys()) {
-      if (!(key in names)) keys.push(key);
+      if (!(key in texts)) keys.push(key);
     }
 
     const needle = search.trim().toLowerCase();
@@ -251,52 +226,53 @@ export default function App() {
         const info: TraitInfo | undefined = traits[key];
         const records = byKey.get(key) ?? [];
         const byLevel = new Map(records.map((record) => [record.level, record]));
-        const label = names[key] ?? key;
+        const label = texts[key]?.name ?? key;
 
         return {
           key,
           label,
+          // 父行读的是概要：它代表整个因子，而概要是游戏对这个因子本身的一句话，
+          // 不是针对其中某个等级的。
+          summary: texts[key]?.summary ?? "",
           info,
           records,
           byLevel,
           enabled: records.some((record) => record.enabled),
-          // Which levels the trait shows, and in what order, is traits.ts's business.
+          // 因子显示哪些等级、按什么顺序，是 traits.ts 的事。
           levels: levelsOf(info, records),
         };
       })
-      // The search is by name, or by the hash the tables and Config.json key the trait
-      // by - which is how a single row is put on screen by hand.
+      // 搜索按名字，或按表和 Config.json 给因子编键的 hash——手动把某一行调出来靠的就是后者。
       .filter((row) => matches(row.label, row.key, needle))
       .sort(
         (a, b) =>
           Number(b.enabled) - Number(a.enabled) ||
           a.label.localeCompare(b.label, lang === "zh" ? "zh-Hans-CN" : lang),
       );
-  }, [edits, names, traits, search, lang]);
+  }, [edits, texts, traits, search, lang]);
 
   /**
-   * The edit a level's checkbox starts: nothing typed, so every slot is the game's own.
+   * 一个等级的勾选框所开启的编辑：没有任何输入，所以每个槽都是游戏自己的数值。
    *
-   * `enabled` is what the caller means by starting one: ticking a level switches it on,
-   * typing into it does not (see updateLevel).
+   * `enabled` 是调用方"开启一条编辑"的意思：勾选一个等级会把它打开，往里面输入则
+   * 不会（见 updateLevel）。
    */
   function newRecord(key: string, level: number, enabled: boolean): SigilTrait {
     return {
       enabled,
       key: key,
       level: level,
-      // No numbers at all: an untouched slot is null, which leaves the game's own value
-      // in place - so ticking a level and changing nothing writes nothing.
+      // 完全没有数值：没碰过的槽是 null，会把游戏自己的数值留在原处——
+      // 所以勾选一个等级却什么都不改，就等于什么都不写。
       values: pad([]),
     };
   }
 
   /*
-    One level's checkbox. With no edit at that address yet, ticking it is what creates
-    one, from the game's own row for that level; unticking switches the edit off and
-    keeps its numbers - a switched-off record that carries typed numbers is still saved
-    (see isEdit), it is simply not applied. Unticking one that carries nothing the user
-    typed leaves no edit at all, and commit drops it.
+    一个等级的勾选框。该地址还没有编辑时，勾选它就是创建一条，内容来自游戏在那个
+    等级上的自有行；取消勾选会把这条编辑关掉并保留它的数值——带用户输入数值的关闭
+    记录仍然会被保存（见 isEdit），只是不生效。取消一条没有任何用户输入的记录等于
+    没有编辑，commit 会把它丢掉。
   */
   function toggleLevel(key: string, level: number) {
     beginTick();
@@ -308,43 +284,38 @@ export default function App() {
     commit(edits.map((e, i) => (i === at ? { ...e, enabled: !e.enabled } : e)));
   }
 
-  /** A trait's own checkbox: every level of it at once. */
+  /*
+    表头勾选框代表整个因子：它把该因子显示的所有等级一并打开，也一并关闭。第一次
+    点击还会让这些等级诞生——没人编辑过的因子还没有任何行，而勾选表头就是关于它们全体的一句话。
+  */
   function toggleTrait(key: string, nextChecked: boolean) {
     beginTick();
-    /*
-      A trait nobody has edited has nothing to switch on, so ticking its box did nothing
-      at all - which is how 暴君 and 暴击伤害 read as rows that cannot be selected. It now
-      selects the trait the way the game uses it: a record at the level the tables call
-      the default, which is the level a sigil carries (15 for these). The rest of the
-      levels stay underneath for anyone who wants them.
-
-      Switching one off keeps the levels that carry typed numbers and drops the rest
-      (commit asks isEdit): what is saved is what is switched on or was typed into.
-    */
-    if (!edits.some((e) => e.key === key)) {
-      const level = traits[key]?.Default;
-      if (nextChecked && level) commit([...edits, newRecord(key, level, true)]);
+    const mine = edits.filter((e) => e.key === key);
+    if (!nextChecked) {
+      commit(edits.map((e) => (e.key === key ? { ...e, enabled: false } : e)));
       return;
     }
-    commit(edits.map((e) => (e.key === key ? { ...e, enabled: nextChecked } : e)));
+
+    const have = new Set(mine.map((e) => e.level));
+    const added = levelsOf(traits[key], mine)
+      .filter((level) => !have.has(level))
+      .map((level) => newRecord(key, level, true));
+    commit([...edits.map((e) => (e.key === key ? { ...e, enabled: true } : e)), ...added]);
   }
 
   /**
-    What a tick does before its re-render: remembers the scroll offset (heldScroll) for
-    the layout effect that follows, which puts the viewport back where it was and points
-    the tooltip at the row now under the pointer.
+    勾选在重渲染之前做的事：为随后的 layout effect 记下滚动偏移（heldScroll），
+    后者把视口放回原处，并把 tooltip 指向此刻指针下的那一行。
   */
   function beginTick() {
     heldScroll.current = listBox.current?.scrollTop ?? null;
   }
 
   /*
-    Which row the pointer is over, asked of the document rather than of a hover event:
-    after a tick the rows have moved under a pointer that has not, and moving inside a
-    row fires no enter either, so hover events cannot say which row is being hovered.
-    Called from the layout effect that follows a tick, so the row found here is the one
-    under the pointer now - whether it is the row that was ticked or the one that slid
-    into its place - and the tooltip simply follows it.
+    指针在哪一行，是问文档而不是问 hover 事件：一次勾选之后，行在没动的指针下面
+    移动了，而在行内移动也不会触发 enter，所以 hover 事件说不出当前悬停的是哪一行。
+    这个函数由勾选之后的 layout effect 调用，所以这里找到的就是此刻指针下的那一行 ——
+    无论它是被勾选的那行，还是滑进来占了它位置的那行 —— tooltip 跟着它走就是了。
   */
   function resolveHoveredRow() {
     const at = lastMove.current;
@@ -352,10 +323,9 @@ export default function App() {
     const row = document.elementFromPoint(at.x, at.y)?.closest("[data-row]");
     const id = row?.getAttribute("data-row") ?? null;
     /*
-      The move alone here, where restInRow replays the whole way in: the click that
-      caused the tick made Base UI close its popup, and a move is the opening its hover
-      accepts - a leave first would only close it again, and our open prop has not
-      changed for a row that stayed put.
+      这里只补一个 move，而 restInRow 会把整个进入过程重放一遍：造成这次勾选的点击
+      让 Base UI 关掉了它的弹层，而 move 才是它的 hover 接受的入场——先来一个 leave
+      只会又把它关上，何况对于没挪窝的那一行，我们的 open prop 并没有变。
     */
     row?.dispatchEvent(
       new window.MouseEvent("mousemove", { bubbles: true, clientX: at.x, clientY: at.y }),
@@ -364,23 +334,18 @@ export default function App() {
   }
 
   /*
-    The pointer enters and leaves rows; the row it is in is the only thing that decides
-    whether a tooltip is up (see tipRow). The only thing that changes it is the pointer
-    moving from one row to another - or a tick, which moves the rows instead and is
-    handled in resolveHoveredRow.
+    指针进入和离开行；它所在的那一行是决定 tooltip 是否显示的唯一因素（见 tipRow）。
+    能改变它的只有指针从一行移到另一行——或者一次勾选，那是行在动，由 resolveHoveredRow 处理。
   */
   function restInRow(id: string, e: PointerEvent<HTMLElement>) {
     /*
-      Base UI only lets a tooltip follow the cursor when the event it opened on was a
-      mouseenter or a mousemove (useClientPoint checks exactly that), and after a click it
-      refuses to let hover open at all until the pointer has left the row and come back.
-      Focus a value box, switch windows, come back and sweep in, and the record still says
-      focus and its own hover is still blocked - so the first tooltip of the visit anchors
-      to the middle of the row, and only the second one lands on the cursor.
+      Base UI 只在打开它的那个事件是 mouseenter 或 mousemove 时才让 tooltip 跟随光标
+      （useClientPoint 检查的正是这一点），而一次点击之后，它根本不允许 hover 打开，
+      直到指针离开这一行再回来。聚焦一个数值框、切换窗口、回来再扫进这一行，记录里写的仍然是 focus，
+      它自己的 hover 也仍然被挡住——于是这次访问的第一个 tooltip 锚在行的中央，只有第二个才落在光标上。
 
-      The way in is therefore replayed on the row, in full: leave clears that latch, enter
-      is the opening it accepts, move carries the pointer's place. resolveHoveredRow needs
-      less than this, because there the popup is already open on the row.
+      所以进入的过程在行上被完整重放：leave 清掉那个闩，enter 是它接受的入场，
+      move 带上指针的位置。resolveHoveredRow 需要的比这少，因为那里的弹层已经在行上打开了。
     */
     const at = { bubbles: true, clientX: e.clientX, clientY: e.clientY };
     const row = e.currentTarget;
@@ -395,13 +360,11 @@ export default function App() {
   }
 
   /*
-    A value box. Typing into a level that has no edit yet starts one, the way ticking its
-    box does - but it does NOT switch it on: the numbers are the user's and are saved,
-    and ticking the box is what puts them into the game. An edit that was typed but never
-    applied is a state the list shows plainly (its box is empty), not a surprise.
+    一个数值框。往还没有编辑的等级里输入，会像勾选它的勾选框一样开始一条编辑 ——
+    但不会把它打开：这些数值是用户的、会被保存，而勾选框才是把它们送进游戏的动作。
+    输入过却从未生效的编辑，是列表明确显示出来的状态（它的勾选框是空的），不是意外。
 
-    Only that first keystroke holds the scroll: creating the record can reorder the row
-    the caret is in. Every keystroke after it changes numbers in a row that stays put.
+    只有第一次敲键会保持滚动：创建记录可能让光标所在的那一行重排。之后每一次敲键都只是在原地改数值。
   */
   function updateLevel(key: string, level: number, patch: Partial<SigilTrait>) {
     const at = edits.findIndex((e) => e.key === key && e.level === level);
@@ -414,9 +377,8 @@ export default function App() {
       edits.map((e, i) => {
         if (i !== at) return e;
         const next = { ...e, ...patch };
-        // Emptying the last number takes the whole edit away: what made it an edit was that
-        // number, so the box goes back to the game's value and commit drops the record
-        // (this is the one thing that switches an edit off by itself).
+        // 清空最后一个数值会把整条编辑带走：让它成为编辑的就是那个数值，所以这个框回到游戏自己的数值，
+        // commit 也会丢掉这条记录（这是唯一会自行把编辑关掉的事）。
         return next.values.some((value) => value !== null)
           ? next
           : { ...next, enabled: false };
@@ -433,10 +395,9 @@ export default function App() {
   }
 
   /*
-    The row is a shortcut for the checkbox it holds. Anything the user actually
-    aimed at - a value box, the checkbox, the chevron, the delete button - is a
-    shadcn control and carries data-slot, so it keeps its own click; the trigger's
-    own slot is not a control, so a click on the row still lands here.
+    整行是它内部勾选框的快捷方式。用户真正瞄准的东西——数值框、勾选框、箭头 ——
+    都是 shadcn 控件并带 data-slot，所以各自保留自己的点击；
+    触发器自身的 slot 不是控件，因此点在行上的点击仍然落到这里。
   */
   const isControl = (e: MouseEvent<HTMLElement>) =>
     !!(e.target as HTMLElement).closest(
@@ -444,16 +405,13 @@ export default function App() {
     );
 
   /*
-    Every edit goes through here: the list on screen is the whole state, and it is also what
-    the running game ends up with. What is not an edit is dropped on the way through
-    (asEdits) - so ticking a level and unticking it leaves nothing behind, and emptying every
-    box of an edit takes the whole edit away.
+    每一次编辑都经过这里：屏幕上的列表就是全部状态，也是运行中的游戏最终拿到的东西。
+    不是编辑的在途中就被丢掉（asEdits）——所以勾选一个等级再取消，不会留下任何东西，
+    而清空一条编辑的所有框，会把整条编辑带走。
 
-    The frontend is deliberately dumb about when the write happens. It hands the whole
-    list over on every change and does not wait for an answer; the backend's
-    trailing debounce turns a burst of keystrokes into a single Config.json write
-    and one live apply, and only a list that cannot be accepted at all comes back
-    as a failure worth interrupting for.
+    前端对"何时写入"刻意保持无知。它在每次变化时把整份列表交出去，不等答复；
+    后端的尾随防抖把一串敲键变成一次 Config.json 写入和一次在线应用，
+    只有完全无法被接受的列表才会作为值得打断用户的失败回来。
   */
   function commit(next: SigilTrait[]) {
     const kept = asEdits(next, traits);
@@ -464,23 +422,18 @@ export default function App() {
   }
 
   /*
-    The explanation a row shows: the wording that covers its level (see explainAt), with
-    each {N} rewritten as the slot it belongs to (see slotLabel).
+    一行显示的说明：覆盖它所在等级的那段措辞（见 explainAt），其中每个 {N} 被改写成它对应的槽号（见 slotLabel）。
 
-    The game's placeholders are 0-based ({0} is the first value); the row shows
-    numbers, so the tooltip says {1} for the first one and lets the reader count
-    along. Substituting the values was the wrong idea: the numbers are already on
-    screen, what is not obvious is which of them means what.
+    游戏的占位符从 0 开始（{0} 是第一个数值）；行里显示的是数字，所以 tooltip 把第一个写成 {1}，
+    让读者顺着数下去。把数值替换进去是错的：数字已经在屏幕上了，不明显的是哪一个数字对应哪一部分。
   */
   function slotNotation(key: string, level: number): string {
-    return slotLabel(explainAt(explains[key], level));
+    return slotLabel(explainAt(texts[key]?.explain, level));
   }
 
   /*
-    Everything a row needs from here, in one object: the copy, the explanation text, the
-    two pointer handlers the tooltip runs on, and the edits a row can ask for. The rows
-    themselves live in TraitRow.tsx - what they must not know is how the list is
-    filtered, ordered or saved.
+    一行需要从这里拿的一切，装在一个对象里：文案、说明文本、tooltip 依赖的两个指针处理函数，
+    以及一行可以请求的编辑。行本身住在 TraitRow.tsx —— 它们不该知道的是列表如何过滤、如何排序、如何保存。
   */
   const rowCtx: RowContext = {
     t,
@@ -497,18 +450,14 @@ export default function App() {
   return (
     <div className="fixed inset-0 flex flex-col p-5 pb-6">
       {/*
-        One band above the list: how to find a trait in it, and the language
-        switch, which has always sat in that corner. Below it the rows own
-        everything.
+        列表上方的一条横带：如何从中找到因子，以及语言切换——它一直待在那个角落。它下面的一切都归行所有。
       */}
       <div className="flex shrink-0 items-center gap-2 border-b pb-4">
         {/*
-          No heading: the search box says what the band is for, and a count of edits
-          would mix two different things - what is on, and how many records exist -
-          in one fraction. The list below is the whole catalogue, so browsing it is
-          searching it, and what is typed reaches the list debounced (useDebounced),
-          which is what keeps a two-hundred row list from being rebuilt on every
-          keystroke.
+          没有标题：搜索框已经说明了这条横带是干什么的，而一个编辑计数会把两件不同的
+          事——开着的有哪些、记录一共有几条——混进一个分数里。下面的列表就是整个总目录，
+          浏览它就是搜索它；输入的内容经过防抖（useDebounced）才到列表，
+          这是让两百行的列表不会每次敲键都重建的原因。
         */}
         <div className="min-w-0 flex-1">
           <InputGroup>
@@ -520,9 +469,8 @@ export default function App() {
               aria-label={t.searchTrait}
             />
             {/*
-              A clear button, only while there is something to clear, and the caret
-              goes back into the box: the button is what was just clicked and it is
-              about to be gone, so without this the next keystroke would go nowhere.
+              一个清除按钮，只在有东西可清时出现，而且光标要回到框里：
+              刚被点击的就是这个按钮，它马上就会消失，没有这一步下一次敲键就不知去向。
             */}
             {query !== "" && (
               <InputGroupAddon>
@@ -542,12 +490,10 @@ export default function App() {
         </div>
 
         {/*
-          One joined group: ButtonGroup squares off everything but the outer
-          corners and drops the inner borders, so the three read as one control.
-          The label is each language's own short form, so it never needs
-          translating, and the chosen one keeps the filled (primary) fill. Set a
-          little apart from the controls beside it: those belong to the list, this one
-          to the interface - the band's own 8px gap plus 8 more.
+          一个连成一体的组：ButtonGroup 把除外侧圆角以外的地方都削成直角，并去掉内部
+          边框，三个按钮因此读起来像一个控件。标签是各语言自己的简称，永远不需要翻译，
+          选中的那个保持填充（primary）样式。它和旁边的控件稍隔开一点：那些属于列表，
+          这个属于界面——横带自身的 8px 间距再加 8。
         */}
         <ButtonGroup className="ml-2">
           {LANGS.map((code) => (
@@ -556,8 +502,7 @@ export default function App() {
               size="sm"
               variant={code === lang ? "default" : "outline"}
               aria-label={code}
-              // Fixed width and no padding: the stock sizes are sized for one
-              // glyph, which leaves two letters touching the edges.
+              // 固定宽度且没有内边距：现成的尺寸是按一个字形定的，两个字母就会贴着边缘。
               className="w-9 px-0"
               onClick={() => setLang(code)}
             >
@@ -568,24 +513,19 @@ export default function App() {
       </div>
 
       {/*
-        The rows stop 16px short of the scrollbar, and the scrollbar's width is
-        reserved whether or not the list overflows. Filtering down to one row takes
-        the scrollbar away, and an unreserved gutter lets every row widen by its
-        width and then snap back when the search is cleared - measured as the row
-        edge moving 772 -> 787 px.
+        行在离滚动条 16px 处停下，而且无论列表是否溢出，滚动条宽度都被预留。
+        过滤到只剩一行会让滚动条消失，不预留这条沟槽的话，每行都会加宽一个滚动条的宽度，
+        清空搜索时又弹回去——实测行边缘在 772 -> 787 px 之间移动。
       */}
       {/*
-        The rows carry a class, not a data-slot: a row's click handler treats any
-        data-slot above it as a control (that is how a click on the checkbox or a
-        value box keeps its own click), so a data-slot on this container swallowed
-        every click on a row and a trait could not be opened.
+        这里用的是 class 而不是 data-slot：
+        行的点击处理把任何带 data-slot 的祖先当成控件（勾选框或数值框上的点击就是靠这个保住自己的点击的），
+        所以这个容器上挂 data-slot 会吞掉所有点在行上的点击，因子就打不开了。
       */}
       {/*
-        The 24px above and below the table sits outside the scrolling box (a margin,
-        not padding): padding would be part of the scrollable area, so the scrollbar
-        would start at the padding's edge instead of at the first row. Only the top one
-        is here - the bottom of the shell's padding is set to the same 24px - so the
-        scrollbar sits the same distance from the band and from the window edge.
+        表格上下的 24px 在滚动盒之外（是 margin，不是 padding）：padding 会成为可滚动区域的一部分，
+        滚动条就会从 padding 的边缘开始，而不是从第一行开始。
+        这里只有上面那一份——外壳 padding 的底部设成同样的 24px——所以滚动条离横带和离窗口边缘是一样的距离。
       */}
       <div
         ref={listBox}
@@ -595,16 +535,14 @@ export default function App() {
         }}
       >
         {/*
-          One provider for the list: which tooltip is open is decided here (see tipRow),
-          so base-ui's own open/close timing never comes into it - what the provider is
-          still for is the rest of the tooltip's setup, which every row shares.
+          整个列表共用一个 provider：哪个 tooltip 打开由这里决定（见 tipRow），
+          所以 base-ui 自己的打开/关闭时序根本不起作用——provider 剩下的用处是 tooltip 其余那一套设置，每一行都共用。
         */}
         <TooltipProvider>
           {rows.map((row) => (
             /*
-              The row under the pointer decides which tooltip is up, so every row is told
-              that one id and compares it with its own - see tipRow for why the pointer,
-              and not a hover event, is what decides.
+              指针下的那一行决定哪个 tooltip 显示，
+              所以每一行都会拿到那个 id 并与自己的比较——指针而不是 hover 事件为什么说了算，见 tipRow。
             */
             <TraitRow
               key={row.key}
@@ -624,19 +562,16 @@ export default function App() {
       </div>
 
       {/*
-        A failed write is worth interrupting for - the edit is not on disk, and
-        the reason is usually something the user has to fix (Config.json locked by
-        something else, a folder that cannot be written). Both kinds of failure
-        land here: the immediate one, and the debounced one pushed from the
-        backend. Closing only closes: the message stays until the next failure
-        replaces it, so the fade-out still has something to draw.
+        写入失败值得打断用户——编辑没有落到磁盘上，
+        而原因通常是用户必须处理的事（Config.json 被别的程序锁住、文件夹不可写）。
+        两种失败都落到这里：立即失败，以及后端推送的防抖失败。
+        关闭只是关闭：消息一直留到下一条失败把它替换掉，这样淡出时仍然有东西可画。
       */}
       <AlertDialog
         open={errorOpen}
         onOpenChange={setErrorOpen}
       >
-        {/* No size="sm": that switches the footer to a two-column grid, and this
-            dialog has a single button that should sit centred. */}
+        {/* 不用 size="sm"：那会把页脚切成两列网格，而这个对话框只有一个按钮，应该居中。 */}
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{error?.title}</AlertDialogTitle>
@@ -644,8 +579,7 @@ export default function App() {
               {error?.detail}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {/* Stock footer and stock button: below the sm breakpoint the footer is
-              a column, so the button stretches on its own. No width of our own. */}
+          {/* 现成的页脚和现成的按钮：在 sm 断点以下是纵向排列，按钮会自己撑开。我们不设自己的宽度。 */}
           <AlertDialogFooter>
             <AlertDialogAction onClick={() => setErrorOpen(false)}>{t.ok}</AlertDialogAction>
           </AlertDialogFooter>

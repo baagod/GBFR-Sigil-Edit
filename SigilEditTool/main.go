@@ -1,9 +1,8 @@
 /*
-Command SigilEdit is the desktop tool that edits GBFR.SigilEdit's Config.json.
-The mod half patches skill_status in memory and re-applies it when this tool
-signals a named event, so the list written here is the list the game ends up
-with. The game's own trait names, values and explanations are embedded, so the
-tool never needs the game to be up.
+Command SigilEdit 是编辑 GBFR.SigilEdit 的 Config.json 的桌面工具。
+mod 那一半在内存里给 skill_status 打补丁，
+并在本工具发出一个具名事件时重新应用，所以这里写下的列表就是游戏最终采用的列表。
+游戏自己的因子名称、数值和说明都已内嵌，因此工具从不需要游戏处于运行状态。
 */
 package main
 
@@ -21,57 +20,39 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-// One trait-name table per UI language, each built from that language's own text
-// in the game. The hashes are identical across all three. The files are named
-// after the game's own table (skill_status), which is what calls these rows skills.
+// 生成的资产，分成两半。skill_status.json 是游戏自己的行：一个因子的哪些等级带数字，
+// 以及每个等级上的十个值。skill.<lang>.json 是一种语言对这个因子的说法——它叫什么、
+// 做什么，以及游戏自己对它的说明——这些文件是按游戏自己那张管这些行叫 skills 的表命名的。
 //
-//go:embed assets/skillnames.zh.json
-var embeddedNamesZH []byte
+//go:embed assets/skill_status.json
+var embeddedSkillStatus []byte
 
-//go:embed assets/skillnames.en.json
-var embeddedNamesEN []byte
+//go:embed assets/skill.zh.json
+var embeddedSkillZH []byte
 
-//go:embed assets/skillnames.ja.json
-var embeddedNamesJA []byte
+//go:embed assets/skill.en.json
+var embeddedSkillEN []byte
 
-// Every trait's vanilla LevelValue1..10 and the levels those values live on, in
-// one generated table: both halves describe the same row.
+//go:embed assets/skill.ja.json
+var embeddedSkillJA []byte
+
+// 窗口/任务栏图标。在这里内嵌它、而不是依赖 exe 自带的图标资源是刻意的：
+// Windows 上的Wails 会去找图标资源 ID 3，找不到时就默默禁用图标——而本 exe 的资源是具名的、不是编号的，
+// 所以 ID 3 是空的，标题栏就一片空白。
 //
-//go:embed assets/skillinfo.json
-var embeddedSkillInfo []byte
-
-// The game's own explanation of each trait, per language. {N} in these stands for
-// LevelValue(N+1), so the tool can label the slots it edits.
+// build.ps1 在构建前会从 icon/sigiledit-256.png 复制一份到这里；
+// 直接跑 `go build` 则用这里已经躺着的任意一份。
 //
-//go:embed assets/skillexplain.zh.json
-var embeddedExplainZH []byte
-
-//go:embed assets/skillexplain.en.json
-var embeddedExplainEN []byte
-
-//go:embed assets/skillexplain.ja.json
-var embeddedExplainJA []byte
-
-// The window/taskbar icon. Embedding it here rather than leaning on the exe's own
-// icon resource is deliberate: Wails on Windows asks for icon resource ID 3 and
-// silently disables the icon when it is not there - and this exe's resource is
-// named, not numbered, so ID 3 is empty and the title bar came up blank.
-//
-// build.ps1 copies this from icon/sigiledit-256.png before the build; a bare `go build`
-// uses whatever copy is already sitting here.
 //go:embed appicon.png
 var appIcon []byte
 
-// mutexName is the single-instance lock's name. A Local\ name, so the lock is
-// per logon session rather than per machine.
+// mutexName 是单实例锁的名字。用 Local\ 前缀，所以这把锁按登录会话隔离，而不是按机器。
 const mutexName = "Local\\GBFRSigilEditTool"
 
-// toolWindowTitle is the tool window's title, and the name a second launch finds
-// that window by.
+// toolWindowTitle 是工具窗口的标题，也是第二次启动时用来找到那个窗口的名字。
 const toolWindowTitle = "GBFR Sigil Edit"
 
-// swRestore is ShowWindow's SW_RESTORE: a minimised window comes back at its
-// previous size and position.
+// swRestore 是 ShowWindow 的 SW_RESTORE：最小化的窗口会恢复到它先前的大小和位置。
 const swRestore = 9
 
 var (
@@ -83,10 +64,9 @@ var (
 	procCreateMutexW        = kernel32.NewProc("CreateMutexW")
 )
 
-// ensureSingleInstance takes the named mutex and brings the window of the
-// instance already holding it to the front, so the tool is never open twice over
-// one Config.json. A mutex that cannot be created at all falls through, and the
-// tool then starts without a lock the way it did before.
+// ensureSingleInstance 取得那个具名互斥体，并把已持有它的那个实例的窗口带到最前面，
+// 这样工具就不会在同一份 Config.json 上开两次。完全创建不出互斥体时就直接往下走，
+// 工具于是像以前那样在没有锁的情况下启动。
 func ensureSingleInstance() {
 	name, _ := syscall.UTF16PtrFromString(mutexName)
 	handle, _, cerr := procCreateMutexW.Call(0, 0, uintptr(unsafe.Pointer(name)))
@@ -99,7 +79,7 @@ func ensureSingleInstance() {
 	}
 }
 
-// findToolWindow returns the tool's main window handle (0 = not found).
+// findToolWindow 返回工具主窗口的句柄（0 表示没找到）。
 func findToolWindow() uintptr {
 	title, _ := syscall.UTF16PtrFromString(toolWindowTitle)
 	hwnd, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(title)))
@@ -122,27 +102,23 @@ func main() {
 		},
 	})
 
-	// The write waits for the editing to stop, so closing the window can beat it:
-	// the list the debounce is still holding goes out on the way down.
+	// 写入要等编辑停下来，所以关窗口可能抢在它前面：防抖仍握着的列表会在退出途中发出。
 	app.OnShutdown(edits.flushNow)
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: toolWindowTitle,
 		/*
-			Both dimensions are written as a client size plus what Windows adds around
-			it, so the numbers to change are the ones the frontend lays out in: 8px per
-			side of resize frame for the width (16), and the title bar plus borders for
-			the height (39). Measured with GetWindowRect vs GetClientRect at 96 DPI.
-			888 by 581 is also the shape the list was laid out in - about nine rows and
-			the band - which is why the height's minimum is the same number: the window
-			can grow, and neither dimension can shrink below what the rows need.
+			两个尺寸都写成客户端尺寸加上 Windows 在其四周加的东西，所以需要改的数字就是
+			前端用来布局的那些：宽度两侧各 8px 的调整边框（16），高度则是标题栏加边框（39）。
+			在 96 DPI 下用 GetWindowRect 对比 GetClientRect 实测得到。
+			888 x 581 也正是这份列表被排版出来的形状——大约九行加上说明分段——所以高度的最小值
+			就是同一个数字：窗口可以变大，而两个方向都不能缩到比这些行所需的更小。
 		*/
 		Width:     888 + 16,
 		MinWidth:  888 + 16,
 		Height:    581 + 39,
 		MinHeight: 581 + 39,
-		// Matches the shadcn dark --background token, so the window does not flash
-		// a different colour before the frontend paints.
+		// 与 shadcn 深色主题的 --background 令牌一致，这样窗口就不会在前端绘制之前闪出另一种颜色。
 		BackgroundColour: application.NewRGB(10, 10, 10),
 		URL:              "/",
 	})

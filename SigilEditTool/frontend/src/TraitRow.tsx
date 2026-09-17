@@ -1,11 +1,9 @@
 /*
-  The rows themselves: one trait's row, the rows of its levels, and the ten value
-  boxes a level holds.
+  行本身：一个因子的行、它各个等级的行，以及一个等级持有的十个数值框。
 
-  They live here rather than in App because they are the bulk of the list's markup and
-  none of them needs to know how the list is filtered, ordered or saved - what they need
-  arrives as props: the row data, whether the pointer is on this row, whether this trait
-  is open, and a context of the handful of callbacks App owns.
+  它们住在这里而不是 App 里，因为它们是列表标记的主体，而且都不需要知道列表如何过滤、
+  如何排序、如何保存——它们要的东西以 props 的形式到达：行数据、指针是否在这一行上、
+  这个因子是否展开，以及装着 App 那几个回调的 context。
 */
 import { Fragment, useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -21,18 +19,22 @@ import type { Dict } from "./i18n";
 import {
   addressOf,
   pad,
+  parentState,
   SLOTS,
   slotEdit,
   stepValue,
+  valuesAt,
   withSlot,
   type SigilTrait,
   type TraitInfo,
 } from "./traits";
 
-/** One trait's row and its levels, as the list builds them. */
+/** 一个因子的行和它的各个等级，由列表这样构建出来。 */
 export type Row = {
   key: string;
   label: string;
+  /** 游戏对这个因子本身的一句话，父行读的就是它。 */
+  summary: string;
   info?: TraitInfo;
   records: SigilTrait[];
   byLevel: Map<number, SigilTrait>;
@@ -41,9 +43,9 @@ export type Row = {
 };
 
 /**
- * What a row needs from App: the copy, the explanation text for a trait, and the edits a
- * row can ask for - including the two pointer handlers the tooltip runs on. Passed as one
- * object so the markup above does not carry a dozen props around.
+ * 一行需要从 App 拿到的东西：文案、因子的说明文本，以及一行可以请求的编辑——
+ * 包括 tooltip 依赖的两个指针处理函数。作为一个对象传下去，
+ * 上面的标记就不必背着十来个 props 走来走去。
  */
 export type RowContext = {
   t: Dict;
@@ -58,18 +60,15 @@ export type RowContext = {
 };
 
 /**
- * Ten compact value inputs, named for the level they belong to so a screen reader can
- * tell a thousand of them apart.
+ * 十个紧凑的数值输入框，按所属等级命名，屏幕阅读器才能把上千个框区分开。
  *
- * Each slot's placeholder is the game's own number for that slot, so an empty box reads
- * as "this one is untouched, the game's value stays", and whether a box is empty is
- * decided by the record itself: a slot is null until someone types into it, never by
- * comparing the number to the default. A typed 20 in a slot whose default is 20 is still
- * the user's 20.
+ * 每个槽的占位符是游戏在该槽上的自有数值，所以空框读起来就是"这个没碰过，游戏的
+ * 数值留着"；而一个框是否为空由记录本身决定：槽在有人输入之前一直是 null，
+ * 从不靠把数字和默认值比较来判断。默认值是 20 的槽里输入一个 20，仍然是用户的 20。
  *
- * What a keystroke means, and what the box shows while it is being typed into, is decided
- * in traits.ts (slotEdit) - including why a typed number keeps its own text on screen
- * until the box is left. That is the rule to read before changing anything here.
+ * 一次敲键意味着什么、正在输入时框里显示什么，由 traits.ts（slotEdit）决定——
+ * 包括为什么输入过的数字会一直显示自己那串文本，直到离开这个框。
+ * 改这里之前先读那条规则。
  */
 function ValueSlots({
   values,
@@ -84,22 +83,20 @@ function ValueSlots({
   level: number;
   onChange: (values: (number | null)[]) => void;
 }) {
-  // The text the box is showing while it is being edited, if it differs from what the
-  // committed number renders as: "-" and "0." are states on the way to a number, and a
-  // typed number keeps its own text too (0.004 must not render as 0 mid-typing).
-  // Dropped on blur, which is when the box goes back to rendering the number.
+  // 编辑中的框正在显示的文本，前提是它与已提交数字渲染出来的样子不同："-" 和 "0."
+  // 是通往一个数字的中间状态，输入过的数字也保留自己那串文本（0.004 在输入途中
+  // 不能渲染成 0）。在 blur 时丢弃，那时框会回到渲染数字的样子。
   const [halfTyped, setHalfTyped] = useState<Record<number, string>>({});
 
   const vanillaOf = (i: number) => defaults?.[i] ?? 0;
 
   /*
-    The wheel steps a focused box, and the list must not scroll with it.
+    滚轮让聚焦的框步进，而列表不能跟着一起滚。
 
-    React registers wheel listeners as passive, so preventDefault inside an onWheel
-    prop does nothing: the browser warns and scrolls the list anyway, while the box
-    steps at the same time. The listener therefore has to be a native one, added with
-    passive: false - hence the ref, and the latest-props ref that keeps the one
-    listener reading the current values.
+    React 把 wheel 监听器注册为 passive，所以写在 onWheel prop 里的 preventDefault
+    毫无作用：浏览器照旧警告并滚动列表，而框同时也在步进。因此监听器必须是原生的，
+    并以 passive: false 添加——这就是那个 ref 的由来，还有让这一个监听器读到最新
+    数值的 latest-props ref。
   */
   const host = useRef<HTMLDivElement>(null);
   const latest = useRef({ values, defaults, onChange });
@@ -111,13 +108,12 @@ function ValueSlots({
     const onWheel = (event: WheelEvent) => {
       const target = event.target as HTMLInputElement | null;
       if (!target || document.activeElement !== target) return;
-      // Which box it was, by position: the row holds exactly these slots and nothing
-      // else, so no index has to be carried through the DOM for this.
+      // 是哪个框，按位置判断：这一行里正好只有这些槽，没有别的东西，所以不必为此把索引带进 DOM。
       const index = Array.prototype.indexOf.call(element.querySelectorAll("input"), target);
       if (index < 0) return;
       event.preventDefault();
       const { values, defaults, onChange } = latest.current;
-      // An untouched slot steps from the game's own number, which is what the box shows.
+      // 没碰过的槽从游戏自己的数值步进，那正是框里显示的东西。
       const from = values[index] ?? defaults?.[index] ?? 0;
       setHalfTyped(({ [index]: _dropped, ...rest }) => rest);
       onChange(withSlot(values, index, stepValue(from, event.deltaY < 0 ? 1 : -1)));
@@ -127,22 +123,18 @@ function ValueSlots({
   }, []);
 
   return (
-    // The one flexible part of the row: whatever the name and the level do not
-    // need goes to the values, and they share it evenly.
+    // 行里唯一有弹性的部分：名字和等级用不完的都归数值，它们平分这点空间。
     //
-    // No cursor-text on the wrapper: each box carries its own, so the I-beam marks
-    // exactly the boxes that accept typing, and every box types - a level with no edit
-    // yet shows the game's numbers as placeholders and the first keystroke starts one
-    // (an edit that is not switched on is saved but not applied, see updateLevel).
+    // 外层不加 cursor-text：每个框自带，I 形光标因此正好标出接受输入的那些框，
+    // 而每个框都能输入——还没有编辑的等级把游戏的数值显示为占位符，第一次敲键就
+    // 开始一条编辑（没打开的编辑会被保存但不生效，见 updateLevel）。
     //
-    // No right padding of its own: the last box ends where the row does and the ten boxes
-    // share the whole line. The disclosure's column is not a reason for one - the arrow
-    // only exists on a parent row, and a parent row carries no values.
+    // 自己不加右内边距：最后一个框在行的末端结束，十个框平分整行。展开箭头那一列
+    // 不构成加它的理由——箭头只存在于父行上，而父行不带任何数值。
     <div ref={host} className="flex min-w-0 flex-1 items-center">
       {Array.from({ length: SLOTS }, (_, i) => (
         <Fragment key={i}>
-          {/* Every slot, the first one too: it separates the values from the level
-              the same way they are separated from each other. */}
+          {/* 每个槽都有，第一个也不例外：它把数值和等级隔开，方式和数值彼此之间的隔开一样。 */}
           <span className="shrink-0 text-muted-foreground/40" aria-hidden>
             |
           </span>
@@ -151,23 +143,21 @@ function ValueSlots({
             inputMode="decimal"
             aria-label={`${label} Lv${level} value ${i + 1}`}
             placeholder={String(vanillaOf(i))}
-            // Empty is "the game's number stays": a slot is null until it is typed into, so
-            // the box needs no comparison against the default to know that - and a number
-            // typed by hand into Config.json shows as the value it is.
+            // 空就是"游戏的数值留着"：槽在有人输入之前是 null，所以这个框不需要和
+            // 默认值比较就知道这一点——而手写进 Config.json 的数字，会按它本来的值显示。
             value={halfTyped[i] ?? (values[i] === null ? "" : String(values[i]))}
             onChange={(e) => {
-              // What a keystroke means - dropped, half typed, or a number to commit -
-              // is decided in traits.ts, where a test can drive it key by key.
+              // 一次敲键意味着什么——丢弃、半输入状态，还是一个要提交的数字——
+              // 由 traits.ts 决定，那里可以用测试逐个按键驱动它。
               const edit = slotEdit(e.target.value, i, values);
               if (edit.kind === "drop") return;
               if (edit.kind === "half") {
                 setHalfTyped((prev) => ({ ...prev, [i]: edit.text }));
                 return;
               }
-              // The number is committed, but the box keeps the text that was typed until
-              // it is left: a prefix of a number is often a number itself (0.0, 0.00), so
-              // rendering the box from the committed number ate the rest of what was
-              // typed - 0.004 came out as 4. Blur renders the number again.
+              // 数字已提交，但框会保留输入的那串文本直到离开它：一个数字的前缀往往
+              // 本身也是数字（0.0、0.00），所以用已提交的数字渲染这个框，会吃掉后面
+              // 输入的内容——0.004 曾变成 4。blur 会重新渲染数字。
               setHalfTyped(({ [i]: _dropped, ...rest }) =>
                 edit.keeps ? { ...rest, [i]: edit.keeps } : rest,
               );
@@ -175,44 +165,36 @@ function ValueSlots({
             }}
             onBlur={() => setHalfTyped(({ [i]: _dropped, ...rest }) => rest)}
             /*
-              Stepping by one, which a number input would have given for free: these
-              boxes have to hold "-" and "0." to be typed into, and a number input
-              cannot report those. A step replaces whatever was half typed, because
-              the number is what the box is for from then on.
+              按 1 步进，这本是 number 输入框免费提供的能力：这些框必须能容纳 "-" 和
+              "0." 才输得进去，而 number 输入框报不出这些内容。步进会替换掉半输入的
+              内容，因为从那一刻起这个框要的就是数字。
             */
             onKeyDown={(e) => {
-              // Escape lets go of the box: the list is read with the pointer, so leaving a
-              // slot is a blur and nothing else. Whatever was half typed goes back with it,
-              // because that is what onBlur already does.
+              // Escape 让人放开这个框：列表是用指针读的，所以离开一个槽就是 blur，
+              // 仅此而已。半输入的内容随之退回，因为 onBlur 本来就是这么做的。
               if (e.key === "Escape") {
                 e.currentTarget.blur();
                 return;
               }
               if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-              // Otherwise the arrow moves the caret to the end of the box, and on a
-              // list that scrolls it would scroll that too.
+              // 否则方向键会把光标移到框的末尾，而在一个可滚动的列表上，它还会顺手把列表也滚了。
               e.preventDefault();
-              // An untouched slot steps from the game's own number, which is what it shows.
+              // 没碰过的槽从游戏自己的数值步进，那正是它显示的东西。
               const from = values[i] ?? vanillaOf(i);
               setHalfTyped(({ [i]: _dropped, ...rest }) => rest);
               onChange(withSlot(values, i, stepValue(from, e.key === "ArrowUp" ? 1 : -1)));
             }}
             /*
-              Bare text, not a field: no border, no fill, no focus ring. The row
-              reads as one line of numbers separated by |, and the only chrome left
-              is a faint wash on the slot being edited so the caret has a home.
+              裸文本，不是输入域：没有边框、没有底色、没有焦点环。整行读起来就是一行
+              用 | 隔开的数字，剩下唯一的装饰是正在编辑的槽上一层很淡的底色，让光标有个落脚处。
 
-              The box is the height of the row: the row has no padding of its own,
-              so the wash that marks the focused slot covers the row top to bottom,
-              and a click anywhere in that band lands in the box. A trait's row and
-              its levels' rows are then the same height (the multi-level row is h-11
-              for the same reason).
+              框就是行高：行自己没有内边距，所以标出聚焦槽的那层底色从上到下盖满整行，
+              点在这条带子上的任何地方都落进框里。因子的行和它各等级的行因此一样高
+              （多等级那一行是 h-11，也是同一个原因）。
 
-              Every box on the row types, whether or not the level is switched on: a
-              level with no edit yet shows the game's numbers as placeholders, and the
-              first keystroke or step starts the edit (see updateLevel). So there is no
-              disabled state to paint around - only the placeholder, which is what an
-              untouched slot in an edited level shows too.
+              行上每个框都能输入，无论该等级是否打开：还没有编辑的等级把游戏的数值
+              显示为占位符，第一次敲键或步进就开始这条编辑（见 updateLevel）。所以
+              没有需要绕开的禁用态——只有占位符，而已编辑等级里没碰过的槽显示的也是它。
             */
             className="h-11! min-w-0 flex-1 border-0 bg-transparent px-0 text-center text-xs md:text-xs tabular-nums shadow-none focus:bg-muted/50 focus-visible:ring-0 dark:bg-transparent"
           />
@@ -223,9 +205,9 @@ function ValueSlots({
 }
 
 /**
- * One level of a trait: its checkbox - ticking it is what starts an edit there - its
- * level, its ten slots, and the trait's own tooltip, because the description covers the
- * whole row and any part of the row is a reasonable place to ask.
+ * 因子的一个等级：它的勾选框（勾选它就是在该等级开始一条编辑）、它的等级号、
+ * 它的十个槽，以及该因子自己的 tooltip——说明覆盖整行，
+ * 行上任何地方都是合理的询问位置。
  */
 function LevelRow({
   row,
@@ -240,8 +222,8 @@ function LevelRow({
   hovered: boolean;
   ctx: RowContext;
 }) {
-  // Its own level's wording, not the trait's: a resistance reads "受到的伤害-{1}%" until
-  // level 29 and "…免疫" at 30, and this row is one of them (see explainAt).
+  // 它自己等级的措辞，而不是整个因子的：某个抗性在 29 级前读作"受到的伤害-{1}%"，
+  // 30 级读作"…免疫"，这一行就是其中之一（见 explainAt）。
   const notation = ctx.notationOf(row.key, level);
   const record = row.byLevel.get(level);
   const id = addressOf(row.key, level);
@@ -254,18 +236,13 @@ function LevelRow({
       trackCursorAxis="x"
     >
       {/*
-        The trigger is the whole row, its checkbox included: the trait's explanation is
-        worth asking for anywhere on the row, and the box is where the pointer already is
-        when a level is being switched.
+        触发器是整行，勾选框也在内：因子的说明在行上任何地方都值得一问，而切换等级时指针本来就在勾选框上。
 
-        Whether the tooltip is open is decided by App, from the pointer alone - see the
-        note there. What is left to base-ui is the placement, and the two switches it
-        needs: the popup sits over the row above the one being hovered, so it must not
-        take the pointer (or that row can never be hovered) and it must not stay open
-        while the pointer is inside the popup's own box.
+        tooltip 是否打开由 App 根据指针单独决定——见那里的说明。留给 base-ui 的是
+        定位，以及它需要的两个开关：弹层压在正悬停那一行上方的那一行上，所以它不能
+        接收指针（否则上面那行永远悬停不到），指针在弹层自己的盒子里时它也不能继续打开。
 
-        A div, not the button a trigger renders by default: the row holds value boxes and
-        a checkbox, and interactive content cannot live inside a button.
+        用 div，而不是触发器默认渲染的 button：这一行里有数值框和勾选框，而交互内容不能住在 button 里面。
       */}
       <TooltipTrigger
         data-row={id}
@@ -281,8 +258,7 @@ function LevelRow({
       >
         <Checkbox
           checked={record?.enabled ?? false}
-          // 2px of room on the left: the row's first child is the box, and a focus ring
-          // grows outward, so without this the container's edge clipped the ring.
+          // 左侧留 2px 空间：行的第一个子元素就是这个勾选框，而焦点环向外生长，没有这一点，容器的边缘会把环裁掉。
           className="ml-0.5"
           aria-label={ctx.t.enable(`${row.label} Lv${level}`)}
           onCheckedChange={() => ctx.toggleLevel(row.key, level)}
@@ -291,11 +267,10 @@ function LevelRow({
         {!nested && (
           <span
             /*
-              A fixed width, not a flexible one: the name and the level have to stay
-              together, and the value boxes are what should absorb a wider window. 217px
-              covers the longest name in any of the three languages
-              ("スーパーアルティメットJust回避"), with only a few pixels to spare;
-              anything longer truncates, with the tooltip carrying the whole one.
+              固定宽度而不是弹性宽度：名字和等级必须待在一起，吸收更宽窗口的应该是
+              数值框。217px 覆盖三种语言里最长的名字
+              （"スーパーアルティメットJust回避"），只剩几个像素的余量；
+              再长的就截断，完整名字由 tooltip 承载。
             */
             className="w-[217px] shrink-0 truncate text-sm"
           >
@@ -303,28 +278,25 @@ function LevelRow({
           </span>
         )}
 
-        {/* The level a row edits, as text: it is part of the address the row writes, not a
-            field of its own. A single-level trait says the same thing on the one row it has. */}
+        {/* 这一行编辑的等级，以文本形式：它是该行写入的地址的一部分，不是一个独立
+            字段。单等级因子在它唯一的那一行上说同样的话。 */}
         <span className="w-12 shrink-0 text-sm leading-7 text-muted-foreground tabular-nums select-none">
           Lv {level}
         </span>
 
         <ValueSlots
-          // A level with no edit has no numbers of its own: every slot is the game's, which
-          // is what the placeholders show.
+          // 没有编辑的等级没有自己的数值：每个槽都是游戏自己的，这正是占位符显示的内容。
           values={record ? record.values : pad([])}
-          defaults={row.info?.Levels?.[level - 1]}
+          defaults={valuesAt(row.info, level)}
           label={row.label}
           level={level}
           onChange={(values) => ctx.updateLevel(row.key, level, { values: values })}
         />
       </TooltipTrigger>
       {/*
-        The trait's explanation, above the row and centred on it: every row reads the same
-        way, and the list under the pointer is never covered. Wider than the stock bubble,
-        and keeping the line breaks the game's own text has - some explanations are three
-        lines of parameters, and a one-line bubble would cut them off. The open and close
-        animations are off: the bubble changes rows without being animated in and out.
+        因子的说明，在行的上方并居中：每一行都按同样的方式读，而且指针下面的列表
+        永远不会被盖住。比现成的气泡更宽，并保留游戏原文里的换行——有些说明是三行参数，
+        单行气泡会把它们截掉。打开和关闭动画都关掉了：气泡是在行之间换位置，而不是被动画带进带出。
       */}
       <TooltipContent
         side="top"
@@ -338,10 +310,9 @@ function LevelRow({
 }
 
 /**
- * A trait: one row when its numbers live on a single level, and otherwise its own row
- * plus a row per level - the edited levels first, ascending, the untouched ones after
- * them. Its checkbox is then all of its levels at once: ticked when they are all on,
- * mixed when some are, empty when none are.
+ * 一个因子：数值只落在一个等级上时是一行，否则是它自己的行加上每个等级一行——
+ * 已编辑的等级在前、升序，没动过的排在后面。它的勾选框此时代表所有等级：
+ * 全开时勾选，部分开时半选，全关时为空。
  */
 export function TraitRow({
   row,
@@ -354,8 +325,9 @@ export function TraitRow({
   isOpen: boolean;
   ctx: RowContext;
 }) {
-  const on = row.records.filter((record) => record.enabled).length;
-  const allOn = row.records.length > 0 && on === row.records.length;
+  // 父行说的是 "这一整行显示的等级"，不是 "碰巧存在几条记录" —— 规则本身在 traits.ts 里，
+  // 半选态才因此可能出现（11 个等级只开 1 个 = 半选）。
+  const state = parentState(row.levels, row.byLevel);
 
   if (row.levels.length === 1) {
     return (
@@ -369,21 +341,16 @@ export function TraitRow({
     );
   }
 
-  // The parent row stands for the trait and has no level of its own, so it reads the trait's
-  // highest band: what the trait does at full power. It said the default level's wording for
-  // a while, which read as "this trait is worth that little" on a trait whose low levels are
-  // a fraction of its top - a resistance says "受到的伤害-{1}%" at 15 and "…免疫" at 30.
-  //
-  // The table's last level, not the last level the picker offers: the bands come from the
-  // game's own rows, so the top wording lives on the top row even where that row's values
-  // are all zeros (万能药 has 30 levels and offers two of them).
-  const notation = ctx.notationOf(row.key, row.info?.Levels.length ?? row.levels[0] ?? 1);
+  /*
+    父行代表整个因子，自己没有等级，所以它读因子的概要：游戏对整个因子的那句话，
+    而不是某个等级的措辞。它下面的各等级行仍然保留各自所指等级的说明。
+  */
 
   return (
     <>
       <Tooltip
         open={hoveredId === row.key}
-        disabled={!notation}
+        disabled={!row.summary}
         disableHoverablePopup
         trackCursorAxis="x"
       >
@@ -392,9 +359,8 @@ export function TraitRow({
           onPointerEnter={(e) => ctx.rest(row.key, e)}
           onPointerLeave={() => ctx.leave(row.key)}
           /*
-            The trigger is the row, checkbox included, and the row is also what opens
-            the trait: a click anywhere but on a control toggles it (the chevron is an
-            icon, not a second control).
+            触发器是整行，勾选框在内；整行也是打开因子的地方：点在除控件以外的任何
+            位置都会切换它（箭头只是一个图标，不是第二个控件）。
           */
           render={
             <div
@@ -408,20 +374,18 @@ export function TraitRow({
         >
           <span className="relative ml-0.5 inline-flex shrink-0">
             <Checkbox
-              checked={allOn}
-              indeterminate={on > 0 && !allOn}
+              checked={state === "all"}
+              indeterminate={state === "some"}
               aria-label={ctx.t.enable(row.label)}
-              onCheckedChange={() => ctx.toggleTrait(row.key, !allOn)}
+              onCheckedChange={() => ctx.toggleTrait(row.key, state !== "all")}
             />
-            {on > 0 && !allOn && (
+            {state === "some" && (
               /*
-                A dash of the row's making, because the geometry is the whole point of
-                it: a horizontal stroke has to sit on the centre of a pixel row or it
-                blurs across two. Lucide's minus puts its line at y=12 of a 24-unit box,
-                which is exactly y=7.0 of the 14px the indicator draws at - a pixel
-                boundary, and it came out fuzzy next to the check. This is the same line
-                (lucide's x 5..19, stroke 2.3 of 24) in a 14-unit box where y=7.5 is the
-                middle of row 7, so it renders solid.
+                这一行自己画的横杠，因为几何就是它的全部意义：一条水平线必须落在某一
+                像素行的中心，否则会糊到两行上。Lucide 的 minus 把线放在 24 单位盒子的
+                y=12，换算到指示器绘制的 14px 里正好是 y=7.0——一个像素边界，
+                结果它挨着对勾显示时发虚。这里是同一条线（lucide 的 x 5..19、
+                24 单位中描边 2.3）放进 14 单位的盒子，y=7.5 是第 7 行的中点，所以渲染出来是实心的。
               */
               <svg
                 aria-hidden
@@ -446,11 +410,10 @@ export function TraitRow({
           <span className="flex-1" />
 
           {/*
-            The disclosure, as a plain icon: no click of its own, no background of its
-            own. Opening the trait is the row's job - the row is what the pointer is on
-            when it means "this trait" - and an icon that answered a click would be a
-            second, quieter control for the same thing. As a ghost button it also painted
-            a wash under the pointer, which read as a button with something to do.
+            展开指示，就是一个普通图标：自己没有点击，也没有自己的背景。打开因子是
+            整行的活——当意思是指 "这个因子" 时，指针就在行上——而一个会响应点击的
+            图标就成了同一件事的第二个、更安静的控制。做成 ghost 按钮时它还会在指针下
+            涂一层底色，读起来像一个有事可做的按钮。
           */}
           <span
             aria-hidden
@@ -468,7 +431,7 @@ export function TraitRow({
           align="center"
           className="max-w-md items-start whitespace-pre-line data-open:animate-none data-closed:animate-none"
         >
-          {notation}
+          {row.summary}
         </TooltipContent>
       </Tooltip>
 

@@ -39,7 +39,7 @@ A typical table mod brings its own edited `.tbl`; two such mods editing the same
 
 ## Building from source
 
-Needs .NET SDK 8, Node.js 20+ (22.5+ only to regenerate the assets), Go 1.27+.
+Needs .NET SDK 8, Node.js 20+, Go 1.27+ (the assets regenerate with `cd tools/build-assets && go run .`).
 
 ```powershell
 ./build.ps1 -Package # -> dist/GBFR.SigilEdit/ + dist/GBFR.SigilEdit-<version>.zip

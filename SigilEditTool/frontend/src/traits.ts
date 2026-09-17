@@ -1,10 +1,9 @@
 /*
-  The tool's pure half: everything about a record that is decided by values alone,
-  with no React and no DOM in sight, so it can be read and tested on its own.
+  工具的纯逻辑半边：一条记录里凡是由值单独决定的部分都在这，不碰 React，也不碰 DOM，
+  所以能独立阅读、独立测试。
 
-  The row list keeps its shape here too (addresses, slots, ordering of a trait's
-  levels), because that shape is what Config.json and the mod's table rows are keyed
-  by - see the note on dedupe, which is the invariant the whole list rests on.
+  行列表的形状也留在这里（地址、槽、一个因子各等级的排序），因为 Config.json 和 mod 的
+  表行正是按这个形状索引的——见 dedupe 的说明，那是整个列表赖以为生的不变量。
 */
 
 export type SigilTrait = {
@@ -12,46 +11,53 @@ export type SigilTrait = {
   key: string;
   level: number;
   /*
-    The ten LevelValue slots, positionally. A slot is a number, or null for "the game's own
-    value, untouched": the mod writes only the numbers and leaves the rest of the row as it
-    found it, so a slot nobody set cannot be overwritten with a stale copy of the game's
-    table. What counts as untouched is trimGameValues.
+    十个 LevelValue 槽，按位置对应。一个槽是一个数字，或者 null，表示"游戏自己的值，
+    未被动过"：mod 只写数字，行的其余部分保持原样，所以没人设过的槽不会被游戏表里的一份
+    陈旧副本覆盖。什么算"未被动过"由 trimGameValues 决定。
   */
   values: (number | null)[];
 };
 
 /**
- * One trait's vanilla numbers per level. Levels is indexed by level - 1, so
- * Levels[3] is the row the game shows as level 4 - which is what a slot's
- * placeholder, and the value an emptied box writes back, have to come from.
- * Rows is every level that carries numbers - the levels the picker offers, which is
- * not the span between the first and the last: 万能药 has rows 15 and 30 with nothing
- * in between.
+ * 一个因子的原始数值，只在真正带值的等级上：[等级, 它的十个值]，按等级排序。
+ * 只有这些等级会被收录——指向全零行的编辑会在游戏根本不读的地方写值——而槽的占位符、
+ * 以及清空的输入框写回的值，都必须来自这里。
+ *
+ * 万能药就是例子：只有 15、30 两级有值，中间什么都没有。
  */
-export type TraitInfo = { Levels: number[][]; Default: number; Rows: number[] };
+export type TraitInfo = { rows: [number, number[]][] };
+
+/** 一个因子某一等级上的十个值；表里没有这一级时是 undefined。 */
+export const valuesAt = (info: TraitInfo | undefined, level: number) =>
+  info?.rows.find((row) => row[0] === level)?.[1];
+
+/**
+ * skill.<lang>.json 里的一条：这种语言管这个因子叫什么、它的效果摘要，以及游戏自己按
+ * 等级分段给出的说明。
+ */
+export type SkillText = { name: string; summary: string; explain: ExplainBand[] };
 
 export const SLOTS = 10;
 
-/** The table row an edit writes: one address per trait hash and level. */
+/** 一条编辑写的那行表：每个因子哈希 + 等级对应一个地址。 */
 export const addressOf = (key: string, level: number) => `${key}#${level}`;
 
 /**
- * Whether a record is an edit at all, which is what decides if it is saved.
+ * 一条记录到底算不算编辑，这决定了它会不会被保存。
  *
- * Two things make one: it is switched on, or it carries a number. A record with neither is a
- * row the user ticked and unticked, and Config.json holds no such row.
+ * 两件事就能让它算：被勾选，或者带着数字。两者都没有的记录，是用户勾了又取消的那一行，
+ * Config.json 里不会有这样的行。
  */
 export const isEdit = (record: SigilTrait) =>
   record.enabled || record.values.some((value) => value !== null);
 
 /**
- * The values with the level's own numbers taken back out: a slot holding the game's number is
- * not an input, so it is null - which leaves that part of the row alone and shows the number
- * as a placeholder. This is also what makes an old file read right, since builds before null
- * existed filled every slot with the game's own numbers to write the row back.
+ * 把该等级自己的数值从十个槽里摘出去：槽里放着游戏的值就不算输入，于是置为 null——
+ * 这样行的那部分保持原样，该数字则作为占位符显示。这也让旧文件能读对：在 null 出现之前，
+ * 旧版本为了把行写回去，会把每个槽都填上游戏自己的数值。
  *
- * A level the tables do not know (a hand-added record) keeps its numbers: there is nothing to
- * compare them with, and they may well be what the game needs written.
+ * 表里没有的等级（手工添加的记录）保留它的数值：没有东西可以拿来比对，而这些数字很可能
+ * 正是游戏需要写入的。
  */
 export const trimGameValues = (
   values: (number | null)[],
@@ -59,18 +65,14 @@ export const trimGameValues = (
 ) => values.map((value, i) => (value === vanilla?.[i] ? null : value));
 
 /**
- * The records as edits: every slot that only held the game's number emptied, and the records
- * that are then not edits at all dropped. Every path in and out of the list goes through
- * this, so the list, Config.json and the game agree on what an edit is.
+ * 把记录变成编辑：只放着游戏数值的槽清空，之后完全不算编辑的记录丢掉。进出这个列表的
+ * 每条路径都经过这里，所以列表、Config.json 和游戏对"什么算编辑"的看法一致。
  */
 export const asEdits = (records: SigilTrait[], info: Record<string, TraitInfo>) =>
   records
     .map((record) => ({
       ...record,
-      values: trimGameValues(
-        record.values,
-        info[record.key]?.Levels?.[record.level - 1],
-      ),
+      values: trimGameValues(record.values, valuesAt(info[record.key], record.level)),
     }))
     .filter(isEdit);
 
@@ -78,14 +80,13 @@ export const pad = (values: (number | null)[]) =>
   Array.from({ length: SLOTS }, (_, i) => values[i] ?? null);
 
 /*
-  At most one edit per address, which is the invariant the whole list rests on.
+  每个地址最多一条编辑，这是整个列表赖以为生的不变量。
 
-  The mod walks the edit list in order and writes every enabled edit into the table
-  row its (hash, level) names, so when two of them share an address the last enabled
-  one is what the game ends up with (Mod.cs:169 and the patch loop after it). A file
-  can still hold both - an older version of this tool wrote them, or someone edited
-  Config.json by hand - and the list can only show one of them, so the last enabled
-  one is kept (the last of any, when the address holds none that is enabled).
+  mod 按顺序遍历编辑列表，把每条已启用的编辑写进它 (因子哈希, 等级) 指定的表行，所以
+  两条共享同一地址时，游戏最终拿到的是最后一条已启用的（PatchRows，Mod.cs:211）。文件里
+  仍可能同时留着两条——旧版本工具写的，或者有人手改了 Config.json——而列表只能显示其中
+  一条，于是保留最后一条已启用的（该地址一条已启用的都没有时，保留最后一条，不论启用
+  与否）。
 */
 export function dedupe(records: SigilTrait[]): {
   records: SigilTrait[];
@@ -107,36 +108,30 @@ export function dedupe(records: SigilTrait[]): {
 }
 
 /*
-  What a box may hold: an optional leading minus sign, digits, and at most one
-  decimal point - so "-", "0." and "-.5" are all reachable states, while a second
-  minus, a second point, a letter or exponent notation never reach the box. Keeping
-  exponent notation out matters: a number input used to accept 1e999, and JSON turns
-  that into null, which the tool then saved as a 0.
+  输入框允许出现的内容：可选的开头负号、数字，以及最多一个小数点——所以 "-"、"0."、
+  "-.5" 都是可达状态，而第二个负号、第二个小数点、字母和科学计数法永远进不了框。
+  挡住科学计数法是关键：数字输入框以前会接受 1e999，JSON 把那个值变成 null，工具再把它
+  存成 0。
 
-  No leading zeroes either: 0 is 0, and 00 or 01 are not numbers anyone means. Letting
-  them in put text in the box that the committed number could not render back - 00 read
-  as 0, so the second 0 looked ignored, and 01 read as 1 while the box showed 01.
+  也不允许前导零：0 就是 0，而 00、01 不是谁想要的数字。放它们进来会给框里留下提交后的
+  数字渲染不回去的文本——00 读作 0，第二个 0 就像被忽略了；01 读作 1，框里却显示 01。
 
-  The lengths are the bound on the whole input domain, not decoration: at most 9 digits
-  before the point and 6 after it means the largest thing that can be typed is
-  999999999.999999. Nothing the game carries comes close (its values run from 0.004 to a
-  few tens of thousands), and a number that can never exceed that can never become
-  Infinity either - a pasted 400-digit number would otherwise be committed as Infinity,
-  and JSON refuses to write those, which left every later save failing.
+  这里的位数是整个输入域的上界，不是装饰：小数点前最多 6 位、后最多 6 位，意味着能输入
+  的最大值是 999999.999999。游戏带的数值离这个上界很远（从 0.004 到几万），而永远
+  超不过它的数也不可能变成 Infinity——否则粘进来的 400 位数会被提交成 Infinity，JSON
+  拒绝写这种值，之后每次保存都失败。
 */
-export const HALF_TYPED = /^-?(0|[1-9]\d{0,8})?(\.\d{0,6})?$/;
+export const HALF_TYPED = /^-?(0|[1-9]\d{0,5})?(\.\d{0,6})?$/;
 
 /*
-  ...and what counts as a number once the box is done with: -3, 30, 0.6, .5
+  ……以及框里输完之后什么才算数字：-3、30、0.6、.5
 
-  The digit after the point is required, and that is the whole point: "0." is a state
-  on the way to 0.5, and treating it as the number 0 committed it, cleared the half
-  typed text and left the next 5 to be typed after a 0 that was already saved - so
-  typing 0.5 produced 5.
+  小数点后必须有一位，这正是关键所在："0." 是通往 0.5 路上的状态，把它当成数字 0 提交
+  会清掉半成品文本，让接下来的 5 被输入到一个已经存下的 0 后面——于是输入 0.5 得到 5。
 */
-export const NUMBER = /^-?((0|[1-9]\d{0,8})(\.\d{1,6})?|\.\d{1,6})$/;
+export const NUMBER = /^-?((0|[1-9]\d{0,5})(\.\d{1,6})?|\.\d{1,6})$/;
 
-/** One slot's number changed: the ten values with that slot set. */
+/** 一个槽的数字变了：十个值中该槽被设为新值。 */
 export const withSlot = (values: (number | null)[], i: number, v: number | null) => {
   const next = values.slice();
   next[i] = v;
@@ -144,13 +139,11 @@ export const withSlot = (values: (number | null)[], i: number, v: number | null)
 };
 
 /**
- * What one keystroke in one slot does.
+ * 一个槽里的一次按键会做什么。
  *
- * The box keeps half typed text on screen while it has focus, because "-" and "0." are
- * states on the way to a number and a controlled input cannot show them otherwise;
- * anything that could never become a number is dropped and the box is left as it was.
- * Returned as data rather than applied, so the rule is one function that a test can
- * drive key by key.
+ * 输入框有焦点时会把半成品文本留在屏幕上，因为 "-" 和 "0." 是通往数字路上的状态，受控
+ * 输入框没有别的办法显示它们；永远成不了数字的东西直接丢弃，输入框保持原样。结果作为
+ * 数据返回而不是直接应用，这样规则就是一个函数，测试可以一个键一个键地驱动它。
  */
 export type SlotEdit =
   | { kind: "drop" }
@@ -163,29 +156,25 @@ export function slotEdit(
   values: (number | null)[],
 ): SlotEdit {
   /*
-    A digit typed into a box that already shows 0 means that digit: the 0 was the box's, not
-    something the user asked to keep. So the whole-number part's leading zeroes go before the
-    text is judged - "04" is 4, "007" is 7, "00" is 0 - while a zero the decimal point needs
-    stays, because 0.5 is not .5.
+    往已经显示 0 的框里输入数字，意思就是那个数字：0 是输入框自己的，不是用户要求保留的。
+    所以判断之前先去掉整数部分的前导零——"04" 是 4，"007" 是 7，"00" 是 0——而小数点需要的
+    那个零留下，因为 0.5 不是 .5。
   */
   const tidied = text.replace(/^(-?)0+(?=\d)/, "$1");
 
   if (!HALF_TYPED.test(tidied)) return { kind: "drop" };
   if (tidied === "") {
-    // Emptied: the slot goes back to the game's own number, which the box shows as a
-    // placeholder from here on - null is that, and the game's number is read from the
-    // tables rather than written back into the file (see SigilTrait.values).
+    // 清空：该槽回到游戏自己的数值，输入框从这里起把它显示成占位符——null 就是它，
+    // 而游戏数值是从表里读的，不会写回文件（见 SigilTrait.values）。
     return { kind: "commit", values: withSlot(values, i, null) };
   }
   if (!NUMBER.test(tidied)) return { kind: "half", text: tidied };
 
   /*
-    A number: committed now, but the box keeps showing what was typed until it is left
-    (see `keeps`). That is not cosmetic. Committing is what the game sees, and it has to
-    happen per keystroke; the *text*, though, has to stay the user's, because a prefix of
-    a number is often a number itself - 0.0 is 0, 0.00 is 0 - and rendering the box from
-    the committed number dropped the rest of what was typed: 0.004 came out as 4, 5.05 as
-    50. On blur the box renders the number again, which is what makes 06 read back as 6.
+    是数字：立刻提交，但输入框在失去焦点前一直显示用户敲的内容（见 `keeps`）。这不是
+    为了好看。提交是给游戏看的，必须逐次按键发生；但*文本*必须留给用户，因为一个数字的
+    前缀往往本身就是数字——0.0 是 0，0.00 是 0——用提交后的数字去渲染输入框会丢掉后面输入
+    的内容：0.004 变成 4，5.05 变成 50。失焦时输入框重新渲染数字，这才让 06 读回成 6。
   */
   return {
     kind: "commit",
@@ -195,40 +184,35 @@ export function slotEdit(
 }
 
 /**
- * The largest value a box may hold, and the bound the two patterns below encode: 9 digits
- * before the point, 6 after it.
+ * 输入框能放的最大值，也就是上面两个模式编码的上界：小数点前 6 位、后 6 位。
  *
- * Written out because a step has to respect it too. Stepping is the third way a value
- * changes - after typing and a hand-edited file - and without the clamp a box at
- * 999999999 answered an arrow key with 1000000000: ten digits, which its own pattern then
- * refuses, so the box showed a number no keystroke would be accepted on.
+ * 专门写出来是因为步进也必须遵守它。步进是值变化的第三条路——排在输入和手改文件之后——
+ * 没有这个钳制时，停在 999999 的框按一下方向键会得到 1000000：七位数，它自己的模式随后
+ * 拒绝，于是框里显示着一个按什么键都不会被接受的数字。
  */
-export const MAX_VALUE = 999999999.999999;
+export const MAX_VALUE = 999999;
 
-/** One step of the arrow keys and the wheel, held inside what a box may hold. */
+/** 方向键和滚轮的一步，限制在输入框能放的范围内。 */
 export const stepValue = (value: number, direction: 1 | -1) => {
   const next = Math.round((value + direction) * 100) / 100;
   return Math.abs(next) <= MAX_VALUE ? next : value;
 };
 
 /*
-  The levels a trait shows: the game's rows that carry numbers, plus any level an edit
-  already names, with what is switched on lifted to the top.
+  一个因子显示的等级：游戏那些带值的行，加上编辑已经指名过的等级，被勾选的排到最前。
 
-  The rows, not the span between them: every level has a table row, but most of them are all
-  zeros - 万能药 has values on 15 and 30 only - and an edit pointed at a zero row writes a
-  value the game never reads there. traitInfo.Rows is that set (build-assets.js derives it
-  the same way).
+  取的是行，不是它们之间的跨度：表里每个等级都有行，但进入资产的只有带值的行（原因和
+  实测数字见 TraitInfo），所以一个因子的等级不能读成首行到尾行的整段。
 
-  A level only the records know about (edited by hand, or left behind by a level the tables
-  no longer carry) still gets a row, so it stays visible instead of being applied invisibly.
+  只有记录知道的等级（手工改出来的，或者表已经不再收录的某个等级留下的）同样会得到一行，
+  这样它保持可见，而不是被无声地应用上去。
 */
 export function levelsOf(
   info: TraitInfo | undefined,
   records: SigilTrait[],
 ): number[] {
   const on = new Set(records.filter((record) => record.enabled).map((r) => r.level));
-  const levels = new Set<number>(info?.Rows ?? []);
+  const levels = new Set<number>((info?.rows ?? []).map((row) => row[0]));
   for (const record of records) levels.add(record.level);
 
   return [...levels].sort(
@@ -236,34 +220,50 @@ export function levelsOf(
   );
 }
 
+/** 父行复选框的三种状态：全开 / 部分开 / 全关。 */
+export type ParentState = "all" | "some" | "none";
+
 /**
- * The name search: a trait is kept when what was typed is in the name, or is the hash
- * the tables and Config.json key it by (which is how one row is put on screen by hand).
+ * 父行的勾选态：说的是一整行显示的那些等级，而不是"碰巧存在几条记录"。
+ *
+ * 记录只有被勾选或输入过数值才会存在，所以按记录计数会把"11 个等级开了 1 个"读成全选——
+ * 半选态就永远不出现了。没有任何记录的等级，就是关着。
+ */
+export function parentState(
+  levels: number[],
+  byLevel: Map<number, SigilTrait>,
+): ParentState {
+  const on = levels.filter((level) => byLevel.get(level)?.enabled).length;
+  if (on === 0) return "none";
+  return on === levels.length ? "all" : "some";
+}
+
+/**
+ * 名字搜索：输入的内容出现在名字里，或者就是表和 Config.json 索引该因子用的哈希时，
+ * 这个因子就留下（手工把某一行弄上屏幕靠的就是后者）。
  */
 export const matches = (label: string, key: string, needle: string) =>
   !needle || label.toLowerCase().includes(needle) || key.toLowerCase().includes(needle);
 
-/** One stretch of levels that share an explanation: the text, from the level it starts at. */
-export type ExplainBand = { from: number; text: string };
+/** 共用同一段说明的一段等级：文本，以及它起始的等级。 */
+export type ExplainBand = [level: number, text: string];
 
 /**
- * The explanation a level shows: the last band that starts at or below it.
+ * 某个等级显示的说明：起点不高于它的最后一个说明分段。
  *
- * The bands are the game's own rows, folded: most skills say the same thing at every level,
- * some change it partway - a 30-level resistance reads "受到的伤害-{0}%" until level 29 and
- * "…免疫" at 30, and one skill has six bands. A level past the last band, which only a
- * hand-edited Config.json can name, is the same rule with nothing extra: no band matches and
- * the last one answers.
+ * 这些分段由游戏自己的行折叠而来：多数技能每一级的说法相同，有些中途会变——一个 30 级的
+ * 抗性到 29 级都写"受到的伤害-{0}%"，30 级写"…免疫"——还有一个技能有六个分段。最后一个
+ * 分段之后的等级（只有手改 Config.json 才能指名）用的还是同一条规则，没有额外处理：没有
+ * 分段匹配，就由最后一个分段回答。
  */
 export const explainAt = (bands: ExplainBand[] | undefined, level: number) =>
-  bands?.findLast((band) => band.from <= level)?.text ?? bands?.[0]?.text ?? "";
+  bands?.findLast(([from]) => from <= level)?.[1] ?? bands?.[0]?.[1] ?? "";
 
 /*
-  The tooltip is a template, not a sentence with the numbers already in it: {N} is rewritten
-  to the slot it stands for, counted from 1 like the ten boxes, so the reader can see which
-  box feeds which part of the effect. Whatever else the game's placeholder carries is
-  dropped - "{0:.1f}" becomes "{1}", because the slot number is all the tooltip is saying -
-  and the "<d>" markers a few explanations carry are markup rather than text.
+  提示框是一个模板，不是把数字填好的一句话：{N} 会被改写成它代表的那个槽，从 1 开始数，
+  和十个输入框一致，这样读者能看出哪个框喂给效果的哪一部分。游戏的占位符带的其它东西一律
+  丢掉——"{0:.1f}" 变成 "{1}"，因为提示框要说的就只有槽号——少数说明带的 "<d>" 标记是
+  标记而不是正文。
 */
 export const slotLabel = (text: string) =>
   text

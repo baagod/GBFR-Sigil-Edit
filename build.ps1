@@ -72,7 +72,7 @@ $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
 if (-not $npm) { $npm = Get-Command npm -ErrorAction SilentlyContinue }
 
 Assert-Tool dotnet 'Install the .NET SDK 8 (https://dotnet.microsoft.com/download), then reopen this shell.'
-Assert-Tool node   'Install Node.js 20 or newer, 22.5+ only to regenerate the assets (https://nodejs.org), then reopen this shell.'
+Assert-Tool node   'Install Node.js 20 or newer (https://nodejs.org), then reopen this shell.'
 Assert-Tool go     'Install Go 1.27 or newer (https://go.dev/dl), then reopen this shell.'
 if (-not $npm) {
     throw "'npm' was not found on PATH. It ships with Node.js; reinstall Node.js and reopen this shell."
