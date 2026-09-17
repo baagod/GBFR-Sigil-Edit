@@ -39,9 +39,10 @@
 
 ## 从源码构建
 
-需要 .NET SDK 8、Node.js 20+、Go 1.27+（重新生成资产：`cd tools/build-assets && go run .`）。
+需要 .NET SDK 8、Node.js 20+、Go 1.27+
 
 ```powershell
+cd tools/build-assets && go run . # -> 重新生成资产（如果需要）
 ./build.ps1 -Package   # -> dist/GBFR.SigilEdit/ 与 dist/GBFR.SigilEdit-<版本>.zip
 ./deploy.ps1           # -> 复制 dist/GBFR.SigilEdit 到 Reloaded-II/Mods/（先关掉游戏）
 ```
