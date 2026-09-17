@@ -2,7 +2,7 @@
   "ModId": "GBFR.SigilEdit",
   "ModName": "GBFR Sigil Edit",
   "ModAuthor": "baago",
-  "ModVersion": "2.1.0",
+  "ModVersion": "2.1.1",
   "ModDescription": "Edits the traits a sigil carries - the game's own data calls them skills (table skill_status), which is what the old name referred to. Ships no .tbl: the table is read from the game archive, and only the rows you name are changed. SigilEdit.exe writes %APPDATA%\\GBFR.SigilEdit\\Config.json and signals a named event, and the running game re-applies the list to the table it already has in memory.",
   "ModDll": "GBFR.SigilEdit.dll",
   "ModIcon": "icon.png",
