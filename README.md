@@ -27,7 +27,7 @@ A typical table mod brings its own edited `.tbl`; two such mods editing the same
 
 ## Using it
 
-- **Changing a sigil**: filter the list or the search box by name or hash, then rewrite the parameters you want.
+- **Changing a sigil**: filter the list or the search box by name or hash, then rewrite the parameters you want and enable it.
 - **Parameters**: **hovering anywhere on the row** shows that sigil's description. The ten slots are numbered the way the placeholders are, so they line up; emptying one greys the game's own value out as a placeholder and writes that value back.
 - **Taking effect**: the **sigil description** updates live in game as you change things, but the **actual effect** applies when the next battle starts.
 
