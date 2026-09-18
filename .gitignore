@@ -32,6 +32,13 @@ extracted/
 *.db
 msg_*.json
 
+# A diagnostic tool, not part of the mod: it attaches to the running game and reports
+# where the skill_status table sits in memory. It does not ship in the release and no
+# build reads it, so it stays on disk as a local tool rather than in a diff. Keep it
+# when memory behaviour needs checking again - the mod's own log says what it did, not
+# what the game held.
+tools/probe/
+
 # The service bindings are generated (`wails3 generate bindings`) and nothing in
 # src imports them: the frontend talks to the backend by name, through
 # Call.ByName and Events.On. Generated code that nothing reads does not belong in

@@ -64,24 +64,24 @@ internal sealed class HotApply
     private List<long> _cachedAddresses = new();
 
     /// <summary>
-    /// Boot-time locate bookkeeping: the previous attempt's address set. A scan
-    /// only locks the cache once it repeats the previous set exactly, because
-    /// the game keeps creating and dropping copies while it boots and only a
-    /// set that has stopped moving is certain to hold the live copy.
+    /// How long to wait before the silent locate, and why one pass is enough.
+    ///
+    /// The delay runs from mod start, and the scan it triggers costs 5 to 6 seconds, so it
+    /// has to finish before the player can interact. Measured on this machine: the table is
+    /// in memory 27 seconds after process start, a save finishes loading at about 70, and
+    /// the mod starts about 4 seconds in. 45 therefore puts the scan at roughly 49 s and its
+    /// end at 55 s - while the player is still on a loading screen, with about 15 seconds of
+    /// slack before they can click apply. Waiting 60 started the scan as the save finished
+    /// loading: neither hidden behind the load nor early enough to be ready for an immediate
+    /// click.
+    ///
+    /// One pass is enough: FindCopies has no early exit, so a single pass returns every
+    /// copy that exists at that moment. Scanning later would find MORE copies (measured:
+    /// 1 at 67 s, 4 at 86 s, 7 at 465 s), but a short cache is not a correctness problem -
+    /// every read of it is re-verified with ContentsMatch, and a miss costs one scan on
+    /// the next apply.
     /// </summary>
-    private long[]? _prewarmPrevious;
-
-    /// <summary>
-    /// When the silent locate runs, and how often it rechecks. The table only
-    /// exists once the game has loaded the data files - roughly the first half
-    /// of the ~40 s between process start and a readable save - and the game
-    /// keeps rebuilding copies while it boots, so the first attempts tend to
-    /// find nothing or a set that keeps moving. The gaps cover 3-4 minutes;
-    /// beyond that, the first click scans as usual and seeds the same cache.
-    /// </summary>
-    private const int PrewarmFirstDelayMs = 20_000;
-    private const int PrewarmRetryMs = 15_000;
-    private const int PrewarmMaxAttempts = 6;
+    private const int PrewarmDelayMs = 45_000;
 
     private EventWaitHandle? _event;
     private volatile bool _stopped;
@@ -309,15 +309,18 @@ internal sealed class HotApply
     }
 
     /// <summary>
-    /// Does the memory walk so the user never does: started with the mod, it
-    /// scans in the background until the game's copy set stops moving, then
-    /// hands the stable set to the fast path. Seeded with nothing if the game
-    /// is still churning when the attempts run out - the first click scans
-    /// exactly like today and seeds the cache through success.
+    /// Does the memory walk so the user never does: started with the mod, it waits for
+    /// the delay PrewarmDelayMs documents, then scans ONCE and hands whatever it found
+    /// to the fast path.
     ///
-    /// The walk can find nothing on early attempts (the table is not in memory
-    /// yet) and partial sets while the game rebuilds copies, which is exactly
-    /// why locking waits for a REPEATED set rather than the first hit.
+    /// One pass is enough, and repeated passes are worse. FindCopies has no early exit,
+    /// so a single pass returns every copy that exists at that moment. The previous
+    /// version instead waited for two passes to agree, which on this game either locked
+    /// in a partial set or, when the game kept rebuilding copies, gave up after minutes
+    /// having found the table every time.
+    ///
+    /// A short cache is not a correctness problem: every read of it is re-verified
+    /// with ContentsMatch, and a miss costs one scan on the next apply.
     /// </summary>
     private void PrewarmLoop()
     {
@@ -330,52 +333,36 @@ internal sealed class HotApply
         if (_currentTable is null || _currentTable.Length == 0)
             return;
 
-        for (var waited = 0; waited < PrewarmFirstDelayMs && !_stopped; waited += 250)
+        for (var waited = 0; waited < PrewarmDelayMs && !_stopped; waited += 250)
             Thread.Sleep(250);
 
-        for (var attempt = 0; attempt < PrewarmMaxAttempts && !_stopped; attempt++)
+        if (_stopped || _cachedAddresses.Count > 0)
+            return; // an apply during the wait already seeded the cache
+
+        var scan = System.Diagnostics.Stopwatch.StartNew();
+        List<long> found;
+        try
         {
-            // An apply that ran while waiting has already seeded the cache; that
-            // is the only gate, so a scan already in flight can still finish
-            // after one and overwrite it. Harmless: every read of the cache is
-            // re-verified with ContentsMatch, so a stale one costs a full scan,
-            // never a missed write.
-            if (_cachedAddresses.Count > 0)
-                return;
+            var current = _currentTable;
+            found = WithoutOwnCopies(null, () => TableLocator.FindCopies(current));
+        }
+        catch (Exception ex)
+        {
+            _log("boot locate EXCEPTION: " + ex);
+            return;
+        }
+        scan.Stop();
 
-            List<long> found;
-            var scan = System.Diagnostics.Stopwatch.StartNew();
-            try
-            {
-                var current = _currentTable;
-                found = WithoutOwnCopies(null, () => TableLocator.FindCopies(current));
-            }
-            catch (Exception ex)
-            {
-                _log("boot locate EXCEPTION: " + ex);
-                break;
-            }
-            scan.Stop();
+        if (_stopped || _cachedAddresses.Count > 0)
+            return;
 
-            var set = found.OrderBy(address => address).ToArray();
-            if (_prewarmPrevious is not null && _prewarmPrevious.SequenceEqual(set))
-            {
-                _cachedAddresses = set.ToList();
-                _log($"boot locate: copy set stable ({found.Count} copy/copies) after {attempt + 1} attempt(s), {scan.ElapsedMilliseconds} ms on the last pass; live applies skip the scan entirely");
-                return;
-            }
-
-            _log($"boot locate attempt {attempt + 1}: {found.Count} table copy/copies found in {scan.ElapsedMilliseconds} ms; waiting for the set to stabilize");
-            _prewarmPrevious = set;
-
-            for (var waited = 0; waited < PrewarmRetryMs && !_stopped; waited += 250)
-                Thread.Sleep(250);
-
-            if (_stopped || _cachedAddresses.Count > 0)
-                return;
+        if (found.Count == 0)
+        {
+            _log($"boot locate: no table copy found in {scan.ElapsedMilliseconds} ms; the first live apply scans as usual and seeds the cache");
+            return;
         }
 
-        if (!_stopped && _cachedAddresses.Count == 0)
-            _log("boot locate: the copy set never stabilized before the attempts ran out; the first live apply will scan once and seed the cache");
+        _cachedAddresses = found.OrderBy(address => address).ToList();
+        _log($"boot locate: {found.Count} copy/copies found in {scan.ElapsedMilliseconds} ms; live applies skip the scan entirely");
     }
 }
